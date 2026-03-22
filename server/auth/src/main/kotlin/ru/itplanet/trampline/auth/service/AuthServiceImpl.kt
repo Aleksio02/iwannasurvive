@@ -7,6 +7,7 @@ import ru.itplanet.trampline.auth.converter.UserConverter
 import ru.itplanet.trampline.auth.dao.UserDao
 import ru.itplanet.trampline.auth.model.TokenPayload
 import ru.itplanet.trampline.auth.model.request.Authorization
+import ru.itplanet.trampline.auth.model.request.Registration
 import ru.itplanet.trampline.auth.model.response.AuthResponse
 import ru.itplanet.trampline.auth.util.PasswordEncoder
 import java.time.Instant
@@ -19,20 +20,17 @@ class AuthServiceImpl(
     private val sessionService: SessionService
 ) : AuthService {
     @Transactional
-    override fun register(request: Authorization): AuthResponse {
-        if (!request.validToRegistration()) {
-            throw RuntimeException("You should fill all fields!")
-        }
+    override fun register(request: Registration): AuthResponse {
         userDao.findByUsernameOrEmail(request.login!!, request.email!!)
             ?.let { throw RuntimeException("User with this username or email exists") }
 
-        val authorization = Authorization(
+        val registration = Registration(
             email = request.email,
             login = request.login,
             password = PasswordEncoder.encode(request.password))
 
 
-        val newUser = userDao.save(userConverter.toUserDto(authorization))
+        val newUser = userDao.save(userConverter.toUserDto(registration))
         val sessionId = sessionService.createSession(newUser.id!!)
         return AuthResponse(
             sessionId = sessionId,
@@ -42,7 +40,7 @@ class AuthServiceImpl(
 
     @Transactional
     override fun login(request: Authorization): AuthResponse {
-        val userDto = userDao.findByUsernameOrEmail(request.login!!, request.email!!)
+        val userDto = userDao.findByUsernameOrEmail(request.login!!, request.login!!)
             ?: throw RuntimeException("User not found")
 
         if (!PasswordEncoder.matches(request.password, userDto.password)) {
