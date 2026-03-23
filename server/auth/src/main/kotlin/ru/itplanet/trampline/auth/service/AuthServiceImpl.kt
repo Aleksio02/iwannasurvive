@@ -13,6 +13,7 @@ import ru.itplanet.trampline.auth.model.request.Registration
 import ru.itplanet.trampline.auth.model.response.AuthResponse
 import ru.itplanet.trampline.auth.util.PasswordEncoder
 import java.time.Instant
+import java.util.*
 
 @Primary
 @Service
@@ -35,14 +36,14 @@ class AuthServiceImpl(
 
         val registration = Registration(
             displayName = request.displayName,
-            email = request.email,
+            email = request.email.trim().lowercase(),
             password = PasswordEncoder.encode(request.password),
             role = request.role,
             status = status
         )
 
         val newUser = userDao.save(userConverter.toUserDto(registration))
-        val sessionId = sessionService.createSession(newUser.id!!)
+        val sessionId = sessionService.createSession(newUser.id)
         return AuthResponse(
             sessionId = sessionId,
             user = userConverter.fromDtoToUser(newUser)
