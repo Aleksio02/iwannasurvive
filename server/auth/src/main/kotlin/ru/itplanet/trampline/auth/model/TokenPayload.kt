@@ -1,44 +1,27 @@
 package ru.itplanet.trampline.auth.model
 
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
-import com.fasterxml.jackson.databind.JsonDeserializer
-import com.fasterxml.jackson.databind.JsonSerializer
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
-import com.fasterxml.jackson.databind.annotation.JsonSerialize
-import java.io.IOException
 import java.time.Instant
-import java.util.*
 
-class TokenPayload @JvmOverloads constructor(
+data class TokenPayload(
     val userId: Long,
-    @field:JsonDeserialize(
-        using = CustomInstantDeserializer::class
-    ) @field:JsonSerialize(using = CustomInstantSerializer::class)
-    val created: Instant = Instant.now(),
-    @field:JsonDeserialize(
-        using = CustomInstantDeserializer::class
-    ) @field:JsonSerialize(using = CustomInstantSerializer::class)
-    var expires: Instant = Instant.now()
-        .plusSeconds(3600)
+    val created: Instant,
+    val expires: Instant
 ) {
-    internal class CustomInstantSerializer : JsonSerializer<Instant>() {
-        @Throws(IOException::class)
-        override fun serialize(
-            value: Instant,
-            gen: JsonGenerator,
-            serializers: SerializerProvider
-        ) {
-            gen.writeString(value.toString())
-        }
+    fun isExpired(now: Instant = Instant.now()): Boolean {
+        return expires.isBefore(now)
     }
 
-    internal class CustomInstantDeserializer : JsonDeserializer<Instant>() {
-        @Throws(IOException::class)
-        override fun deserialize(p: JsonParser, ctxt: DeserializationContext): Instant {
-            return Instant.parse(p.valueAsString)
+    companion object {
+        fun new(
+            userId: Long,
+            ttlSeconds: Long,
+            now: Instant = Instant.now()
+        ): TokenPayload {
+            return TokenPayload(
+                userId = userId,
+                created = now,
+                expires = now.plusSeconds(ttlSeconds)
+            )
         }
     }
 }

@@ -1,13 +1,21 @@
 package ru.itplanet.trampline.auth.dao.dto
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import ru.itplanet.trampline.auth.model.Role
 import ru.itplanet.trampline.auth.model.Status
-import java.util.*
+import java.time.Instant
 
 @Entity
 @Table(name = "users")
 open class UserDto {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long = 0
@@ -19,7 +27,7 @@ open class UserDto {
     var email: String = ""
 
     @Column(name = "password_hash", nullable = false)
-    var password: String = ""
+    var passwordHash: String = ""
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
@@ -29,12 +37,24 @@ open class UserDto {
     @Column(name = "status", nullable = false)
     var status: Status = Status.PENDING_VERIFICATION
 
-    constructor() {}
+    @Column(name = "email_verified", nullable = false)
+    var emailVerified: Boolean = true
 
-    constructor(displayName: String, email: String, password: String, role: Role, status: Status) {
+    @Column(name = "last_login_at")
+    var lastLoginAt: Instant? = null
+
+    constructor()
+
+    constructor(
+        displayName: String,
+        email: String,
+        passwordHash: String,
+        role: Role,
+        status: Status
+    ) {
         this.displayName = displayName
         this.email = email
-        this.password = password
+        this.passwordHash = passwordHash
         this.role = role
         this.status = status
     }
