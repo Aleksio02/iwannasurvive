@@ -14,17 +14,15 @@ import java.util.concurrent.TimeUnit
 
 @Service
 class SessionService(
-    private val redisTemplate: RedisTemplate<String, String>
+    private val redisTemplate: RedisTemplate<String, String>,
+    private val objectMapper: ObjectMapper
 ) {
-    private val objectMapper = ObjectMapper()
-        .registerModule(JavaTimeModule())
-        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     private val secureRandom = SecureRandom()
     private val base64Encoder: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
 
-    fun createSession(userId: UUID): String {
+    fun createSession(userId: Long): String {
         val sessionId = generateId()
-        val tokenPayload: TokenPayload = TokenPayload(userId)
+        val tokenPayload = TokenPayload(userId)
         redisTemplate.opsForValue()[sessionId, writeAsString(tokenPayload), 3600] = TimeUnit.SECONDS
         return sessionId
     }

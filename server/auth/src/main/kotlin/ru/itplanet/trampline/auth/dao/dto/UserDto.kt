@@ -9,8 +9,8 @@ import java.util.*
 @Table(name = "users")
 open class UserDto {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    var id: UUID? = null
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long = 0
 
     @Column(name = "display_name", nullable = false)
     var displayName: String = ""
@@ -18,12 +18,14 @@ open class UserDto {
     @Column(name = "email", nullable = false, unique = true)
     var email: String = ""
 
-    @Column(name = "password", nullable = false)
+    @Column(name = "password_hash", nullable = false)
     var password: String = ""
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
     var role: Role = Role.APPLICANT
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     var status: Status = Status.PENDING_VERIFICATION
 

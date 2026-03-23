@@ -13,7 +13,7 @@ import java.time.Instant
 import java.util.*
 
 class TokenPayload @JvmOverloads constructor(
-    val userId: UUID,
+    val userId: Long,
     @field:JsonDeserialize(
         using = CustomInstantDeserializer::class
     ) @field:JsonSerialize(using = CustomInstantSerializer::class)

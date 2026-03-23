@@ -6,7 +6,7 @@ import ru.itplanet.trampline.auth.dao.dto.UserDto
 import java.util.UUID
 
 interface UserDao:
-    JpaRepository<UserDto, UUID>,
+    JpaRepository<UserDto, Long>,
     JpaSpecificationExecutor<UserDto>{
         fun findByEmail(email: String): UserDto?
     }
