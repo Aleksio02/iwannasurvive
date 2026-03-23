@@ -20,3 +20,10 @@ spring:
           max-active: 8
           max-idle: 8
           min-idle: 0
+
+auth:
+  session:
+    cookie-name: sessionId
+    ttl-seconds: 3600
+    secure-cookie: false
+    same-site: Lax

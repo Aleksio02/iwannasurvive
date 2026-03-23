@@ -1,76 +1,113 @@
 package ru.itplanet.trampline.auth.service
 
-import org.springframework.context.annotation.Primary
+import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.auth.converter.UserConverter
 import ru.itplanet.trampline.auth.dao.UserDao
+import ru.itplanet.trampline.auth.exception.InvalidCredentialsException
+import ru.itplanet.trampline.auth.exception.InvalidSessionException
+import ru.itplanet.trampline.auth.exception.RegistrationRoleNotAllowedException
+import ru.itplanet.trampline.auth.exception.UserAlreadyExistsException
 import ru.itplanet.trampline.auth.model.Role
 import ru.itplanet.trampline.auth.model.Status
 import ru.itplanet.trampline.auth.model.TokenPayload
 import ru.itplanet.trampline.auth.model.request.Authorization
 import ru.itplanet.trampline.auth.model.request.Registration
 import ru.itplanet.trampline.auth.model.response.AuthResponse
-import ru.itplanet.trampline.auth.util.PasswordEncoder
 import java.time.Instant
-import java.util.*
+import java.util.Locale
 
-@Primary
 @Service
 class AuthServiceImpl(
     private val userDao: UserDao,
     private val userConverter: UserConverter,
-    private val sessionService: SessionService
+    private val sessionService: SessionService,
+    private val passwordEncoder: PasswordEncoder
 ) : AuthService {
+
     @Transactional
     override fun register(request: Registration): AuthResponse {
-        userDao.findByEmail(request.email)
-            ?.let { throw RuntimeException("User with this username or email exists") }
-
-        if (!(request.role == Role.EMPLOYER || request.role == Role.APPLICANT)) {
-            throw RuntimeException("Only applicant or employer can register")
+        if (request.role != Role.EMPLOYER && request.role != Role.APPLICANT) {
+            throw RegistrationRoleNotAllowedException()
         }
 
-        val status =
-            if (request.role == Role.EMPLOYER) Status.PENDING_VERIFICATION else Status.ACTIVE
+        val normalizedEmail = normalizeEmail(request.email)
 
-        val registration = Registration(
-            displayName = request.displayName,
-            email = request.email.trim().lowercase(),
-            password = PasswordEncoder.encode(request.password),
-            role = request.role,
+        if (userDao.findByEmail(normalizedEmail) != null) {
+            throw UserAlreadyExistsException()
+        }
+
+        val status = if (request.role == Role.EMPLOYER) {
+            Status.PENDING_VERIFICATION
+        } else {
+            Status.ACTIVE
+        }
+
+        val userToSave = userConverter.toUserDto(
+            source = request,
+            normalizedEmail = normalizedEmail,
+            passwordHash = passwordEncoder.encode(request.password),
             status = status
         )
 
-        val newUser = userDao.save(userConverter.toUserDto(registration))
-        val sessionId = sessionService.createSession(newUser.id)
+        val savedUser = try {
+            userDao.save(userToSave)
+        } catch (_: DataIntegrityViolationException) {
+            throw UserAlreadyExistsException()
+        }
+
+        val sessionId = sessionService.createSession(savedUser.id)
+
         return AuthResponse(
             sessionId = sessionId,
-            user = userConverter.fromDtoToUser(newUser)
+            user = userConverter.fromDtoToUser(savedUser)
         )
     }
 
     @Transactional
     override fun login(request: Authorization): AuthResponse {
-        val userDto = userDao.findByEmail(request.email)
-            ?: throw RuntimeException("User not found")
+        val normalizedEmail = normalizeEmail(request.email)
 
-        if (!PasswordEncoder.matches(request.password, userDto.password)) {
-            throw RuntimeException("Incorrect password")
+        val userDto = userDao.findByEmail(normalizedEmail)
+            ?: throw InvalidCredentialsException()
+
+        if (!passwordEncoder.matches(request.password, userDto.passwordHash)) {
+            throw InvalidCredentialsException()
         }
 
+        if (userDto.status == Status.BLOCKED || userDto.status == Status.DELETED) {
+            throw InvalidCredentialsException()
+        }
+
+        userDto.lastLoginAt = Instant.now()
+        val savedUser = userDao.save(userDto)
+
         return AuthResponse(
-            sessionId = sessionService.createSession(userDto.id!!),
-            user = userConverter.fromDtoToUser(userDto)
+            sessionId = sessionService.createSession(savedUser.id),
+            user = userConverter.fromDtoToUser(savedUser)
         )
     }
 
     override fun validateSession(sessionId: String?): TokenPayload {
         val tokenPayload = sessionService.getSession(sessionId)
-        if (tokenPayload.expires.isBefore(Instant.now())) {
+
+        val user = userDao.findById(tokenPayload.userId).orElse(null)
+            ?: run {
+                sessionService.deleteSession(sessionId)
+                throw InvalidSessionException()
+            }
+
+        if (user.status == Status.BLOCKED || user.status == Status.DELETED) {
             sessionService.deleteSession(sessionId)
-            throw RuntimeException("Invalid session")
+            throw InvalidSessionException()
         }
+
         return sessionService.extendSession(sessionId)
+    }
+
+    private fun normalizeEmail(email: String): String {
+        return email.trim().lowercase(Locale.ROOT)
     }
 }
