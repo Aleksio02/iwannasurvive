@@ -9,7 +9,7 @@ import ru.itplanet.trampline.auth.exception.InvalidCredentialsException
 import ru.itplanet.trampline.auth.exception.InvalidSessionException
 import ru.itplanet.trampline.auth.exception.RegistrationRoleNotAllowedException
 import ru.itplanet.trampline.auth.exception.UserAlreadyExistsException
-import ru.itplanet.trampline.auth.model.TokenPayload
+import ru.itplanet.trampline.commons.model.TokenPayload
 import ru.itplanet.trampline.auth.model.request.Authorization
 import ru.itplanet.trampline.auth.model.request.Registration
 import ru.itplanet.trampline.auth.model.response.AuthResponse
