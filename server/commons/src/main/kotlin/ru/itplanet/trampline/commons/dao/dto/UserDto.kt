@@ -18,7 +18,7 @@ open class UserDto {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    open var id: Long = 0
+    open var id: Long? = null
 
     @Column(name = "display_name", nullable = false)
     open var displayName: String = ""
