@@ -18,30 +18,30 @@ open class UserDto {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: Long = 0
+    open var id: Long = 0
 
     @Column(name = "display_name", nullable = false)
-    var displayName: String = ""
+    open var displayName: String = ""
 
     @Column(name = "email", nullable = false, unique = true)
-    var email: String = ""
+    open var email: String = ""
 
     @Column(name = "password_hash", nullable = false)
-    var passwordHash: String = ""
+    open var passwordHash: String = ""
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
-    var role: Role = Role.APPLICANT
+    open var role: Role = Role.APPLICANT
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    var status: Status = Status.PENDING_VERIFICATION
+    open var status: Status = Status.PENDING_VERIFICATION
 
     @Column(name = "email_verified", nullable = false)
-    var emailVerified: Boolean = true
+    open var emailVerified: Boolean = true
 
     @Column(name = "last_login_at")
-    var lastLoginAt: Instant? = null
+    open var lastLoginAt: Instant? = null
 
     constructor()
 
