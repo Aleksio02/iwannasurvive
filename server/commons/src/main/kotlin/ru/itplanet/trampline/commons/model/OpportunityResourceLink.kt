@@ -1,6 +1,6 @@
-package ru.itplanet.trampline.opportunity.model
+package ru.itplanet.trampline.commons.model
 
-import ru.itplanet.trampline.opportunity.model.enums.ResourceLinkType
+import ru.itplanet.trampline.commons.model.enums.ResourceLinkType
 
 data class OpportunityResourceLink(
     val sortOrder: Int,
