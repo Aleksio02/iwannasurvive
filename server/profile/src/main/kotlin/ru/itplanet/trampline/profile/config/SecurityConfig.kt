@@ -43,13 +43,14 @@ class SecurityConfig(
         val request = PathPatternRequestMatcher.withDefaults()
 
         return http
-            .csrf { csrf ->
-                csrf
-                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                    .ignoringRequestMatchers(
-                        request.matcher("/internal/**")
-                    )
-            }
+//            .csrf { csrf ->
+//                csrf
+//                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+//                    .ignoringRequestMatchers(
+//                        request.matcher("/internal/**")
+//                    )
+//            }
+            .csrf { it.disable() } // TODO: потом вернуть
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
             .logout { it.disable() }
