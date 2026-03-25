@@ -1,5 +1,7 @@
 package ru.itplanet.trampline.profile.model
 
+import ru.itplanet.trampline.profile.model.enums.VerificationStatus
+
 data class EmployerProfile (
     val userId: Long,
     val companyName: String,

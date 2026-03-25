@@ -5,8 +5,7 @@ import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.type.SqlTypes
-import ru.itplanet.trampline.commons.dao.dto.UserDto
-import ru.itplanet.trampline.profile.model.VerificationStatus
+import ru.itplanet.trampline.profile.model.enums.VerificationStatus
 import java.time.OffsetDateTime
 
 @Entity
