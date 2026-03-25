@@ -36,7 +36,7 @@ open class EmployerProfileDto {
 
     @Column(name = "social_links", columnDefinition = "jsonb", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)
-    open var socialLinks: Map<String, String> = emptyMap()
+    open var socialLinks: List<String> = emptyList()
 
     @Column(name = "public_contacts", columnDefinition = "jsonb", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)
@@ -81,7 +81,7 @@ open class EmployerProfileDto {
         description: String? = null,
         industry: String? = null,
         websiteUrl: String? = null,
-        socialLinks: Map<String, String> = emptyMap(),
+        socialLinks: List<String> = emptyList(),
         publicContacts: Map<String, String> = emptyMap(),
         companySize: String? = null,
         foundedYear: Short? = null,

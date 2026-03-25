@@ -14,7 +14,7 @@ data class EmployerProfile (
     val locationId: Long?,
     val companySize: String?,
     val foundedYear: Short?,
-    val socialLinks: Map<String, String>, // TODO: переделать в List моделей
+    val socialLinks: List<String>, // TODO: переделать в List моделей
     val publicContacts: Map<String, String>, // TODO: переделать в List моделей
     val verificationStatus: VerificationStatus,
 )
