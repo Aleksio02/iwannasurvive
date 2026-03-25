@@ -9,8 +9,7 @@ data class EmployerVerificationRequest(
     val verificationMethod: String,
 
     @field:Email
-    @field:NotBlank
-    val corporateEmail: String,
+    val corporateEmail: String?,
 
     @field:Pattern(regexp = "\\d{10,12}", message = "ИНН должен содержать 10-12 цифр")
     val inn: String? = null,
