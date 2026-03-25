@@ -34,12 +34,12 @@ class EmployerVerificationServiceImpl(
             )
         }
 
-        // Преобразуем строку в enum
-        val method = try {
-            VerificationMethod.valueOf(request.verificationMethod.uppercase())
-        } catch (e: IllegalArgumentException) {
-            // TODO: create exception for it
-            throw RuntimeException("Invalid verification method")
+        val method = when (request.verificationMethod.uppercase()) {
+            "EMAIL", "CORPORATE_EMAIL" -> VerificationMethod.CORPORATE_EMAIL
+            "INN", "TIN" -> VerificationMethod.TIN
+            "PROFESSIONAL_LINKS", "LINKS" -> VerificationMethod.PROFESSIONAL_LINKS
+            "MANUAL" -> VerificationMethod.MANUAL
+            else -> throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid verification method")
         }
 
         val entity = EmployerVerificationDto(
