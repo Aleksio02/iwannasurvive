@@ -9,11 +9,11 @@ import org.springframework.web.context.request.NativeWebRequest
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.method.support.ModelAndViewContainer
 import ru.itplanet.trampline.commons.annotation.CurrentUser
-import ru.itplanet.trampline.profile.connector.AuthConnector
+import ru.itplanet.trampline.profile.client.AuthServiceClient
 
 @Component
 class CurrentUserArgumentResolver(
-    private val authConnectorProvider: ObjectProvider<AuthConnector>
+    private val authServiceClientProvider: ObjectProvider<AuthServiceClient>
 ) : HandlerMethodArgumentResolver {
 
     override fun supportsParameter(parameter: MethodParameter): Boolean {
@@ -33,7 +33,7 @@ class CurrentUserArgumentResolver(
         val sessionId = extractSessionId(request)
             ?: throw RuntimeException("Session cookie not found")
 
-        val authConnector = authConnectorProvider.getObject()
+        val authConnector = authServiceClientProvider.getObject()
 
         val payload = authConnector.validateSession(sessionId)
 

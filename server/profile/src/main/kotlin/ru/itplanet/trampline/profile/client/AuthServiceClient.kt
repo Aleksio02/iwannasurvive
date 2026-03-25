@@ -1,4 +1,4 @@
-package ru.itplanet.trampline.profile.connector
+package ru.itplanet.trampline.profile.client
 
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.web.bind.annotation.CookieValue
@@ -6,10 +6,14 @@ import org.springframework.web.bind.annotation.GetMapping
 import ru.itplanet.trampline.commons.model.TokenPayload
 
 
-@FeignClient(name = "auth-service", url = "\${auth.service.url:http://localhost:9999/api/auth}")
-interface AuthConnector {
+@FeignClient(
+    name = "profile-auth-service-client",
+    url = "\${auth.service.url}",
+    configuration = [AuthServiceFeignConfig::class]
+)
+interface AuthServiceClient {
 
-    @GetMapping("/validateSession")
+    @GetMapping("/api/auth/me")
     fun validateSession(
         @CookieValue("sessionId") sessionId: String
     ): TokenPayload
