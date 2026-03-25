@@ -25,6 +25,19 @@ class CommonGlobalExceptionHandler {
             )
     }
 
+    @ExceptionHandler(OpportunityValidationException::class)
+    fun handleOpportunityValidation(ex: OpportunityValidationException): ResponseEntity<ApiError> {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(
+                ApiError(
+                    status = HttpStatus.BAD_REQUEST.value(),
+                    error = HttpStatus.BAD_REQUEST.reasonPhrase,
+                    message = ex.message,
+                    details = ex.details
+                )
+            )
+    }
+
     @ExceptionHandler(BindException::class)
     fun handleBindException(ex: BindException): ResponseEntity<ApiError> {
         val details = ex.bindingResult.fieldErrors.associate { error ->
