@@ -19,7 +19,7 @@ feign:
 
 auth:
   service:
-    url: ${AUTH_SERVICE_URL:http://auth:9999}
+    url: ${AUTH_SERVICE_URL:http://localhost:9999}
 
 internal-api:
   api-key: moderation-api-key
