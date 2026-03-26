@@ -1,5 +1,6 @@
 package ru.itplanet.trampline.interaction.service
 
+import ru.itplanet.trampline.interaction.dao.dto.ContactStatus
 import ru.itplanet.trampline.interaction.model.request.ContactRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseStatusUpdateRequest
@@ -30,7 +31,7 @@ interface InteractionService {
 
     fun addContact(userId: Long, request: ContactRequest): ContactResponse
 
-    fun acceptContact(userId: Long, contactUserId: Long): ContactResponse
+    fun respondContact(userId: Long, contactUserId: Long, status: ContactStatus): ContactResponse
 
     fun removeContact(userId: Long, contactUserId: Long)
 

@@ -2,7 +2,7 @@ package ru.itplanet.trampline.opportunity.model.request
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
-import ru.itplanet.trampline.opportunity.model.enums.ResourceLinkType
+import ru.itplanet.trampline.commons.model.enums.ResourceLinkType
 
 data class CreateEmployerOpportunityResourceLinkRequest(
     @field:NotBlank

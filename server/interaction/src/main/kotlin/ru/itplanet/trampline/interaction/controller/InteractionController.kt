@@ -3,6 +3,7 @@ package ru.itplanet.trampline.interaction.controller
 import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.*
 import ru.itplanet.trampline.commons.annotation.CurrentUser
+import ru.itplanet.trampline.interaction.dao.dto.ContactStatus
 import ru.itplanet.trampline.interaction.model.request.ContactRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseStatusUpdateRequest
@@ -57,7 +58,11 @@ class InteractionController(
 
     @PatchMapping("/contacts/{contactUserId}/accept")
     fun acceptContact(@CurrentUser userId: Long, @PathVariable contactUserId: Long): ContactResponse =
-        interactionService.acceptContact(userId, contactUserId)
+        interactionService.respondContact(userId, contactUserId, ContactStatus.ACCEPTED)
+
+    @PatchMapping("/contacts/{contactUserId}/decline")
+    fun declineContact(@CurrentUser userId: Long, @PathVariable contactUserId: Long): ContactResponse =
+        interactionService.respondContact(userId, contactUserId, ContactStatus.DECLINED)
 
     @DeleteMapping("/contacts/{contactUserId}")
     fun removeContact(@CurrentUser userId: Long, @PathVariable contactUserId: Long) =

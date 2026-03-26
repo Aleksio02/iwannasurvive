@@ -6,20 +6,15 @@ import org.hibernate.annotations.UpdateTimestamp
 import java.time.OffsetDateTime
 
 @Entity
-@Table(name = "contact", uniqueConstraints = [
-    UniqueConstraint(columnNames = ["user_id", "contact_user_id"])
+@Table(name = "applicant_contact", uniqueConstraints = [
+    UniqueConstraint(columnNames = ["user_low_id", "user_high_id"])
 ])
 open class ContactDto {
+    @EmbeddedId
+    open var id: ContactDtoId = ContactDtoId()
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    open var id: Long? = null
-
-    @Column(name = "user_id", nullable = false)
-    open var userId: Long = 0
-
-    @Column(name = "contact_user_id", nullable = false)
-    open var contactUserId: Long = 0
+    @Column(name = "initiated_by_user_id", nullable = false)
+    open var initiatedByUserId: Long? = null
 
     @Column(name = "status", nullable = false, length = 32)
     @Enumerated(EnumType.STRING)
@@ -33,16 +28,21 @@ open class ContactDto {
     @Column(name = "updated_at")
     open var updatedAt: OffsetDateTime? = null
 
+    @UpdateTimestamp
+    @Column(name = "responded_at")
+    open var respondedAt: OffsetDateTime? = null
+
     constructor() {}
 
-    constructor(userId: Long, contactUserId: Long) {
-        this.userId = userId
-        this.contactUserId = contactUserId
+    constructor(id: ContactDtoId, initiatedByUserId: Long?) {
+        this.id = id
+        this.initiatedByUserId = initiatedByUserId
     }
 }
 
 enum class ContactStatus {
-    PENDING,   // ожидает подтверждения
-    ACCEPTED,  // друзья
+    PENDING,
+    ACCEPTED,
+    DECLINED,
     BLOCKED
 }
