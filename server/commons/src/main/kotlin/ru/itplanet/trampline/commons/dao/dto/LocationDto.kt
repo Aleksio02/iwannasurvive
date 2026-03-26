@@ -30,10 +30,10 @@ open class LocationDto {
     @Column(name = "postal_code", length = 20)
     open var postalCode: String? = null
 
-    @Column(name = "latitude", precision = 9, scale = 6)
+    @Column(name = "latitude")
     open var latitude: Double? = null
 
-    @Column(name = "longitude", precision = 9, scale = 6)
+    @Column(name = "longitude")
     open var longitude: Double? = null
 
     @Column(name = "is_active", nullable = false)

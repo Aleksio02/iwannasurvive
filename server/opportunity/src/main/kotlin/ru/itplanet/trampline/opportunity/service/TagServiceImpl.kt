@@ -4,8 +4,8 @@ import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
 import ru.itplanet.trampline.opportunity.converter.TagConverter
 import ru.itplanet.trampline.opportunity.dao.TagDao
-import ru.itplanet.trampline.opportunity.model.Tag
-import ru.itplanet.trampline.opportunity.model.enums.TagCategory
+import ru.itplanet.trampline.commons.model.Tag
+import ru.itplanet.trampline.commons.model.enums.TagCategory
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 
 @Primary

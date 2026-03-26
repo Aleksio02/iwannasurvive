@@ -1,6 +1,6 @@
 package ru.itplanet.trampline.opportunity.service
 
-import ru.itplanet.trampline.opportunity.model.OpportunityCard
+import ru.itplanet.trampline.commons.model.OpportunityCard
 import ru.itplanet.trampline.opportunity.model.OpportunityListItem
 import ru.itplanet.trampline.opportunity.model.OpportunityMapPoint
 import ru.itplanet.trampline.opportunity.model.OpportunityPage
