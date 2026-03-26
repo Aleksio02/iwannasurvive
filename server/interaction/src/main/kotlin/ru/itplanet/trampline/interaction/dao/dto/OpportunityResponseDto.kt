@@ -21,7 +21,7 @@ open class OpportunityResponseDto {
 
     @Column(name = "status", nullable = false, length = 32)
     @Enumerated(EnumType.STRING)
-    open var status: ApplicationStatus = ApplicationStatus.PENDING
+    open var status: OpportunityResponseStatus = OpportunityResponseStatus.PENDING
 
     @Column(name = "comment")
     open var comment: String? = null
@@ -43,9 +43,9 @@ open class OpportunityResponseDto {
     }
 }
 
-enum class ApplicationStatus {
-    PENDING,    // ожидает рассмотрения
-    ACCEPTED,   // принят
-    REJECTED,   // отклонён
-    RESERVED    // в резерве
+enum class OpportunityResponseStatus {
+    PENDING,
+    ACCEPTED,
+    REJECTED,
+    RESERVED
 }

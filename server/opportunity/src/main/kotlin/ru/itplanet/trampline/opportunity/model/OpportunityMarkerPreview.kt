@@ -1,6 +1,7 @@
 package ru.itplanet.trampline.opportunity.model
 
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.Tag
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 
 data class OpportunityMarkerPreview(
     val title: String,

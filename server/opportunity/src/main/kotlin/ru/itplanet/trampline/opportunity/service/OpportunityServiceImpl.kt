@@ -8,7 +8,7 @@ import ru.itplanet.trampline.opportunity.converter.OpportunityConverter
 import ru.itplanet.trampline.opportunity.dao.OpportunityDao
 import ru.itplanet.trampline.opportunity.dao.specification.OpportunitySpecification
 import ru.itplanet.trampline.commons.exception.OpportunityNotFoundException
-import ru.itplanet.trampline.opportunity.model.OpportunityCard
+import ru.itplanet.trampline.commons.model.OpportunityCard
 import ru.itplanet.trampline.opportunity.model.OpportunityListItem
 import ru.itplanet.trampline.opportunity.model.OpportunityMapPoint
 import ru.itplanet.trampline.opportunity.model.OpportunityPage

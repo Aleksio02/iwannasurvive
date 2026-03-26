@@ -6,7 +6,7 @@ import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Table
 import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
-import ru.itplanet.trampline.opportunity.model.enums.TagCategory
+import ru.itplanet.trampline.commons.model.enums.TagCategory
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 
 @Entity

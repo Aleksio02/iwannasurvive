@@ -1,7 +1,7 @@
 package ru.itplanet.trampline.opportunity.service
 
-import ru.itplanet.trampline.opportunity.model.Tag
-import ru.itplanet.trampline.opportunity.model.enums.TagCategory
+import ru.itplanet.trampline.commons.model.Tag
+import ru.itplanet.trampline.commons.model.enums.TagCategory
 
 interface TagService {
 

@@ -1,6 +1,6 @@
 package ru.itplanet.trampline.opportunity.model
 
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
 
 data class OpportunityMapPoint(
     val id: Long,

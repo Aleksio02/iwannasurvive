@@ -62,11 +62,13 @@ class SecurityConfig(
             }
             .authorizeHttpRequests { auth ->
                 auth
-                    .requestMatchers(HttpMethod.PATCH, "/api/profile/employer").hasRole("EMPLOYER")
-                    .requestMatchers(HttpMethod.PATCH, "/api/profile/applicant").hasRole("APPLICANT")
-                    .requestMatchers(HttpMethod.GET, "/api/profile/**").permitAll()
+                    .requestMatchers(HttpMethod.PATCH, "/api/interaction/applications/**").hasRole("EMPLOYER")
+                    .requestMatchers(HttpMethod.PATCH, "/api/interaction/contacts/**").hasRole("APPLICANT")
+                    .requestMatchers(HttpMethod.GET, "/api/interaction/opportunities/**").hasRole("EMPLOYER")
+                    .requestMatchers(HttpMethod.POST, "/api/interaction/**").hasRole("APPLICANT")
+                    .requestMatchers(HttpMethod.DELETE, "/api/interaction/**").hasRole("APPLICANT")
+                    .requestMatchers(HttpMethod.GET, "/api/interaction/**").permitAll()
                     .requestMatchers(request.matcher("/internal/**")).hasRole("INTERNAL")
-                    .requestMatchers(request.matcher("/api/employer/**")).hasRole("EMPLOYER")
                     .requestMatchers(request.matcher("/error")).permitAll()
                     .anyRequest().authenticated()
             }

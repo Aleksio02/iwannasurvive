@@ -1,9 +1,12 @@
 package ru.itplanet.trampline.opportunity.model
 
-import ru.itplanet.trampline.opportunity.model.enums.EmploymentType
-import ru.itplanet.trampline.opportunity.model.enums.Grade
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.City
+import ru.itplanet.trampline.commons.model.Location
+import ru.itplanet.trampline.commons.model.Tag
+import ru.itplanet.trampline.commons.model.enums.EmploymentType
+import ru.itplanet.trampline.commons.model.enums.Grade
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -22,7 +25,7 @@ data class OpportunityListItem(
     val publishedAt: OffsetDateTime?,
     val expiresAt: OffsetDateTime?,
     val eventDate: LocalDate?,
-    val city: CitySummary?,
-    val locationPreview: LocationPreview?,
+    val city: City?,
+    val locationPreview: Location?,
     val tags: List<Tag>
 )
