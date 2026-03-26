@@ -6,12 +6,12 @@ import ru.itplanet.trampline.opportunity.dao.dto.LocationDto
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityResourceLinkDto
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
-import ru.itplanet.trampline.opportunity.model.CitySummary
+import ru.itplanet.trampline.commons.model.City
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityCard
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityEditPayload
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityListItem
-import ru.itplanet.trampline.opportunity.model.LocationPreview
-import ru.itplanet.trampline.opportunity.model.OpportunityResourceLink
+import ru.itplanet.trampline.commons.model.Location
+import ru.itplanet.trampline.commons.model.OpportunityResourceLink
 import ru.itplanet.trampline.opportunity.model.enums.EmployerOpportunityCabinetGroup
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import java.util.Locale
@@ -123,28 +123,29 @@ class EmployerOpportunityConverter(
         return source.city ?: source.location?.city
     }
 
-    private fun toCitySummary(source: CityDto?): CitySummary? {
+    private fun toCitySummary(source: CityDto?): City? {
         if (source == null) {
             return null
         }
 
-        return CitySummary(
+        return City(
             id = requireNotNull(source.id),
             name = source.name,
             regionName = source.regionName,
             countryCode = source.countryCode,
-            latitude = source.latitude?.toDouble(),
-            longitude = source.longitude?.toDouble()
+            latitude = source.latitude,
+            longitude = source.longitude
         )
     }
 
-    private fun toLocationPreview(source: LocationDto?): LocationPreview? {
+    private fun toLocationPreview(source: LocationDto?): Location? {
         if (source == null) {
             return null
         }
 
-        return LocationPreview(
+        return Location(
             id = requireNotNull(source.id),
+            city = toCitySummary(source.city),
             title = source.title,
             addressLine = source.addressLine,
             addressLine2 = source.addressLine2,
