@@ -95,11 +95,11 @@ class InteractionServiceImpl(
     // ----- Избранное -----
     override fun addToFavorites(userId: Long, opportunityId: Long): FavoriteResponse {
         if (!favoriteDao.existsByUserIdAndOpportunityId(userId, opportunityId)) {
-            val favoriteDto = FavoriteDto(userId, opportunityId)
+            val favoriteDto = FavoriteDto(userId, opportunityId, FavoriteTargetType.OPPORTUNITY)
             favoriteDao.save(favoriteDto)
         }
         val opportunity = opportunityServiceClient.getPublicOpportunity(opportunityId)
-        return FavoriteResponse(opportunityId, opportunity.title, null)
+        return FavoriteResponse(opportunityId, opportunity.title, OffsetDateTime.now())
     }
 
     override fun removeFromFavorites(userId: Long, opportunityId: Long) {
