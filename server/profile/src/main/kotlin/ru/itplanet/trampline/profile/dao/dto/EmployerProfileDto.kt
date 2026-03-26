@@ -19,13 +19,13 @@ open class EmployerProfileDto {
     open var userId: Long = 0
 
     @Column(name = "company_name", length = 255)
-    open var companyName: String = ""
+    open var companyName: String? = null
 
     @Column(name = "legal_name", length = 255)
     open var legalName: String? = null
 
     @Column(name = "inn", length = 12, unique = true)
-    open var inn: String = ""
+    open var inn: String? = null
 
     @Column(name = "description")
     open var description: String? = null
@@ -80,9 +80,9 @@ open class EmployerProfileDto {
 
     constructor(
         userId: Long,
-        companyName: String,
+        companyName: String?,
         legalName: String? = null,
-        inn: String,
+        inn: String?,
         description: String? = null,
         industry: String? = null,
         websiteUrl: String? = null,

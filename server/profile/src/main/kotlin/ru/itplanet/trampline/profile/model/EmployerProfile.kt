@@ -6,9 +6,9 @@ import ru.itplanet.trampline.profile.model.enums.VerificationStatus
 
 data class EmployerProfile (
     val userId: Long,
-    val companyName: String,
+    val companyName: String?,
     val legalName: String?,
-    val inn: String,
+    val inn: String?,
     val description: String?,
     val industry: String?,
     val websiteUrl: String?,

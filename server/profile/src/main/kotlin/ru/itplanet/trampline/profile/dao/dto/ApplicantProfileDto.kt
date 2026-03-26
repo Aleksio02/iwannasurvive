@@ -21,10 +21,10 @@ open class ApplicantProfileDto {
     open var userId: Long = 0
 
     @Column(name = "first_name", length = 100)
-    open var firstName: String = ""
+    open var firstName: String? = null
 
     @Column(name = "last_name", length = 100)
-    open var lastName: String = ""
+    open var lastName: String? = null
 
     @Column(name = "middle_name", length = 100)
     open var middleName: String? = null
@@ -100,8 +100,8 @@ open class ApplicantProfileDto {
 
     constructor(
         userId: Long,
-        firstName: String,
-        lastName: String,
+        firstName: String?,
+        lastName: String?,
         middleName: String? = null,
         universityName: String? = null,
         facultyName: String? = null,
