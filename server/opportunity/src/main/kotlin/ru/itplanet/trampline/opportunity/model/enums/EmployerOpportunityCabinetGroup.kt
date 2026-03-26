@@ -1,5 +1,7 @@
 package ru.itplanet.trampline.opportunity.model.enums
 
+import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
+
 enum class EmployerOpportunityCabinetGroup {
     ACTIVE,
     PLANNED,

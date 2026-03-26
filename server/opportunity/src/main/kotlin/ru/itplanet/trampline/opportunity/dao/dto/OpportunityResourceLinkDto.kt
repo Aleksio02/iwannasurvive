@@ -10,7 +10,7 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.MapsId
 import jakarta.persistence.Table
 import jakarta.persistence.Column
-import ru.itplanet.trampline.opportunity.model.enums.ResourceLinkType
+import ru.itplanet.trampline.commons.model.enums.ResourceLinkType
 
 @Entity
 @Table(name = "opportunity_resource_link")

@@ -2,12 +2,12 @@ package ru.itplanet.trampline.opportunity.model.request
 
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
+import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.model.enums.EmployerOpportunityCabinetGroup
 import ru.itplanet.trampline.opportunity.model.enums.EmployerOpportunitySortBy
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityStatus
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
 import ru.itplanet.trampline.opportunity.model.enums.SortDirection
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
 
 data class GetEmployerOpportunityListRequest(
     @field:Min(1)

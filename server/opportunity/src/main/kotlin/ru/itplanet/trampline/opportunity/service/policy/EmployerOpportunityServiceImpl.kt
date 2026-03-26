@@ -20,12 +20,12 @@ import ru.itplanet.trampline.opportunity.dao.specification.EmployerOpportunitySp
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityCard
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityEditPayload
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityListItem
-import ru.itplanet.trampline.opportunity.model.OpportunityContactInfo
+import ru.itplanet.trampline.commons.model.OpportunityContactInfo
 import ru.itplanet.trampline.opportunity.model.OpportunityPage
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityStatus
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityContactInfoRequest
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityRequest
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityResourceLinkRequest

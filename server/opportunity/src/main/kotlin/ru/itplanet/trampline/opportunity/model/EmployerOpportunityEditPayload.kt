@@ -1,10 +1,12 @@
 package ru.itplanet.trampline.opportunity.model
 
-import ru.itplanet.trampline.opportunity.model.enums.EmploymentType
-import ru.itplanet.trampline.opportunity.model.enums.Grade
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityStatus
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.OpportunityContactInfo
+import ru.itplanet.trampline.commons.model.OpportunityResourceLink
+import ru.itplanet.trampline.commons.model.enums.EmploymentType
+import ru.itplanet.trampline.commons.model.enums.Grade
+import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import java.time.LocalDate
 import java.time.OffsetDateTime
 

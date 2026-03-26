@@ -1,27 +1,12 @@
 package ru.itplanet.trampline.opportunity.dao.dto
 
-import jakarta.persistence.CascadeType
-import jakarta.persistence.Column
-import jakarta.persistence.Entity
-import jakarta.persistence.EnumType
-import jakarta.persistence.Enumerated
-import jakarta.persistence.FetchType
-import jakarta.persistence.JoinColumn
-import jakarta.persistence.JoinTable
-import jakarta.persistence.ManyToMany
-import jakarta.persistence.ManyToOne
-import jakarta.persistence.OneToMany
-import jakarta.persistence.Table
+import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
-import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.type.SqlTypes
-import ru.itplanet.trampline.opportunity.model.OpportunityContactInfo
-import ru.itplanet.trampline.opportunity.model.enums.EmploymentType
-import ru.itplanet.trampline.opportunity.model.enums.Grade
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityStatus
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.OpportunityContactInfo
+import ru.itplanet.trampline.commons.model.enums.*
 import java.time.LocalDate
 import java.time.OffsetDateTime
 

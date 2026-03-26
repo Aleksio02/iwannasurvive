@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.ModelAttribute
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import ru.itplanet.trampline.opportunity.model.OpportunityCard
+import ru.itplanet.trampline.commons.model.OpportunityCard
 import ru.itplanet.trampline.opportunity.model.OpportunityListItem
 import ru.itplanet.trampline.opportunity.model.OpportunityMapPoint
 import ru.itplanet.trampline.opportunity.model.OpportunityPage

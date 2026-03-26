@@ -24,8 +24,7 @@ class CityConverter {
             regionName = source.regionName,
             countryCode = source.countryCode,
             latitude = source.latitude,
-            longitude = source.longitude,
-            isActive = source.isActive
+            longitude = source.longitude
         )
     }
 }

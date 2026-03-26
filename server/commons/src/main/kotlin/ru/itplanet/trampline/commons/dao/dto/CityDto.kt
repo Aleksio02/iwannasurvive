@@ -23,10 +23,10 @@ open class CityDto {
     @Column(name = "country_code", length = 2, nullable = false)
     open var countryCode: String = ""
 
-    @Column(name = "latitude", precision = 9, scale = 6)
+    @Column(name = "latitude")
     open var latitude: BigDecimal? = null
 
-    @Column(name = "longitude", precision = 9, scale = 6)
+    @Column(name = "longitude")
     open var longitude: BigDecimal? = null
 
     @Column(name = "is_active", nullable = false)

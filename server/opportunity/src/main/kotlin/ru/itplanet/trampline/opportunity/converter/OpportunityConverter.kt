@@ -3,16 +3,16 @@ package ru.itplanet.trampline.opportunity.converter
 import org.springframework.stereotype.Component
 import ru.itplanet.trampline.opportunity.dao.dto.CityDto
 import ru.itplanet.trampline.opportunity.dao.dto.LocationDto
+import ru.itplanet.trampline.commons.model.City
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityResourceLinkDto
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
-import ru.itplanet.trampline.opportunity.model.CitySummary
-import ru.itplanet.trampline.opportunity.model.LocationPreview
-import ru.itplanet.trampline.opportunity.model.OpportunityCard
+import ru.itplanet.trampline.commons.model.Location
+import ru.itplanet.trampline.commons.model.OpportunityCard
 import ru.itplanet.trampline.opportunity.model.OpportunityListItem
 import ru.itplanet.trampline.opportunity.model.OpportunityMapPoint
 import ru.itplanet.trampline.opportunity.model.OpportunityMarkerPreview
-import ru.itplanet.trampline.opportunity.model.OpportunityResourceLink
+import ru.itplanet.trampline.commons.model.OpportunityResourceLink
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 
 @Component
@@ -47,6 +47,7 @@ class OpportunityConverter(
     fun toCard(source: OpportunityDto): OpportunityCard {
         return OpportunityCard(
             id = requireNotNull(source.id),
+            employerUserId = source.employerUserId,
             title = source.title,
             shortDescription = source.shortDescription,
             fullDescription = source.fullDescription,
@@ -71,7 +72,8 @@ class OpportunityConverter(
             tags = source.tags
                 .approvedActiveTags()
                 .map(tagConverter::toModel),
-            mediaLinks = emptyList()
+            mediaLinks = emptyList(),
+            status = source.status
         )
     }
 
@@ -112,34 +114,35 @@ class OpportunityConverter(
         return source.city ?: source.location?.city
     }
 
-    private fun toCitySummary(source: CityDto?): CitySummary? {
+    private fun toCitySummary(source: CityDto?): City? {
         if (source == null) {
             return null
         }
 
-        return CitySummary(
+        return City(
             id = source.id!!,
             name = source.name,
             regionName = source.regionName,
             countryCode = source.countryCode,
-            latitude = source.latitude?.toDouble(),
-            longitude = source.longitude?.toDouble()
+            latitude = source.latitude,
+            longitude = source.longitude
         )
     }
 
-    private fun toLocationPreview(source: LocationDto?): LocationPreview? {
+    private fun toLocationPreview(source: LocationDto?): Location? {
         if (source == null) {
             return null
         }
 
-        return LocationPreview(
+        return Location(
             id = requireNotNull(source.id),
             title = source.title,
             addressLine = source.addressLine,
             addressLine2 = source.addressLine2,
             postalCode = source.postalCode,
             latitude = source.latitude?.toDouble(),
-            longitude = source.longitude?.toDouble()
+            longitude = source.longitude?.toDouble(),
+            city = toCitySummary(source.city)
         )
     }
 
