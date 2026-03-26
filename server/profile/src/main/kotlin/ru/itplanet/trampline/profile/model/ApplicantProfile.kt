@@ -8,8 +8,8 @@ import ru.itplanet.trampline.profile.model.enums.ResumeVisibility
 
 data class ApplicantProfile (
     val userId: Long,
-    val firstName: String,
-    val lastName: String,
+    val firstName: String?,
+    val lastName: String?,
     val middleName: String?,
     val universityName: String?,
     val facultyName: String?,
