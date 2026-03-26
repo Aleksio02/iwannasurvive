@@ -3,9 +3,9 @@ package ru.itplanet.trampline.opportunity.model.request
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import ru.itplanet.trampline.opportunity.model.enums.OpportunitySortBy
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
 import ru.itplanet.trampline.opportunity.model.enums.SortDirection
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 
 data class GetOpportunityListRequest(
     @field:Min(1)

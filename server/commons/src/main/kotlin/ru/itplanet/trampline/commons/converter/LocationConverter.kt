@@ -1,9 +1,7 @@
 package ru.itplanet.trampline.commons.converter
 
 import org.springframework.stereotype.Component
-import ru.itplanet.trampline.commons.dao.dto.CityDto
 import ru.itplanet.trampline.commons.dao.dto.LocationDto
-import ru.itplanet.trampline.commons.model.City
 import ru.itplanet.trampline.commons.model.Location
 
 @Component
@@ -33,7 +31,6 @@ class LocationConverter(
             postalCode = source.postalCode,
             latitude = source.latitude,
             longitude = source.longitude,
-            isActive = source.isActive
         )
     }
 }

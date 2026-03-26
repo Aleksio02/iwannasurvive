@@ -8,6 +8,5 @@ data class City(
     val regionName: String,
     val countryCode: String,
     val latitude: BigDecimal?,
-    val longitude: BigDecimal?,
-    val isActive: Boolean
+    val longitude: BigDecimal?
 )

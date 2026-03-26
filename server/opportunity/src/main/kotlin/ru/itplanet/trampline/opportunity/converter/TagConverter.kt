@@ -2,7 +2,7 @@ package ru.itplanet.trampline.opportunity.converter
 
 import org.springframework.stereotype.Component
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
-import ru.itplanet.trampline.opportunity.model.Tag
+import ru.itplanet.trampline.commons.model.Tag
 
 @Component
 class TagConverter {

@@ -30,11 +30,11 @@ open class LocationDto {
     @Column(name = "postal_code", length = 20)
     open var postalCode: String? = null
 
-    @Column(name = "latitude", precision = 9, scale = 6)
-    open var latitude: BigDecimal? = null
+    @Column(name = "latitude")
+    open var latitude: Double? = null
 
-    @Column(name = "longitude", precision = 9, scale = 6)
-    open var longitude: BigDecimal? = null
+    @Column(name = "longitude")
+    open var longitude: Double? = null
 
     @Column(name = "is_active", nullable = false)
     open var isActive: Boolean = true
@@ -55,8 +55,8 @@ open class LocationDto {
         title: String? = null,
         addressLine2: String? = null,
         postalCode: String? = null,
-        latitude: BigDecimal? = null,
-        longitude: BigDecimal? = null
+        latitude: Double? = null,
+        longitude: Double? = null
     ) {
         this.city = city
         this.addressLine = addressLine

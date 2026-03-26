@@ -3,9 +3,9 @@ package ru.itplanet.trampline.opportunity.dao.specification
 import org.springframework.data.jpa.domain.Specification
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
 import ru.itplanet.trampline.opportunity.model.enums.EmployerOpportunityCabinetGroup
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityStatus
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.model.request.GetEmployerOpportunityListRequest
 
 object EmployerOpportunitySpecification {

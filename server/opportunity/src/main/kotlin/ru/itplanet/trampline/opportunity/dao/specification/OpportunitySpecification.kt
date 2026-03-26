@@ -6,10 +6,10 @@ import ru.itplanet.trampline.opportunity.dao.dto.CityDto
 import ru.itplanet.trampline.opportunity.dao.dto.LocationDto
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityStatus
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.model.request.GetOpportunityListRequest
 import java.time.LocalDate
 import java.time.OffsetDateTime

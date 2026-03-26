@@ -1,4 +1,4 @@
-package ru.itplanet.trampline.opportunity.model.enums
+package ru.itplanet.trampline.commons.model.enums
 
 enum class OpportunityStatus {
     DRAFT,

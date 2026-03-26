@@ -1,4 +1,4 @@
-package ru.itplanet.trampline.opportunity.model
+package ru.itplanet.trampline.commons.model
 
 data class OpportunityContactInfo(
     val email: String? = null,

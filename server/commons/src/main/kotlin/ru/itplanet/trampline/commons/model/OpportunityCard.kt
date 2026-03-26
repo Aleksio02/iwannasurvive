@@ -1,14 +1,12 @@
-package ru.itplanet.trampline.opportunity.model
+package ru.itplanet.trampline.commons.model
 
-import ru.itplanet.trampline.opportunity.model.enums.EmploymentType
-import ru.itplanet.trampline.opportunity.model.enums.Grade
-import ru.itplanet.trampline.opportunity.model.enums.OpportunityType
-import ru.itplanet.trampline.opportunity.model.enums.WorkFormat
+import ru.itplanet.trampline.commons.model.enums.*
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
 data class OpportunityCard(
     val id: Long,
+    val employerUserId: Long?,
     val title: String,
     val shortDescription: String,
     val fullDescription: String?,
@@ -24,9 +22,10 @@ data class OpportunityCard(
     val publishedAt: OffsetDateTime?,
     val expiresAt: OffsetDateTime?,
     val eventDate: LocalDate?,
-    val city: CitySummary?,
-    val location: LocationPreview?,
+    val city: City?,
+    val location: Location?,
     val contactInfo: OpportunityContactInfo,
+    val status: OpportunityStatus,
     val resourceLinks: List<OpportunityResourceLink>,
     val tags: List<Tag>,
     val mediaLinks: List<String>
