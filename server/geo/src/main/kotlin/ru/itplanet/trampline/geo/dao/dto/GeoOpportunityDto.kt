@@ -10,11 +10,17 @@ open class GeoOpportunityDto(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
+    @Column
     var title: String,
+    @Column(name="full_description")
     var fullDescription: String?,
+    @Column(name="salary_from")
     var salaryFrom: Int?,
+    @Column(name="salary_to")
     var salaryTo: Int?,
+    @Column(name="salary_currency")
     var salaryCurrency: String?,
+    @Column(name="type")
     var type: String?,
     @ManyToOne
     @JoinColumn(name = "employer_user_id")
