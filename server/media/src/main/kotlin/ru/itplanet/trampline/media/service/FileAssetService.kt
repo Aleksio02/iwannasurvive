@@ -2,7 +2,7 @@ package ru.itplanet.trampline.media.service
 
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.commons.dao.FileAssetDao
 import ru.itplanet.trampline.commons.dao.dto.FileAssetDto
@@ -17,95 +17,71 @@ class FileAssetService(
     private val fileAssetDao: FileAssetDao,
     private val objectStorage: ObjectStorage,
     private val fileKeyFactory: FileKeyFactory,
+    private val fileValidationService: FileValidationService,
+    private val transactionTemplate: TransactionTemplate,
 ) {
 
-    @Transactional
     fun upload(
         file: MultipartFile,
+        ownerUserId: Long,
         kind: FileAssetKind,
-        ownerUserId: Long? = null,
         visibility: FileAssetVisibility = FileAssetVisibility.PRIVATE,
     ): FileAssetDto {
+        fileValidationService.validate(file, kind)
+
         val originalFileName = file.originalFilename?.takeIf { it.isNotBlank() } ?: "file.bin"
         val mediaType = file.contentType?.takeIf { it.isNotBlank() } ?: MediaType.APPLICATION_OCTET_STREAM_VALUE
         val bytes = file.bytes
+        val checksumSha256 = sha256Hex(bytes)
         val storageKey = fileKeyFactory.buildKey(
             kind = kind,
             ownerUserId = ownerUserId,
             originalFileName = originalFileName,
         )
 
-        val fileAsset = FileAssetDto().apply {
-            this.ownerUserId = ownerUserId
-            this.storageProvider = FileStorageProvider.S3
-            this.storageKey = storageKey
-            this.originalFileName = originalFileName
-            this.mediaType = mediaType
-            this.sizeBytes = bytes.size.toLong()
-            this.checksumSha256 = sha256Hex(bytes)
-            this.kind = kind
-            this.visibility = visibility
-            this.status = FileAssetStatus.UPLOADING
-        }
-
-        val savedFileAsset = fileAssetDao.save(fileAsset)
+        val createdFileAsset = transactionTemplate.execute {
+            fileAssetDao.save(
+                FileAssetDto().apply {
+                    this.ownerUserId = ownerUserId
+                    this.storageProvider = FileStorageProvider.S3
+                    this.storageKey = storageKey
+                    this.originalFileName = originalFileName
+                    this.mediaType = mediaType
+                    this.sizeBytes = bytes.size.toLong()
+                    this.checksumSha256 = checksumSha256
+                    this.kind = kind
+                    this.visibility = visibility
+                    this.status = FileAssetStatus.UPLOADING
+                }
+            )
+        } ?: throw IllegalStateException("Failed to create file asset record")
 
         return try {
             objectStorage.putObject(
-                key = savedFileAsset.storageKey,
+                key = createdFileAsset.storageKey,
                 bytes = bytes,
-                contentType = savedFileAsset.mediaType,
-                metadata = buildMetadata(savedFileAsset),
+                contentType = createdFileAsset.mediaType,
+                metadata = buildMetadata(createdFileAsset),
             )
 
-            savedFileAsset.status = FileAssetStatus.READY
-            fileAssetDao.save(savedFileAsset)
+            transactionTemplate.execute {
+                val fileAsset = fileAssetDao.findById(createdFileAsset.id!!)
+                    .orElseThrow { NoSuchElementException("File asset ${createdFileAsset.id} not found") }
+
+                fileAsset.status = FileAssetStatus.READY
+                fileAssetDao.save(fileAsset)
+            } ?: throw IllegalStateException("Failed to update file asset status to READY")
         } catch (ex: Exception) {
-            savedFileAsset.status = FileAssetStatus.FAILED
-            fileAssetDao.save(savedFileAsset)
+            transactionTemplate.executeWithoutResult {
+                val fileAsset = fileAssetDao.findById(createdFileAsset.id!!).orElse(null)
+                if (fileAsset != null) {
+                    fileAsset.status = FileAssetStatus.FAILED
+                    fileAssetDao.save(fileAsset)
+                }
+            }
+
             throw IllegalStateException("Failed to upload file to object storage", ex)
         }
-    }
-
-    @Transactional(readOnly = true)
-    fun getById(fileId: Long): FileAssetDto {
-        return fileAssetDao.findById(fileId)
-            .orElseThrow { NoSuchElementException("File asset $fileId not found") }
-    }
-
-    @Transactional(readOnly = true)
-    fun generateDownloadUrl(fileId: Long): String {
-        val fileAsset = getById(fileId)
-        check(fileAsset.status == FileAssetStatus.READY) { "File asset $fileId is not ready" }
-        return objectStorage.generatePresignedGetUrl(fileAsset.storageKey)
-    }
-
-    @Transactional(readOnly = true)
-    fun generateUploadUrl(
-        kind: FileAssetKind,
-        ownerUserId: Long? = null,
-        originalFileName: String,
-    ): String {
-        val storageKey = fileKeyFactory.buildKey(
-            kind = kind,
-            ownerUserId = ownerUserId,
-            originalFileName = originalFileName,
-        )
-
-        return objectStorage.generatePresignedPutUrl(storageKey)
-    }
-
-    @Transactional
-    fun delete(fileId: Long) {
-        val fileAsset = getById(fileId)
-
-        if (fileAsset.status == FileAssetStatus.DELETED) {
-            return
-        }
-
-        objectStorage.deleteObject(fileAsset.storageKey)
-        fileAsset.status = FileAssetStatus.DELETED
-        fileAssetDao.save(fileAsset)
     }
 
     private fun buildMetadata(fileAsset: FileAssetDto): Map<String, String> = buildMap {

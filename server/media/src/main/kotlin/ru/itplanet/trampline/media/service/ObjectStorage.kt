@@ -8,10 +8,4 @@ interface ObjectStorage {
         contentType: String,
         metadata: Map<String, String> = emptyMap(),
     )
-
-    fun deleteObject(key: String)
-
-    fun generatePresignedGetUrl(key: String): String
-
-    fun generatePresignedPutUrl(key: String): String
 }

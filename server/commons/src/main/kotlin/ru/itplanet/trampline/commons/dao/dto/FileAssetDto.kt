@@ -63,9 +63,9 @@ open class FileAssetDto {
     @Column(name = "status", nullable = false, length = 32)
     open var status: FileAssetStatus = FileAssetStatus.UPLOADING
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     open var createdAt: OffsetDateTime? = null
 
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     open var updatedAt: OffsetDateTime? = null
 }
