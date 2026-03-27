@@ -1,8 +1,6 @@
 package ru.itplanet.trampline.moderation.model.response
 
 import com.fasterxml.jackson.databind.JsonNode
-import ru.itplanet.trampline.moderation.model.ModerationEntityType
-import ru.itplanet.trampline.moderation.model.ModerationTaskPriority
 import ru.itplanet.trampline.moderation.model.ModerationTaskStatus
 import ru.itplanet.trampline.moderation.model.ModerationTaskType
 import java.time.OffsetDateTime
