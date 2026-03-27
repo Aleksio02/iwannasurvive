@@ -22,7 +22,6 @@ import ru.itplanet.trampline.moderation.dao.dto.ModerationTaskDto
 import ru.itplanet.trampline.moderation.dao.dto.ModerationUserRefDto
 import ru.itplanet.trampline.moderation.dao.query.ModerationReadModelDao
 import ru.itplanet.trampline.moderation.exception.ModerationTaskNotFoundException
-import ru.itplanet.trampline.moderation.model.ModerationEntityType
 import ru.itplanet.trampline.moderation.model.ModerationLogAction
 import ru.itplanet.trampline.moderation.model.ModerationSeverity
 import ru.itplanet.trampline.moderation.model.ModerationTaskStatus
@@ -45,6 +44,46 @@ class ModerationCommandServiceImpl(
 
     @PersistenceContext
     private lateinit var entityManager: EntityManager
+
+    @Transactional
+    override fun createInternalTask(
+        request: CreateInternalModerationTaskRequest,
+    ): InternalModerationTaskResponse {
+        val existingTask = moderationTaskDao.findActiveByKeyForUpdate(
+            entityType = request.entityType,
+            entityId = request.entityId,
+            taskType = request.taskType,
+            statuses = ACTIVE_TASK_STATUSES,
+        ).firstOrNull()
+
+        if (existingTask != null) {
+            return existingTask.toInternalResponse(created = false)
+        }
+
+        val now = OffsetDateTime.now()
+        val task = ModerationTaskDto().apply {
+            entityType = request.entityType
+            entityId = request.entityId
+            taskType = request.taskType
+            status = ModerationTaskStatus.OPEN
+            priority = request.priority
+            createdByUser = request.createdByUserId?.let { userReference(it) }
+            createdAt = now
+            updatedAt = now
+        }
+
+        moderationTaskDao.save(task)
+
+        saveLog(
+            task = task,
+            action = ModerationLogAction.CREATED,
+            actorUserId = request.createdByUserId,
+            payload = buildInternalCreatedPayload(request),
+            createdAt = now,
+        )
+
+        return task.toInternalResponse(created = true)
+    }
 
     @Transactional
     override fun createManualTask(
@@ -322,6 +361,25 @@ class ModerationCommandServiceImpl(
         )
     }
 
+    private fun buildInternalCreatedPayload(
+        request: CreateInternalModerationTaskRequest,
+    ): JsonNode {
+        val payload = if (request.snapshot is ObjectNode) {
+            request.snapshot.deepCopy<ObjectNode>()
+        } else {
+            JsonNodeFactory.instance.objectNode().apply {
+                set<JsonNode>("snapshot", request.snapshot.deepCopy())
+            }
+        }
+
+        payload.put("createdManually", false)
+        payload.put("sourceService", request.sourceService.trim())
+        payload.put("sourceAction", request.sourceAction.trim())
+        request.createdByUserId?.let { payload.put("createdByUserId", it) }
+
+        return payload
+    }
+
     private fun buildManualCreatedPayload(
         snapshot: JsonNode,
         comment: String,
@@ -458,11 +516,29 @@ class ModerationCommandServiceImpl(
         return entityManager.getReference(ModerationUserRefDto::class.java, userId)
     }
 
+    private fun ModerationTaskDto.toInternalResponse(created: Boolean): InternalModerationTaskResponse {
+        return InternalModerationTaskResponse(
+            taskId = id ?: error("Task id must not be null"),
+            entityType = entityType,
+            entityId = entityId,
+            taskType = taskType,
+            status = status,
+            created = created,
+        )
+    }
+
     private fun conflict(message: String): ResponseStatusException {
         return ResponseStatusException(HttpStatus.CONFLICT, message)
     }
 
     private fun forbidden(message: String): ResponseStatusException {
         return ResponseStatusException(HttpStatus.FORBIDDEN, message)
+    }
+
+    companion object {
+        private val ACTIVE_TASK_STATUSES = listOf(
+            ModerationTaskStatus.OPEN,
+            ModerationTaskStatus.IN_PROGRESS,
+        )
     }
 }

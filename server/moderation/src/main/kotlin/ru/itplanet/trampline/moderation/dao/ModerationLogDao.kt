@@ -2,7 +2,6 @@ package ru.itplanet.trampline.moderation.dao
 
 import org.springframework.data.jpa.repository.JpaRepository
 import ru.itplanet.trampline.moderation.dao.dto.ModerationLogDto
-import ru.itplanet.trampline.moderation.model.ModerationEntityType
 import ru.itplanet.trampline.moderation.model.ModerationLogAction
 
 interface ModerationLogDao : JpaRepository<ModerationLogDto, Long> {

@@ -1,8 +1,6 @@
 package ru.itplanet.trampline.moderation.dao.dto
 
 import jakarta.persistence.*
-import ru.itplanet.trampline.moderation.model.ModerationEntityType
-import ru.itplanet.trampline.moderation.model.ModerationTaskPriority
 import ru.itplanet.trampline.moderation.model.ModerationTaskStatus
 import ru.itplanet.trampline.moderation.model.ModerationTaskType
 import java.time.OffsetDateTime

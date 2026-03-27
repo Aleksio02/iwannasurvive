@@ -9,6 +9,10 @@ import ru.itplanet.trampline.moderation.security.AuthenticatedUser
 
 interface ModerationCommandService {
 
+    fun createInternalTask(
+        request: CreateInternalModerationTaskRequest,
+    ): InternalModerationTaskResponse
+
     fun createManualTask(
         currentUser: AuthenticatedUser,
         request: CreateManualModerationTaskRequest,

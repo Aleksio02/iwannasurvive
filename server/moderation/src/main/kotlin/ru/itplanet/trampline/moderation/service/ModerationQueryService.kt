@@ -1,6 +1,5 @@
 package ru.itplanet.trampline.moderation.service
 
-import ru.itplanet.trampline.moderation.model.ModerationEntityType
 import ru.itplanet.trampline.moderation.model.request.GetModerationTasksRequest
 import ru.itplanet.trampline.moderation.model.response.ModerationDashboardResponse
 import ru.itplanet.trampline.moderation.model.response.ModerationEntityHistoryItemResponse

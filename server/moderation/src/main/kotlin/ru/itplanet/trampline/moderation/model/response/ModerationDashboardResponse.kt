@@ -1,8 +1,5 @@
 package ru.itplanet.trampline.moderation.model.response
 
-import ru.itplanet.trampline.moderation.model.ModerationEntityType
-import ru.itplanet.trampline.moderation.model.ModerationTaskPriority
-
 data class ModerationDashboardResponse(
     val openCount: Long,
     val inProgressCount: Long,
