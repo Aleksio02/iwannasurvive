@@ -6,23 +6,23 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import ru.itplanet.trampline.geo.dao.dto.GeoOpportunityDto
 
-interface OpportunityDao : JpaRepository<GeoOpportunityDto, Long> {
 
+interface OpportunityDao : JpaRepository<GeoOpportunityDto, Long> {
     @Query(
         value = """
             SELECT
-                o.id AS opportunity_id,
+                o.id,
                 o.title,
                 o.full_description,
                 o.salary_from,
                 o.salary_to,
                 o.salary_currency,
                 o.type,
-                ep.user_id AS employer_id,
+                ep.user_id AS employer_user_id,
                 ep.company_name,
                 l.id AS location_id,
-                l.address_line as address,
-                l.location_point AS location_point,
+                l.address_line as address_line,
+                ST_AsText(l.location_point)::text AS location_point,
                 c.id AS city_id,
                 c.name AS city_name
             FROM opportunity o
@@ -38,27 +38,27 @@ interface OpportunityDao : JpaRepository<GeoOpportunityDto, Long> {
         nativeQuery = true
     )
     fun findWithinRadius(
-        @Param("lat") lat: Double,
-        @Param("lng") lng: Double,
-        @Param("radius") radiusKm: Double,
-        @Param("limit") limit: Int,
-        @Param("offset") offset: Int
-    ): List<OpportunityGeoProjection>
+        @Param("lat") lat: Double?,
+        @Param("lng") lng: Double?,
+        @Param("radius") radiusKm: Double?,
+        @Param("limit") limit: Int?,
+        @Param("offset") offset: Int?
+    ): List<GeoOpportunityProjection>
 }
 
-interface OpportunityGeoProjection {
-    fun getOpportunityId(): Long
-    fun getTitle(): String
-    fun getFullDescription(): String?
-    fun getSalaryFrom(): Int?
-    fun getSalaryTo(): Int?
-    fun getSalaryCurrency(): String?
-    fun getType(): String?
-    fun getEmployerId(): Long?
-    fun getCompanyName(): String?
-    fun getLocationId(): Long?
-    fun getAddress(): String?
-    fun getLocationPoint(): Point?
-    fun getCityId(): Long?
-    fun getCityName(): String?
+interface GeoOpportunityProjection {
+    val id: Long?
+    val title: String?
+    val fullDescription: String?
+    val salaryFrom: Int?
+    val salaryTo: Int?
+    val salaryCurrency: String?
+    val type: String?
+    val employerUserId: Long?
+    val companyName: String?
+    val locationId: Long?
+    val addressLine: String?
+    val locationPoint: String?
+    val cityId: Long?
+    val cityName: String?
 }

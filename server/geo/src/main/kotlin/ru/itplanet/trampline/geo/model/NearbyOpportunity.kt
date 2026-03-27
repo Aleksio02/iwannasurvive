@@ -3,8 +3,8 @@ package ru.itplanet.trampline.geo.model
 import org.locationtech.jts.geom.Point
 
 data class NearbyOpportunity(
-    val opportunityId: Long,
-    val title: String,
+    val id: Long?,
+    val title: String?,
     val fullDescription: String?,
     val salary: Salary?,
     val type: String?,
@@ -36,8 +36,8 @@ data class City(
 )
 
 data class GeoPoint(
-    val lat: Double,
-    val lng: Double
+    val lat: Double?,
+    val lng: Double?
 ) {
     companion object {
         fun fromPoint(point: Point?): GeoPoint? {
