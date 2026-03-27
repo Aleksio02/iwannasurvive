@@ -44,6 +44,6 @@ open class FileAttachmentDto {
     @Column(name = "sort_order", nullable = false)
     open var sortOrder: Int = 0
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     open var createdAt: OffsetDateTime? = null
 }
