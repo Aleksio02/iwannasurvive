@@ -21,7 +21,7 @@ class ApplicantProfileConverter(
             studyProgram = source.studyProgram,
             course = source.course,
             graduationYear = source.graduationYear,
-            city = source.city?.let {cityConverter.toDto(it)},
+            city = source.city?.let { cityConverter.toDto(it) },
             about = source.about,
             resumeText = source.resumeText,
             portfolioLinks = source.portfolioLinks,

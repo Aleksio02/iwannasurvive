@@ -169,7 +169,7 @@ class ProfileServiceImpl(
             profile.city = cityDao.findById(it)
                 .orElseThrow { EntityNotFoundException("Unknown city") }
         }
-        request.cityId?.let {
+        request.locationId?.let {
             profile.location = locationDao.findById(it)
                 .orElseThrow { EntityNotFoundException("Unknown location") }
         }
