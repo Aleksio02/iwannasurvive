@@ -8,13 +8,20 @@ import jakarta.persistence.PersistenceContext
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.model.Role
+import ru.itplanet.trampline.commons.model.file.FileAssetKind
+import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
+import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
+import ru.itplanet.trampline.commons.model.file.FileAttachmentRole
+import ru.itplanet.trampline.commons.model.file.InternalCreateFileAttachmentRequest
 import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTaskRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationActionResultResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationApproveRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationRejectRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskResponse
+import ru.itplanet.trampline.moderation.client.MediaServiceClient
 import ru.itplanet.trampline.moderation.client.OpportunityModerationOwnerClient
 import ru.itplanet.trampline.moderation.client.ProfileModerationOwnerClient
 import ru.itplanet.trampline.moderation.dao.ModerationLogDao
@@ -41,6 +48,7 @@ class ModerationCommandServiceImpl(
     private val moderationReadModelDao: ModerationReadModelDao,
     private val profileModerationOwnerClient: ProfileModerationOwnerClient,
     private val opportunityModerationOwnerClient: OpportunityModerationOwnerClient,
+    private val mediaServiceClient: MediaServiceClient,
 ) : ModerationCommandService {
 
     @PersistenceContext
@@ -291,6 +299,55 @@ class ModerationCommandServiceImpl(
             actorUserId = currentUser.userId,
             payload = JsonNodeFactory.instance.objectNode().apply {
                 put("text", request.text.trim())
+            },
+            createdAt = now,
+        )
+    }
+
+    @Transactional
+    override fun addAttachment(
+        taskId: Long,
+        currentUser: AuthenticatedUser,
+        file: MultipartFile,
+    ) {
+        val task = getTaskForUpdate(taskId)
+
+        if (task.status != ModerationTaskStatus.OPEN && task.status != ModerationTaskStatus.IN_PROGRESS) {
+            throw conflict("Attachments can be added only to OPEN or IN_PROGRESS tasks")
+        }
+
+        val createdFile = mediaServiceClient.uploadFile(
+            file = file,
+            ownerUserId = currentUser.userId,
+            kind = FileAssetKind.MODERATION_ATTACHMENT,
+            visibility = FileAssetVisibility.PRIVATE,
+        )
+
+        val attachment = mediaServiceClient.createAttachment(
+            InternalCreateFileAttachmentRequest(
+                fileId = createdFile.fileId,
+                entityType = FileAttachmentEntityType.MODERATION_TASK,
+                entityId = taskId,
+                attachmentRole = FileAttachmentRole.ATTACHMENT,
+            ),
+        )
+
+        val now = OffsetDateTime.now()
+        task.updatedAt = now
+        moderationTaskDao.save(task)
+
+        saveLog(
+            task = task,
+            action = ModerationLogAction.UPDATED,
+            actorUserId = currentUser.userId,
+            payload = JsonNodeFactory.instance.objectNode().apply {
+                put("updateType", "ATTACHMENT_ADDED")
+                put("attachmentId", attachment.attachmentId)
+                put("fileId", attachment.fileId)
+                put("originalFileName", attachment.file.originalFileName)
+                put("mediaType", attachment.file.mediaType)
+                put("sizeBytes", attachment.file.sizeBytes)
+                put("attachmentRole", attachment.attachmentRole.name)
             },
             createdAt = now,
         )
