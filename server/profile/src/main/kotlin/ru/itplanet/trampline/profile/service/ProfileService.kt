@@ -2,6 +2,7 @@ package ru.itplanet.trampline.profile.service
 
 import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
+import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
 import ru.itplanet.trampline.profile.model.ApplicantProfile
 import ru.itplanet.trampline.profile.model.EmployerProfile
 import ru.itplanet.trampline.profile.model.request.ApplicantProfilePatchRequest
@@ -16,4 +17,6 @@ interface ProfileService {
     fun putEmployerLogo(userId: Long, file: MultipartFile): EmployerProfile
     fun getApplicantProfile(currentUserId: Long, targetUserId: Long): ApplicantProfile
     fun getEmployerProfile(currentUserId: Long, targetUserId: Long): EmployerProfile
+    fun getApplicantFileDownloadUrl(currentUserId: Long?, targetUserId: Long, fileId: Long): InternalFileDownloadUrlResponse
+    fun getEmployerFileDownloadUrl(currentUserId: Long?, targetUserId: Long, fileId: Long): InternalFileDownloadUrlResponse
 }
