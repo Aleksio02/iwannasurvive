@@ -8,6 +8,7 @@ import jakarta.persistence.PersistenceContext
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.model.Role
@@ -16,6 +17,7 @@ import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
 import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
 import ru.itplanet.trampline.commons.model.file.FileAttachmentRole
 import ru.itplanet.trampline.commons.model.file.InternalCreateFileAttachmentRequest
+import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTaskRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationActionResultResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationApproveRequest
@@ -49,6 +51,7 @@ class ModerationCommandServiceImpl(
     private val profileModerationOwnerClient: ProfileModerationOwnerClient,
     private val opportunityModerationOwnerClient: OpportunityModerationOwnerClient,
     private val mediaServiceClient: MediaServiceClient,
+    private val transactionTemplate: TransactionTemplate,
 ) : ModerationCommandService {
 
     @PersistenceContext
@@ -101,13 +104,13 @@ class ModerationCommandServiceImpl(
     ): Long {
         val snapshot = moderationReadModelDao.findCurrentEntityState(
             request.entityType,
-            request.entityId
+            request.entityId,
         )
 
         if (snapshot.path("notFound").asBoolean(false)) {
             throw ResponseStatusException(
                 HttpStatus.NOT_FOUND,
-                "Entity ${request.entityType.name}:${request.entityId} was not found"
+                "Entity ${request.entityType.name}:${request.entityId} was not found",
             )
         }
 
@@ -304,17 +307,12 @@ class ModerationCommandServiceImpl(
         )
     }
 
-    @Transactional
     override fun addAttachment(
         taskId: Long,
         currentUser: AuthenticatedUser,
         file: MultipartFile,
     ) {
-        val task = getTaskForUpdate(taskId)
-
-        if (task.status != ModerationTaskStatus.OPEN && task.status != ModerationTaskStatus.IN_PROGRESS) {
-            throw conflict("Attachments can be added only to OPEN or IN_PROGRESS tasks")
-        }
+        ensureAttachmentCanBeAdded(taskId)
 
         val createdFile = mediaServiceClient.uploadFile(
             file = file,
@@ -332,25 +330,22 @@ class ModerationCommandServiceImpl(
             ),
         )
 
-        val now = OffsetDateTime.now()
-        task.updatedAt = now
-        moderationTaskDao.save(task)
+        transactionTemplate.executeWithoutResult {
+            val task = getTaskForUpdate(taskId)
+            validateAttachmentAllowed(task)
 
-        saveLog(
-            task = task,
-            action = ModerationLogAction.UPDATED,
-            actorUserId = currentUser.userId,
-            payload = JsonNodeFactory.instance.objectNode().apply {
-                put("updateType", "ATTACHMENT_ADDED")
-                put("attachmentId", attachment.attachmentId)
-                put("fileId", attachment.fileId)
-                put("originalFileName", attachment.file.originalFileName)
-                put("mediaType", attachment.file.mediaType)
-                put("sizeBytes", attachment.file.sizeBytes)
-                put("attachmentRole", attachment.attachmentRole.name)
-            },
-            createdAt = now,
-        )
+            val now = OffsetDateTime.now()
+            task.updatedAt = now
+            moderationTaskDao.save(task)
+
+            saveLog(
+                task = task,
+                action = ModerationLogAction.UPDATED,
+                actorUserId = currentUser.userId,
+                payload = buildAttachmentAddedPayload(attachment),
+                createdAt = now,
+            )
+        }
     }
 
     @Transactional
@@ -390,6 +385,33 @@ class ModerationCommandServiceImpl(
             actorUserId = null,
             actorType = "INTERNAL",
         )
+    }
+
+    private fun ensureAttachmentCanBeAdded(taskId: Long) {
+        transactionTemplate.executeWithoutResult {
+            val task = getTaskForUpdate(taskId)
+            validateAttachmentAllowed(task)
+        }
+    }
+
+    private fun validateAttachmentAllowed(task: ModerationTaskDto) {
+        if (task.status != ModerationTaskStatus.OPEN && task.status != ModerationTaskStatus.IN_PROGRESS) {
+            throw conflict("Attachments can be added only to OPEN or IN_PROGRESS tasks")
+        }
+    }
+
+    private fun buildAttachmentAddedPayload(
+        attachment: InternalFileAttachmentResponse,
+    ): ObjectNode {
+        return JsonNodeFactory.instance.objectNode().apply {
+            put("updateType", "ATTACHMENT_ADDED")
+            put("attachmentId", attachment.attachmentId)
+            put("fileId", attachment.fileId)
+            put("originalFileName", attachment.file.originalFileName)
+            put("mediaType", attachment.file.mediaType)
+            put("sizeBytes", attachment.file.sizeBytes)
+            put("attachmentRole", attachment.attachmentRole.name)
+        }
     }
 
     private fun cancelTask(

@@ -19,8 +19,8 @@ feign:
   client:
     config:
       default:
-        connectTimeout: 10000
-        readTimeout: 10000
+        connectTimeout: 5000
+        readTimeout: 5000
 
 auth:
   service:
