@@ -1,10 +1,15 @@
 package ru.itplanet.trampline.profile.model.request
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import jakarta.validation.Valid
+import ru.itplanet.trampline.profile.model.ContactMethod
+import ru.itplanet.trampline.profile.model.ProfileLink
 import ru.itplanet.trampline.profile.model.enums.ApplicationsVisibility
 import ru.itplanet.trampline.profile.model.enums.ContactsVisibility
 import ru.itplanet.trampline.profile.model.enums.ProfileVisibility
 import ru.itplanet.trampline.profile.model.enums.ResumeVisibility
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class ApplicantProfilePatchRequest(
     val firstName: String? = null,
     val lastName: String? = null,
@@ -17,12 +22,14 @@ data class ApplicantProfilePatchRequest(
     val cityId: Long? = null,
     val about: String? = null,
     val resumeText: String? = null,
-    val portfolioLinks: List<String>? = null,
-    val contactLinks: List<String>? = null,
+    @field:Valid
+    val portfolioLinks: List<ProfileLink>? = null,
+    @field:Valid
+    val contactLinks: List<ContactMethod>? = null,
     val profileVisibility: ProfileVisibility? = null,
     val resumeVisibility: ResumeVisibility? = null,
     val applicationsVisibility: ApplicationsVisibility? = null,
     val contactsVisibility: ContactsVisibility? = null,
     val openToWork: Boolean? = null,
-    val openToEvents: Boolean? = null
+    val openToEvents: Boolean? = null,
 )

@@ -20,8 +20,8 @@ data class ApplicantProfile(
     val city: City?,
     val about: String?,
     val resumeText: String?,
-    val portfolioLinks: List<String>, // TODO: переделать в List моделей
-    val contactLinks: List<String>, // TODO: переделать в List моделей
+    val portfolioLinks: List<ProfileLink>,
+    val contactLinks: List<ContactMethod>,
     val profileVisibility: ProfileVisibility,
     val resumeVisibility: ResumeVisibility,
     val applicationsVisibility: ApplicationsVisibility,

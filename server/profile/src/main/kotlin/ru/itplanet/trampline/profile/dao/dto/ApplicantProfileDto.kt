@@ -1,11 +1,19 @@
 package ru.itplanet.trampline.profile.dao.dto
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
+import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
+import jakarta.persistence.Table
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.type.SqlTypes
 import ru.itplanet.trampline.commons.dao.dto.CityDto
+import ru.itplanet.trampline.profile.model.ContactMethod
+import ru.itplanet.trampline.profile.model.ProfileLink
 import ru.itplanet.trampline.profile.model.enums.ApplicationsVisibility
 import ru.itplanet.trampline.profile.model.enums.ContactsVisibility
 import ru.itplanet.trampline.profile.model.enums.ProfileVisibility
@@ -56,26 +64,26 @@ open class ApplicantProfileDto {
 
     @Column(name = "portfolio_links", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
-    open var portfolioLinks: List<String> = emptyList()
+    open var portfolioLinks: List<ProfileLink> = emptyList()
 
     @Column(name = "contact_links", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
-    open var contactLinks: List<String> = emptyList()
+    open var contactLinks: List<ContactMethod> = emptyList()
 
     @Column(name = "profile_visibility", length = 32)
-    @Enumerated(EnumType.STRING)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     open var profileVisibility: ProfileVisibility = ProfileVisibility.AUTHENTICATED
 
     @Column(name = "resume_visibility", length = 32)
-    @Enumerated(EnumType.STRING)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     open var resumeVisibility: ResumeVisibility = ResumeVisibility.AUTHENTICATED
 
     @Column(name = "applications_visibility", length = 32)
-    @Enumerated(EnumType.STRING)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     open var applicationsVisibility: ApplicationsVisibility = ApplicationsVisibility.PRIVATE
 
     @Column(name = "contacts_visibility", length = 32)
-    @Enumerated(EnumType.STRING)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     open var contactsVisibility: ContactsVisibility = ContactsVisibility.AUTHENTICATED
 
     @Column(name = "open_to_work")
@@ -111,8 +119,8 @@ open class ApplicantProfileDto {
         city: CityDto? = null,
         about: String? = null,
         resumeText: String? = null,
-        portfolioLinks: List<String> = emptyList(),
-        contactLinks: List<String> = emptyList(),
+        portfolioLinks: List<ProfileLink> = emptyList(),
+        contactLinks: List<ContactMethod> = emptyList(),
         profileVisibility: ProfileVisibility = ProfileVisibility.AUTHENTICATED,
         resumeVisibility: ResumeVisibility = ResumeVisibility.AUTHENTICATED,
         applicationsVisibility: ApplicationsVisibility = ApplicationsVisibility.PRIVATE,
@@ -120,7 +128,7 @@ open class ApplicantProfileDto {
         openToWork: Boolean = true,
         openToEvents: Boolean = true,
         createdAt: OffsetDateTime? = null,
-        updatedAt: OffsetDateTime? = null
+        updatedAt: OffsetDateTime? = null,
     ) {
         this.userId = userId
         this.firstName = firstName
