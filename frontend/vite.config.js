@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => {
   const authTarget = env.VITE_AUTH_PROXY_TARGET || 'http://localhost:9999'
   const profileTarget = env.VITE_PROFILE_PROXY_TARGET || 'http://localhost:8080'
   const opportunityTarget = env.VITE_OPPORTUNITY_PROXY_TARGET || 'http://localhost:8081'
+  const moderationTarget = env.VITE_MODERATION_PROXY_TARGET || 'http://localhost:8082'
 
   return {
     plugins: [react()],
@@ -45,6 +46,16 @@ export default defineConfig(({ mode }) => {
         },
         '/api/employer': {
           target: profileTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/api/moderation': {
+          target: moderationTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/api/admin': {
+          target: authTarget,
           changeOrigin: true,
           secure: false,
         },
