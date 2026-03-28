@@ -16,8 +16,6 @@ import ru.itplanet.trampline.interaction.security.ApiAccessDeniedHandler
 import ru.itplanet.trampline.interaction.security.ApiAuthenticationEntryPoint
 import ru.itplanet.trampline.interaction.security.InternalApiRequestFilter
 import ru.itplanet.trampline.interaction.security.SessionAuthenticationFilter
-import ru.itplanet.trampline.interaction.config.AuthServiceProperties
-import ru.itplanet.trampline.interaction.config.InternalApiProperties
 
 @Configuration
 @EnableMethodSecurity
@@ -44,13 +42,13 @@ class SecurityConfig(
         val request = PathPatternRequestMatcher.withDefaults()
 
         return http
-//            .csrf { csrf ->
-//                csrf
-//                    .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-//                    .ignoringRequestMatchers(
-//                        request.matcher("/internal/**")
-//                    )
-//            }
+            // .csrf { csrf ->
+            //     csrf
+            //         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+            //         .ignoringRequestMatchers(
+            //             request.matcher("/internal/**")
+            //         )
+            // }
             .csrf { it.disable() } // TODO: потом вернуть
             .httpBasic { it.disable() }
             .formLogin { it.disable() }
@@ -62,6 +60,12 @@ class SecurityConfig(
             }
             .authorizeHttpRequests { auth ->
                 auth
+                    .requestMatchers(
+                        request.matcher("/v3/api-docs/**"),
+                        request.matcher("/swagger-ui.html"),
+                        request.matcher("/swagger-ui/**"),
+                        request.matcher("/error")
+                    ).permitAll()
                     .requestMatchers(HttpMethod.PATCH, "/api/interaction/responses/**").hasRole("EMPLOYER")
                     .requestMatchers(HttpMethod.PATCH, "/api/interaction/contacts/**").hasRole("APPLICANT")
                     .requestMatchers(HttpMethod.GET, "/api/interaction/opportunities/**").hasRole("EMPLOYER")
@@ -69,7 +73,6 @@ class SecurityConfig(
                     .requestMatchers(HttpMethod.DELETE, "/api/interaction/**").hasRole("APPLICANT")
                     .requestMatchers(HttpMethod.GET, "/api/interaction/**").permitAll()
                     .requestMatchers(request.matcher("/internal/**")).hasRole("INTERNAL")
-                    .requestMatchers(request.matcher("/error")).permitAll()
                     .anyRequest().authenticated()
             }
             .addFilterBefore(internalApiRequestFilter, LogoutFilter::class.java)
