@@ -10,7 +10,9 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
+import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
 import ru.itplanet.trampline.commons.model.file.FileAttachmentRole
+import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
@@ -164,6 +166,20 @@ class ModerationQueryServiceImpl(
     }
 
     @Transactional(readOnly = true)
+    override fun getEntityAttachments(
+        entityType: FileAttachmentEntityType,
+        entityId: Long,
+        currentUser: AuthenticatedUser,
+    ): List<InternalFileAttachmentResponse> {
+        ensureCanViewAttachments(currentUser)
+
+        return mediaServiceClient.getAttachments(
+            entityType = entityType,
+            entityId = entityId,
+        )
+    }
+
+    @Transactional(readOnly = true)
     override fun getTaskAttachmentDownloadUrl(
         taskId: Long,
         currentUser: AuthenticatedUser,
@@ -216,6 +232,14 @@ class ModerationQueryServiceImpl(
                         attachment.attachmentRole == FileAttachmentRole.ATTACHMENT.name
             }
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Moderation attachment not found")
+    }
+
+    private fun ensureCanViewAttachments(
+        currentUser: AuthenticatedUser,
+    ) {
+        if (currentUser.role !in MODERATION_DOWNLOAD_ROLES) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied")
+        }
     }
 
     private fun ensureCanDownloadAttachment(
