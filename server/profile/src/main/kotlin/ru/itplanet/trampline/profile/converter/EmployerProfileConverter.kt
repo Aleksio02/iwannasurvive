@@ -25,8 +25,8 @@ class EmployerProfileConverter(
             publicContacts = source.publicContacts,
             companySize = source.companySize,
             foundedYear = source.foundedYear,
-            city = source.city?.let {cityConverter.toDto(it)},
-            location = source.location?.let {locationConverter.toDto(it)},
+            city = source.city?.let { cityConverter.toDto(it) },
+            location = source.location?.let { locationConverter.toDto(it) },
             verificationStatus = source.verificationStatus,
         )
     }
@@ -44,8 +44,8 @@ class EmployerProfileConverter(
             publicContacts = source.publicContacts,
             companySize = source.companySize,
             foundedYear = source.foundedYear,
-            city = source.city?.let {cityConverter.fromDto(it)},
-            location = source.location?.let {locationConverter.fromDto(it)},
+            city = source.city?.let { cityConverter.fromDto(it) },
+            location = source.location?.let { locationConverter.fromDto(it) },
             verificationStatus = source.verificationStatus,
         )
     }
