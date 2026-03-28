@@ -1,12 +1,13 @@
-// utils/profileApi.js
-
-const API_BASE = '/api'
 import { CITIES } from '../constants/cities'
 import {
     archiveEmployerOpportunity,
     createEmployerOpportunity,
     listEmployerOpportunities
 } from '../api/opportunities'
+import {
+    addToFavorites,
+    removeFromFavorites
+} from '../api/interaction'
 
 function getCurrentUser() {
     try {
@@ -69,7 +70,7 @@ export async function getApplicantProfile() {
         throw new Error('Пользователь не авторизован')
     }
 
-    const url = `${API_BASE}/profile/applicant/${user.userId}`
+    const url = `/api/profile/applicant/${user.userId}`
     console.log('[API] GET applicant profile:', url)
 
     try {
@@ -92,22 +93,17 @@ export async function updateApplicantProfile(profile) {
         throw new Error('Пользователь не авторизован')
     }
 
-    // Если приходит массив объектов, преобразуем в массив строк
     let portfolioLinks = []
     let contactLinks = []
 
     if (profile.portfolioLinks) {
         if (Array.isArray(profile.portfolioLinks)) {
-            // Если это массив строк
             if (profile.portfolioLinks.length > 0 && typeof profile.portfolioLinks[0] === 'string') {
                 portfolioLinks = profile.portfolioLinks
-            }
-            // Если это массив объектов
-            else if (profile.portfolioLinks.length > 0 && profile.portfolioLinks[0].url) {
+            } else if (profile.portfolioLinks.length > 0 && profile.portfolioLinks[0].url) {
                 portfolioLinks = profile.portfolioLinks.map(link => link.url)
             }
         } else if (typeof profile.portfolioLinks === 'object') {
-            // Если это объект
             portfolioLinks = Object.values(profile.portfolioLinks)
         }
     }
@@ -148,7 +144,7 @@ export async function updateApplicantProfile(profile) {
 
     console.log('[API] Saving applicant profile with PATCH:', payload)
 
-    const url = `${API_BASE}/profile/applicant`
+    const url = `/api/profile/applicant`
     const data = await apiRequest(url, {
         method: 'PATCH',
         body: JSON.stringify(payload),
@@ -168,14 +164,13 @@ export async function getEmployerProfile() {
         throw new Error('Пользователь не авторизован')
     }
 
-    const url = `${API_BASE}/profile/employer/${user.userId}`
+    const url = `/api/profile/employer/${user.userId}`
     console.log('[API] GET employer profile:', url)
 
     try {
         const data = await apiRequest(url)
         console.log('[API] Employer profile received:', data)
 
-        // Преобразуем socialLinks (массив строк) в формат для LinksEditor
         const socialLinksArray = data.socialLinks && Array.isArray(data.socialLinks)
             ? data.socialLinks.map((url, index) => ({
                 id: index,
@@ -184,7 +179,6 @@ export async function getEmployerProfile() {
             }))
             : []
 
-        // Преобразуем publicContacts (объект) в формат для LinksEditor
         const publicContactsArray = data.publicContacts && typeof data.publicContacts === 'object'
             ? Object.entries(data.publicContacts).map(([title, url], index) => ({
                 id: index,
@@ -214,31 +208,24 @@ export async function updateEmployerProfile(profile) {
         throw new Error('Пользователь не авторизован')
     }
 
-    // Преобразуем socialLinks - ожидается массив строк
     let socialLinks = []
     if (profile.socialLinks) {
         if (Array.isArray(profile.socialLinks)) {
-            // Если это массив объектов с title/url
             if (profile.socialLinks.length > 0 && profile.socialLinks[0].title !== undefined) {
                 socialLinks = profile.socialLinks
                     .filter(link => link.url?.trim())
                     .map(link => link.url.trim())
-            }
-            // Если это уже массив строк
-            else if (profile.socialLinks.length > 0 && typeof profile.socialLinks[0] === 'string') {
+            } else if (profile.socialLinks.length > 0 && typeof profile.socialLinks[0] === 'string') {
                 socialLinks = profile.socialLinks.filter(url => url?.trim())
             }
         } else if (typeof profile.socialLinks === 'object') {
-            // Если это объект, преобразуем в массив значений
             socialLinks = Object.values(profile.socialLinks).filter(url => url?.trim())
         }
     }
 
-    // Преобразуем publicContacts - ожидается объект Map<String, String>
     let publicContacts = {}
     if (profile.publicContacts) {
         if (Array.isArray(profile.publicContacts)) {
-            // Если это массив объектов с title/url
             if (profile.publicContacts.length > 0 && profile.publicContacts[0].title !== undefined) {
                 profile.publicContacts.forEach(contact => {
                     const title = contact.title?.trim()
@@ -247,9 +234,7 @@ export async function updateEmployerProfile(profile) {
                         publicContacts[title] = url
                     }
                 })
-            }
-            // Если это массив строк
-            else if (profile.publicContacts.length > 0 && typeof profile.publicContacts[0] === 'string') {
+            } else if (profile.publicContacts.length > 0 && typeof profile.publicContacts[0] === 'string') {
                 profile.publicContacts.forEach((url, index) => {
                     if (url?.trim()) {
                         publicContacts[`contact_${index + 1}`] = url.trim()
@@ -257,37 +242,34 @@ export async function updateEmployerProfile(profile) {
                 })
             }
         } else if (typeof profile.publicContacts === 'object') {
-            // Если это уже объект
             publicContacts = profile.publicContacts
         }
     }
 
-    const payload = {
-        companyName: profile.companyName || '',
-        legalName: profile.legalName || null,
-        inn: profile.inn || '',
-        description: profile.description || null,
-        industry: profile.industry || null,
-        websiteUrl: profile.websiteUrl || null,
-        cityId: profile.cityId || null,
-        locationId: profile.locationId || null,
-        companySize: profile.companySize || null,
-        foundedYear: profile.foundedYear ? Number(profile.foundedYear) : null,
-        socialLinks: socialLinks,
-        publicContacts: publicContacts,
-        verificationStatus: profile.verificationStatus || 'PENDING',
-    }
+    // Формируем payload, исключая null значения
+    const payload = {}
+
+    if (profile.companyName) payload.companyName = profile.companyName
+    if (profile.legalName) payload.legalName = profile.legalName
+    if (profile.inn) payload.inn = profile.inn
+    if (profile.description) payload.description = profile.description
+    if (profile.industry) payload.industry = profile.industry
+    if (profile.websiteUrl) payload.websiteUrl = profile.websiteUrl
+    if (profile.cityId) payload.cityId = Number(profile.cityId)
+    if (profile.locationId) payload.locationId = Number(profile.locationId)
+    if (profile.companySize) payload.companySize = profile.companySize
+    if (profile.foundedYear) payload.foundedYear = Number(profile.foundedYear)
+    if (socialLinks.length > 0) payload.socialLinks = socialLinks
+    if (Object.keys(publicContacts).length > 0) payload.publicContacts = publicContacts
+    if (profile.verificationStatus) payload.verificationStatus = profile.verificationStatus
 
     console.log('[API] Saving employer profile with PATCH:', JSON.stringify(payload, null, 2))
 
-    const url = `${API_BASE}/profile/employer`
-    console.log('[API] PATCH employer profile:', url)
-
+    const url = `/api/profile/employer`
     const data = await apiRequest(url, {
         method: 'PATCH',
         body: JSON.stringify(payload),
     })
-    console.log('[API] Employer profile saved:', data)
     return data
 }
 
@@ -301,7 +283,7 @@ export async function submitVerification(payload) {
         throw new Error('Пользователь не авторизован')
     }
 
-    const url = `${API_BASE}/employer/verification`
+    const url = `/api/employer/verification`
     console.log('[API] Submitting verification:', payload)
 
     const data = await apiRequest(url, {
@@ -312,7 +294,57 @@ export async function submitVerification(payload) {
     return data
 }
 
-// ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (локально) ==========
+// ========== ИЗБРАННОЕ (с бэкендом) ==========
+
+/**
+ * Получение списка избранного текущего пользователя
+ * GET /api/interaction/favorites
+ */
+export async function getSeekerSaved() {
+    try {
+        const { getFavorites } = await import('../api/interaction')
+        const favorites = await getFavorites()
+        return favorites || []
+    } catch (error) {
+        console.error('Failed to load favorites from API:', error)
+        // Fallback на localStorage
+        const user = getCurrentUser()
+        if (user) {
+            const key = `seeker_saved_${user.email}`
+            const saved = localStorage.getItem(key)
+            return saved ? JSON.parse(saved) : []
+        }
+        return []
+    }
+}
+
+/**
+ * Добавить в избранное
+ * POST /api/interaction/favorites/{opportunityId}
+ */
+export async function addToSaved(opportunityId) {
+    try {
+        return await addToFavorites(opportunityId)
+    } catch (error) {
+        console.error('Failed to add to favorites:', error)
+        throw error
+    }
+}
+
+/**
+ * Удалить из избранного
+ * DELETE /api/interaction/favorites/{opportunityId}
+ */
+export async function removeFromSaved(opportunityId) {
+    try {
+        return await removeFromFavorites(opportunityId)
+    } catch (error) {
+        console.error('Failed to remove from favorites:', error)
+        throw error
+    }
+}
+
+// ========== ОТКЛИКИ ==========
 
 export async function getSeekerApplications() {
     const user = getCurrentUser()
@@ -322,37 +354,35 @@ export async function getSeekerApplications() {
     return saved ? JSON.parse(saved) : []
 }
 
-export async function getSeekerSaved() {
+export async function applyToOpportunity(opportunityId, message = '') {
     const user = getCurrentUser()
-    if (!user) return []
-    const key = `seeker_saved_${user.email}`
-    const saved = localStorage.getItem(key)
-    return saved ? JSON.parse(saved) : []
-}
-
-export async function addToSaved(opportunity) {
-    const user = getCurrentUser()
-    if (!user) throw new Error('Пользователь не авторизован')
-    const key = `seeker_saved_${user.email}`
-    const saved = localStorage.getItem(key)
-    const savedItems = saved ? JSON.parse(saved) : []
-    if (!savedItems.some(item => item.id === opportunity.id)) {
-        const updated = [opportunity, ...savedItems]
-        localStorage.setItem(key, JSON.stringify(updated))
+    if (!user) {
+        throw new Error('Чтобы откликнуться, необходимо войти в аккаунт')
     }
+
+    const key = `seeker_applications_${user.email}`
+    const saved = localStorage.getItem(key)
+    const items = saved ? JSON.parse(saved) : []
+
+    if (items.some(item => item.opportunityId === opportunityId)) {
+        throw new Error('already_applied')
+    }
+
+    const nextItem = {
+        id: Date.now(),
+        opportunityId: opportunityId,
+        position: `Вакансия #${opportunityId}`,
+        companyName: 'Компания',
+        status: 'PENDING',
+        appliedAt: new Date().toISOString(),
+    }
+
+    const next = [nextItem, ...items]
+    localStorage.setItem(key, JSON.stringify(next))
     return { success: true }
 }
 
-export async function removeFromSaved(opportunityId) {
-    const user = getCurrentUser()
-    if (!user) throw new Error('Пользователь не авторизован')
-    const key = `seeker_saved_${user.email}`
-    const saved = localStorage.getItem(key)
-    const savedItems = saved ? JSON.parse(saved) : []
-    const updated = savedItems.filter(item => item.id !== opportunityId)
-    localStorage.setItem(key, JSON.stringify(updated))
-    return { success: true }
-}
+// ========== РАБОТОДАТЕЛЬ: ВАКАНСИИ И ОТКЛИКИ ==========
 
 export async function getEmployerOpportunities(params = {}) {
     const page = await listEmployerOpportunities({
