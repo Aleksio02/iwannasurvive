@@ -19,18 +19,16 @@ function Navbar() {
             const sessionData = await getCurrentUserInfo()
             console.log('[Navbar] Session data:', sessionData)
 
-            // Сохраняем пользователя в state
-            let userData
-            if (sessionData && sessionData.user) {
+            let userData = null
+            if (sessionData?.user) {
                 userData = sessionData.user
-            } else {
+            } else if (sessionData?.id) {
                 userData = sessionData
             }
 
             setUser(userData)
 
             if (!userData) {
-                // Если нет пользователя, чистим localStorage
                 clearCurrentUser()
                 setIsLoading(false)
                 return
@@ -39,17 +37,13 @@ function Navbar() {
             // Сохраняем в localStorage как кэш
             setCurrentUser(userData)
 
-            // В зависимости от роли, получаем профиль для отображения имени
+            // Получаем имя для отображения
             if (userData.role === 'APPLICANT') {
                 try {
                     const profile = await getApplicantProfile()
                     if (profile && (profile.firstName || profile.lastName)) {
                         const fullName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim()
-                        if (fullName) {
-                            setDisplayName(fullName)
-                        } else {
-                            setDisplayName(userData.displayName || userData.email?.split('@')[0])
-                        }
+                        setDisplayName(fullName || userData.displayName || userData.email?.split('@')[0])
                     } else {
                         setDisplayName(userData.displayName || userData.email?.split('@')[0])
                     }
@@ -60,11 +54,7 @@ function Navbar() {
             } else if (userData.role === 'EMPLOYER') {
                 try {
                     const profile = await getEmployerProfile()
-                    if (profile && profile.companyName) {
-                        setDisplayName(profile.companyName)
-                    } else {
-                        setDisplayName(userData.displayName)
-                    }
+                    setDisplayName(profile?.companyName || userData.displayName)
                 } catch (error) {
                     console.warn('Failed to load employer profile:', error)
                     setDisplayName(userData.displayName)
@@ -75,16 +65,16 @@ function Navbar() {
         } catch (error) {
             console.error('[Navbar] Failed to load user data:', error)
 
-            // При 401 или любой ошибке авторизации — чистим localStorage
-            if (error.message?.includes('401') || error.message?.includes('истекла') || error.message?.includes('Unauthorized')) {
+            // При 401 — чистим всё
+            if (error.message?.includes('401') || error.message?.includes('истекла')) {
                 clearCurrentUser()
                 setUser(null)
                 setDisplayName('')
             } else {
-                // Fallback на localStorage только при ошибках сети
+                // Fallback на localStorage
                 const cachedUser = getCurrentUser()
                 if (cachedUser) {
-                    console.log('[Navbar] Using cached user from localStorage')
+                    console.log('[Navbar] Using cached user')
                     setUser(cachedUser)
                     setDisplayName(cachedUser.displayName || cachedUser.email?.split('@')[0])
                 }
@@ -96,17 +86,14 @@ function Navbar() {
 
     const handleLogout = async () => {
         try {
-            // Вызываем backend logout
             await logoutUser()
             console.log('[Navbar] Logout successful')
         } catch (error) {
             console.error('[Navbar] Logout error:', error)
         } finally {
-            // В любом случае чистим локальные данные
             clearCurrentUser()
             setUser(null)
             setDisplayName('')
-            // Редирект на главную
             window.location.href = '/'
         }
     }
@@ -114,39 +101,30 @@ function Navbar() {
     useEffect(() => {
         loadUserData()
 
-        // Слушаем событие обновления профиля
         const handleProfileUpdate = (event) => {
             const { firstName, lastName, companyName, role } = event.detail || {}
-
             if (role === 'APPLICANT' && (firstName || lastName)) {
                 const fullName = `${firstName || ''} ${lastName || ''}`.trim()
-                if (fullName) {
-                    setDisplayName(fullName)
-                    // Обновляем также в localStorage
-                    const stored = getCurrentUser()
-                    if (stored) {
-                        stored.displayName = fullName
-                        setCurrentUser(stored)
-                    }
+                setDisplayName(fullName)
+                const cached = getCurrentUser()
+                if (cached) {
+                    cached.displayName = fullName
+                    setCurrentUser(cached)
                 }
             } else if (role === 'EMPLOYER' && companyName) {
                 setDisplayName(companyName)
-                const stored = getCurrentUser()
-                if (stored) {
-                    stored.displayName = companyName
-                    setCurrentUser(stored)
+                const cached = getCurrentUser()
+                if (cached) {
+                    cached.displayName = companyName
+                    setCurrentUser(cached)
                 }
             } else {
-                // Если нет данных, перезагружаем полностью
                 loadUserData()
             }
         }
 
         window.addEventListener('profile-updated', handleProfileUpdate)
-
-        return () => {
-            window.removeEventListener('profile-updated', handleProfileUpdate)
-        }
+        return () => window.removeEventListener('profile-updated', handleProfileUpdate)
     }, [])
 
     const isActive = (path) => location === path
