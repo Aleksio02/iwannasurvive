@@ -1,12 +1,20 @@
 package ru.itplanet.trampline.profile.dao.dto
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
+import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.ManyToOne
+import jakarta.persistence.Table
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.type.SqlTypes
 import ru.itplanet.trampline.commons.dao.dto.CityDto
 import ru.itplanet.trampline.commons.dao.dto.LocationDto
+import ru.itplanet.trampline.profile.model.ContactMethod
+import ru.itplanet.trampline.profile.model.ProfileLink
 import ru.itplanet.trampline.profile.model.enums.VerificationStatus
 import java.time.OffsetDateTime
 
@@ -38,18 +46,17 @@ open class EmployerProfileDto {
 
     @Column(name = "social_links", columnDefinition = "jsonb", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)
-    open var socialLinks: List<String> = emptyList()
+    open var socialLinks: List<ProfileLink> = emptyList()
 
     @Column(name = "public_contacts", columnDefinition = "jsonb", nullable = false)
     @JdbcTypeCode(SqlTypes.JSON)
-    open var publicContacts: Map<String, String> = emptyMap()
+    open var publicContacts: List<ContactMethod> = emptyList()
 
     @Column(name = "company_size", length = 64)
     open var companySize: String? = null
 
     @Column(name = "founded_year")
     open var foundedYear: Short? = null
-
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "city_id")
@@ -59,9 +66,8 @@ open class EmployerProfileDto {
     @JoinColumn(name = "location_id")
     open var location: LocationDto? = null
 
-
     @Column(name = "verification_status", length = 32, nullable = false)
-    @Enumerated(EnumType.STRING)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     open var verificationStatus: VerificationStatus = VerificationStatus.PENDING
 
     @CreationTimestamp
@@ -86,15 +92,15 @@ open class EmployerProfileDto {
         description: String? = null,
         industry: String? = null,
         websiteUrl: String? = null,
-        socialLinks: List<String> = emptyList(),
-        publicContacts: Map<String, String> = emptyMap(),
+        socialLinks: List<ProfileLink> = emptyList(),
+        publicContacts: List<ContactMethod> = emptyList(),
         companySize: String? = null,
         foundedYear: Short? = null,
         city: CityDto? = null,
         location: LocationDto? = null,
         verificationStatus: VerificationStatus = VerificationStatus.PENDING,
         createdAt: OffsetDateTime? = null,
-        updatedAt: OffsetDateTime? = null
+        updatedAt: OffsetDateTime? = null,
     ) {
         this.userId = userId
         this.companyName = companyName

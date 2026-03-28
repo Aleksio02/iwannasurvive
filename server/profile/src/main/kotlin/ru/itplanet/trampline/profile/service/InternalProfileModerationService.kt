@@ -16,6 +16,9 @@ import ru.itplanet.trampline.profile.dao.EmployerProfileDao
 import ru.itplanet.trampline.profile.dao.EmployerVerificationDao
 import ru.itplanet.trampline.profile.dao.dto.EmployerProfileDto
 import ru.itplanet.trampline.profile.dao.dto.EmployerVerificationDto
+import ru.itplanet.trampline.profile.model.ContactMethod
+import ru.itplanet.trampline.profile.model.ProfileLink
+import ru.itplanet.trampline.profile.model.enums.ContactType
 import ru.itplanet.trampline.profile.model.enums.VerificationMethod
 import ru.itplanet.trampline.profile.model.enums.VerificationStatus
 import java.time.OffsetDateTime
@@ -115,11 +118,11 @@ class InternalProfileModerationService(
         shortField(patch, "foundedYear") { profile.foundedYear = it }
 
         if (patch.has("socialLinks")) {
-            profile.socialLinks = listOfStrings(patch.get("socialLinks"))
+            profile.socialLinks = profileLinks(patch.get("socialLinks"))
         }
 
         if (patch.has("publicContacts")) {
-            profile.publicContacts = mapOfStrings(patch.get("publicContacts"))
+            profile.publicContacts = contactMethods(patch.get("publicContacts"))
         }
 
         enumField<VerificationStatus>(patch, "verificationStatus") { profile.verificationStatus = it }
@@ -206,9 +209,121 @@ class InternalProfileModerationService(
         return objectMapper.convertValue(node, object : TypeReference<List<String>>() {})
     }
 
-    private fun mapOfStrings(node: JsonNode): Map<String, String> {
-        if (node.isNull) return emptyMap()
-        return objectMapper.convertValue(node, object : TypeReference<Map<String, String>>() {})
+    private fun profileLinks(node: JsonNode): List<ProfileLink> {
+        if (node.isNull || !node.isArray) {
+            return emptyList()
+        }
+
+        return node.mapNotNull { item ->
+            when {
+                item.isTextual -> item.asText()
+                    .trim()
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { ProfileLink(url = it) }
+
+                item.isObject -> {
+                    val url = item.get("url")
+                        ?.takeUnless { it.isNull }
+                        ?.asText()
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: return@mapNotNull null
+
+                    val label = item.get("label")
+                        ?.takeUnless { it.isNull }
+                        ?.asText()
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+
+                    ProfileLink(
+                        label = label,
+                        url = url,
+                    )
+                }
+
+                else -> null
+            }
+        }
+    }
+
+    private fun contactMethods(node: JsonNode): List<ContactMethod> {
+        if (node.isNull) {
+            return emptyList()
+        }
+
+        if (node.isObject) {
+            return buildList {
+                node.fields().forEach { (typeRaw, valueNode) ->
+                    val value = valueNode.asText().trim()
+                    if (value.isNotEmpty()) {
+                        add(
+                            ContactMethod(
+                                type = parseContactType(typeRaw),
+                                value = value,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+        if (!node.isArray) {
+            return emptyList()
+        }
+
+        return node.mapNotNull { item ->
+            when {
+                item.isTextual -> item.asText()
+                    .trim()
+                    .takeIf { it.isNotEmpty() }
+                    ?.let {
+                        ContactMethod(
+                            type = ContactType.OTHER,
+                            value = it,
+                        )
+                    }
+
+                item.isObject -> {
+                    val value = item.get("value")
+                        ?.takeUnless { it.isNull }
+                        ?.asText()
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: return@mapNotNull null
+
+                    val type = item.get("type")
+                        ?.takeUnless { it.isNull }
+                        ?.asText()
+                        ?.trim()
+
+                    val label = item.get("label")
+                        ?.takeUnless { it.isNull }
+                        ?.asText()
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+
+                    ContactMethod(
+                        type = parseContactType(type),
+                        value = value,
+                        label = label,
+                    )
+                }
+
+                else -> null
+            }
+        }
+    }
+
+    private fun parseContactType(raw: String?): ContactType {
+        if (raw.isNullOrBlank()) {
+            return ContactType.OTHER
+        }
+
+        return try {
+            enumValueOf<ContactType>(raw.trim().uppercase())
+        } catch (_: IllegalArgumentException) {
+            ContactType.OTHER
+        }
     }
 
     private fun notFound(message: String): ResponseStatusException {
