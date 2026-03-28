@@ -30,6 +30,11 @@ interface MediaServiceClient {
         @RequestParam visibility: FileAssetVisibility,
     ): InternalCreatedFileResponse
 
+    @GetMapping("/internal/files/{fileId}/download-url")
+    fun getDownloadUrl(
+        @PathVariable fileId: Long,
+    ): InternalFileDownloadUrlResponse
+
     @PostMapping("/internal/attachments")
     fun createAttachment(
         @RequestBody request: InternalCreateFileAttachmentRequest,

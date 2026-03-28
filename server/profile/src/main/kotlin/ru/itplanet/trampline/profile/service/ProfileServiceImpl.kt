@@ -3,9 +3,11 @@ package ru.itplanet.trampline.profile.service
 import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Primary
+import org.springframework.http.HttpStatus
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.dao.CityDao
 import ru.itplanet.trampline.commons.dao.LocationDao
 import ru.itplanet.trampline.commons.model.file.FileAssetKind
@@ -14,6 +16,7 @@ import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
 import ru.itplanet.trampline.commons.model.file.FileAttachmentRole
 import ru.itplanet.trampline.commons.model.file.InternalCreateFileAttachmentRequest
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
+import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
 import ru.itplanet.trampline.commons.model.file.InternalFileMetadataResponse
 import ru.itplanet.trampline.profile.client.MediaServiceClient
 import ru.itplanet.trampline.profile.converter.ApplicantProfileConverter
@@ -226,6 +229,47 @@ class ProfileServiceImpl(
         }
 
         return buildEmployerProfile(profileDto)
+    }
+
+    override fun getApplicantFileDownloadUrl(
+        currentUserId: Long?,
+        targetUserId: Long,
+        fileId: Long,
+    ): InternalFileDownloadUrlResponse {
+        val profileDto = loadApplicantProfileDto(targetUserId)
+        val attachments = mediaServiceClient.getAttachments(
+            entityType = FileAttachmentEntityType.APPLICANT_PROFILE,
+            entityId = targetUserId,
+        )
+
+        val requestedAttachment = attachments.firstOrNull { attachment ->
+            attachment.fileId == fileId && attachment.attachmentRole in applicantDownloadRoles
+        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Applicant file not found")
+
+        if (!canAccessApplicantAttachment(currentUserId, targetUserId, profileDto, requestedAttachment)) {
+            throw AccessDeniedException("You do not have access to this file")
+        }
+
+        return mediaServiceClient.getDownloadUrl(requestedAttachment.fileId)
+    }
+
+    override fun getEmployerFileDownloadUrl(
+        currentUserId: Long?,
+        targetUserId: Long,
+        fileId: Long,
+    ): InternalFileDownloadUrlResponse {
+        loadEmployerProfileDto(targetUserId)
+
+        val attachments = mediaServiceClient.getAttachments(
+            entityType = FileAttachmentEntityType.EMPLOYER_PROFILE,
+            entityId = targetUserId,
+        )
+
+        val requestedAttachment = attachments.firstOrNull { attachment ->
+            attachment.fileId == fileId && attachment.attachmentRole in employerDownloadRoles
+        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Employer file not found")
+
+        return mediaServiceClient.getDownloadUrl(requestedAttachment.fileId)
     }
 
     private fun loadApplicantProfileDto(userId: Long): ApplicantProfileDto {
@@ -442,6 +486,54 @@ class ProfileServiceImpl(
         }
     }
 
+    private fun canAccessApplicantAttachment(
+        currentUserId: Long?,
+        targetUserId: Long,
+        profileDto: ApplicantProfileDto,
+        attachment: InternalFileAttachmentResponse,
+    ): Boolean {
+        if (currentUserId == targetUserId) {
+            return true
+        }
+
+        return when (attachment.attachmentRole) {
+            FileAttachmentRole.AVATAR -> canAccessProfileVisibility(
+                visibility = profileDto.profileVisibility,
+                currentUserId = currentUserId,
+            )
+
+            FileAttachmentRole.RESUME,
+            FileAttachmentRole.PORTFOLIO -> canAccessResumeVisibility(
+                visibility = profileDto.resumeVisibility,
+                currentUserId = currentUserId,
+            )
+
+            else -> false
+        }
+    }
+
+    private fun canAccessProfileVisibility(
+        visibility: ProfileVisibility,
+        currentUserId: Long?,
+    ): Boolean {
+        return when (visibility) {
+            ProfileVisibility.PUBLIC -> true
+            ProfileVisibility.AUTHENTICATED -> currentUserId != null
+            ProfileVisibility.PRIVATE -> false
+        }
+    }
+
+    private fun canAccessResumeVisibility(
+        visibility: ResumeVisibility,
+        currentUserId: Long?,
+    ): Boolean {
+        return when (visibility) {
+            ResumeVisibility.PUBLIC -> true
+            ResumeVisibility.AUTHENTICATED -> currentUserId != null
+            ResumeVisibility.PRIVATE -> false
+        }
+    }
+
     private fun InternalFileAttachmentResponse.withFileVisibility(
         visibility: FileAssetVisibility,
     ): InternalFileAttachmentResponse {
@@ -476,5 +568,15 @@ class ProfileServiceImpl(
 
     private companion object {
         private val logger = LoggerFactory.getLogger(ProfileServiceImpl::class.java)
+
+        private val applicantDownloadRoles = setOf(
+            FileAttachmentRole.AVATAR,
+            FileAttachmentRole.RESUME,
+            FileAttachmentRole.PORTFOLIO,
+        )
+
+        private val employerDownloadRoles = setOf(
+            FileAttachmentRole.LOGO,
+        )
     }
 }
