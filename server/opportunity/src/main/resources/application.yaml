@@ -1,5 +1,5 @@
 server:
-  port: 8081
+  port: ${PORT:8081}
 
 spring:
   application:
@@ -19,15 +19,15 @@ feign:
 
 auth:
   service:
-    url: ${AUTH_SERVICE_URL:http://localhost:9999}
+    url: ${AUTH_SERVER_HOST:http://localhost:9999}
 
 moderation:
   service:
-    url: ${MODERATION_SERVICE_URL:http://localhost:8082}
+    url: ${MODERATION_SERVER_HOST:http://localhost:8082}
 
 media:
   service:
-    url: ${MEDIA_SERVICE_URL:http://localhost:8091}
+    url: ${MEDIA_SERVER_HOST:http://localhost:8091}
 
 internal-api:
   api-key: moderation-api-key
