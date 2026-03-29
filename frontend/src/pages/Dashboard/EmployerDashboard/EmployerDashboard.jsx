@@ -18,7 +18,7 @@ import {
     getEmployerApplications,
     updateApplicationStatus,
     searchCities
-} from '../../../utils/profileApi'
+} from '../../../api/profile'
 import { listTags, OPPORTUNITY_LABELS } from '../../../api/opportunities'
 import '../DashboardBase.scss'
 import './EmployerDashboard.scss'

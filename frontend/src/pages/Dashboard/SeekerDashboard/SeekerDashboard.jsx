@@ -18,7 +18,7 @@ import {
     removeFromSaved,
     removeContact,
     searchCities
-} from '../../../utils/profileApi'
+} from '../../../api/profile'
 import '../DashboardBase.scss'
 import './SeekerDashboard.scss'
 
