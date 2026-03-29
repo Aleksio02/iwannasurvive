@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useLocation } from 'wouter'
 import Button from '../../../components/Button'
 import Input from '../../../components/Input'
@@ -15,12 +15,15 @@ import {
 import {
     addToSaved,
     removeFromSaved,
-    applyToOpportunity
-} from '../../../utils/profileApi'
-import useGuestFavorites from '../../../hooks/useGuestFavorites'
+    applyToOpportunity,
+    getSeekerSaved,
+} from '../../../api/profile'
+import {
+    getSessionUser,
+    subscribeSessionChange,
+} from '../../../utils/sessionStore'
 import './OpportunitiesPage.scss'
 
-// Импорт SVG иконок из папки assets
 import locationIcon from '../../../assets/icons/location.svg'
 import briefcaseIcon from '../../../assets/icons/briefcase.svg'
 import companyIcon from '../../../assets/icons/company.svg'
@@ -52,29 +55,18 @@ function formatMoney(from, to, currency) {
     return `${values.join(' ')} ${currency || ''}`.trim()
 }
 
-function getCurrentUser() {
-    try {
-        const stored = localStorage.getItem('tramplin_current_user')
-        return stored ? JSON.parse(stored) : null
-    } catch {
-        return null
-    }
+function getStorageKey(key, user = getSessionUser()) {
+    if (!user || !user.id) return key
+    return `${key}_user_${user.id}`
 }
 
-// User-specific storage keys
-function getStorageKey(key) {
-    const user = getCurrentUser()
-    if (!user || !user.userId) return key
-    return `${key}_user_${user.userId}`
-}
-
-function setStorageSet(key, setValue) {
-    const storageKey = getStorageKey(key)
+function setStorageSet(key, setValue, user = getSessionUser()) {
+    const storageKey = getStorageKey(key, user)
     localStorage.setItem(storageKey, JSON.stringify(Array.from(setValue)))
 }
 
-function getStorageSet(key) {
-    const storageKey = getStorageKey(key)
+function getStorageSet(key, user = getSessionUser()) {
+    const storageKey = getStorageKey(key, user)
     try {
         const raw = localStorage.getItem(storageKey)
         if (!raw) return new Set()
@@ -84,15 +76,22 @@ function getStorageSet(key) {
     }
 }
 
+function useDebounce(value, delay) {
+    const [debouncedValue, setDebouncedValue] = useState(value)
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedValue(value), delay)
+        return () => clearTimeout(timer)
+    }, [value, delay])
+
+    return debouncedValue
+}
+
 function OpportunitiesPage() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
 
-    // ✅ сначала объявляем currentUser
-    const currentUser = useMemo(() => getCurrentUser(), [])
-    const isApplicant = currentUser?.role === 'APPLICANT'
-
-    // --------------------------
+    const [currentUser, setCurrentUser] = useState(getSessionUser())
     const [viewMode, setViewMode] = useState('map')
     const [filters, setFilters] = useState({
         search: '',
@@ -111,21 +110,63 @@ function OpportunitiesPage() {
     const [focusedOpportunityId, setFocusedOpportunityId] = useState(null)
     const [tags, setTags] = useState([])
 
-    // ✅ теперь безопасно инициализируем избранное
-    const [favoriteCompanies, setFavoriteCompanies] = useState(() => getStorageSet('favorite_companies'))
-    const { favorites: guestFavorites, toggle: toggleGuestFavorite } = useGuestFavorites()
-
+    const [favoriteCompanies, setFavoriteCompanies] = useState(() =>
+        getStorageSet('favorite_companies', getSessionUser())
+    )
     const [favoriteOpportunities, setFavoriteOpportunities] = useState(() =>
-        currentUser ? getStorageSet('favorite_opportunities') : new Set(guestFavorites)
+        getStorageSet('favorite_opportunities', getSessionUser())
     )
 
+    const isApplicant = currentUser?.role === 'APPLICANT'
     const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT))
+
+    const debouncedSearch = useDebounce(filters.search, 500)
+    const debouncedSkills = useDebounce(filters.skillsQuery, 500)
+
+    useEffect(() => {
+        const unsubscribe = subscribeSessionChange((nextUser) => {
+            setCurrentUser(nextUser)
+
+            if (!nextUser?.id) {
+                setFavoriteCompanies(getStorageSet('favorite_companies', null))
+                setFavoriteOpportunities(getStorageSet('favorite_opportunities', null))
+                return
+            }
+
+            setFavoriteCompanies(getStorageSet('favorite_companies', nextUser))
+            setFavoriteOpportunities(getStorageSet('favorite_opportunities', nextUser))
+        })
+
+        return unsubscribe
+    }, [])
+
+    const syncFavoriteOpportunities = useCallback(async () => {
+        if (!currentUser?.id) {
+            const localFavorites = getStorageSet('favorite_opportunities', null)
+            setFavoriteOpportunities(localFavorites)
+            return
+        }
+
+        try {
+            const saved = await getSeekerSaved()
+            const next = new Set(saved.map((item) => item.id))
+            setFavoriteOpportunities(next)
+            setStorageSet('favorite_opportunities', next, currentUser)
+        } catch (syncError) {
+            console.error('Failed to sync favorites:', syncError)
+
+            if ([401, 403, 500, 503].includes(syncError.status)) {
+                setFavoriteOpportunities(getStorageSet('favorite_opportunities', null))
+                return
+            }
+        }
+    }, [currentUser])
 
     const queryParams = useMemo(() => {
         const params = {
             limit: PAGE_LIMIT,
             offset: page * PAGE_LIMIT,
-            search: `${filters.search} ${filters.skillsQuery}`.trim(),
+            search: `${debouncedSearch} ${debouncedSkills}`.trim(),
             type: filters.type,
             workFormat: filters.format,
             sortBy: 'PUBLISHED_AT',
@@ -143,9 +184,8 @@ function OpportunitiesPage() {
         }
 
         return params
-    }, [filters, page, salaryRange, selectedTags])
+    }, [debouncedSearch, debouncedSkills, filters.type, filters.format, page, salaryRange, selectedTags])
 
-    // Загрузка тегов
     useEffect(() => {
         listTags('TECH')
             .then((data) => {
@@ -157,7 +197,31 @@ function OpportunitiesPage() {
             })
     }, [])
 
-    // Загрузка данных
+    useEffect(() => {
+        syncFavoriteOpportunities()
+    }, [syncFavoriteOpportunities])
+
+    useEffect(() => {
+        const handleFavoritesUpdated = async () => {
+            await syncFavoriteOpportunities()
+        }
+
+        const handleStorage = (event) => {
+            const storageKey = getStorageKey('favorite_opportunities', currentUser)
+            if (event.key === storageKey) {
+                setFavoriteOpportunities(getStorageSet('favorite_opportunities', currentUser))
+            }
+        }
+
+        window.addEventListener('favorites-updated', handleFavoritesUpdated)
+        window.addEventListener('storage', handleStorage)
+
+        return () => {
+            window.removeEventListener('favorites-updated', handleFavoritesUpdated)
+            window.removeEventListener('storage', handleStorage)
+        }
+    }, [syncFavoriteOpportunities, currentUser])
+
     useEffect(() => {
         let mounted = true
 
@@ -200,8 +264,9 @@ function OpportunitiesPage() {
         const next = new Set(favoriteCompanies)
         if (next.has(companyName)) next.delete(companyName)
         else next.add(companyName)
+
         setFavoriteCompanies(next)
-        setStorageSet('favorite_companies', next)
+        setStorageSet('favorite_companies', next, currentUser)
 
         toast({
             title: next.has(companyName) ? 'Компания добавлена в избранное' : 'Компания удалена из избранного',
@@ -213,15 +278,18 @@ function OpportunitiesPage() {
         const isFavorite = favoriteOpportunities.has(opportunity.id)
 
         if (!currentUser) {
-            toggleGuestFavorite(opportunity.id)
+            const next = new Set(favoriteOpportunities)
 
-            const updated = new Set(guestFavorites.includes(opportunity.id)
-                ? guestFavorites.filter(id => id !== opportunity.id)
-                : [...guestFavorites, opportunity.id]
-            )
+            if (isFavorite) next.delete(opportunity.id)
+            else next.add(opportunity.id)
 
-            setFavoriteOpportunities(updated)
+            setFavoriteOpportunities(next)
+            setStorageSet('favorite_opportunities', next, null)
 
+            toast({
+                title: isFavorite ? 'Удалено из избранного' : 'Добавлено в избранное',
+                description: `"${opportunity.title}" ${isFavorite ? 'удалено из избранного' : 'сохранено в избранное'}`,
+            })
             return
         }
 
@@ -232,19 +300,56 @@ function OpportunitiesPage() {
                 const next = new Set(favoriteOpportunities)
                 next.delete(opportunity.id)
                 setFavoriteOpportunities(next)
-                setStorageSet('favorite_opportunities', next)
+                setStorageSet('favorite_opportunities', next, currentUser)
 
+                toast({
+                    title: 'Удалено из избранного',
+                    description: `"${opportunity.title}" удалено из избранного`,
+                })
             } else {
                 await addToSaved(opportunity.id)
 
                 const next = new Set(favoriteOpportunities)
                 next.add(opportunity.id)
                 setFavoriteOpportunities(next)
-                setStorageSet('favorite_opportunities', next)
+                setStorageSet('favorite_opportunities', next, currentUser)
+
+                toast({
+                    title: 'Добавлено в избранное',
+                    description: `"${opportunity.title}" сохранено в избранное`,
+                })
+            }
+        } catch (error) {
+            console.error('Favorite error:', error)
+
+            if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
+                const next = new Set(favoriteOpportunities)
+                next.add(opportunity.id)
+                setFavoriteOpportunities(next)
+                setStorageSet('favorite_opportunities', next, currentUser)
+
+                toast({
+                    title: 'В избранном',
+                    description: `"${opportunity.title}" уже в избранном`,
+                })
+                return
             }
 
-        } catch (error) {
-            console.error(error)
+            if (error.status === 401 || error.status === 403 || error.status === 500 || error.status === 503) {
+                toast({
+                    title: 'Сессия недоступна',
+                    description: 'Пожалуйста, войдите снова',
+                    variant: 'destructive',
+                })
+                navigate('/login')
+                return
+            }
+
+            toast({
+                title: 'Ошибка',
+                description: error.message || 'Не удалось изменить избранное',
+                variant: 'destructive'
+            })
         }
     }
 
@@ -263,7 +368,7 @@ function OpportunitiesPage() {
                 description: 'Войдите в аккаунт, чтобы откликнуться',
                 variant: 'destructive'
             })
-            setTimeout(() => navigate('/auth/login'), 1500)
+            navigate('/login')
             return
         }
 
@@ -295,6 +400,16 @@ function OpportunitiesPage() {
                 return
             }
 
+            if (applyError.status === 401 || applyError.status === 403 || applyError.status === 500 || applyError.status === 503) {
+                toast({
+                    title: 'Сессия недоступна',
+                    description: 'Пожалуйста, войдите снова',
+                    variant: 'destructive'
+                })
+                navigate('/login')
+                return
+            }
+
             toast({
                 title: 'Ошибка',
                 description: applyError.message || 'Не удалось отправить отклик',
@@ -310,7 +425,6 @@ function OpportunitiesPage() {
         }
     }
 
-    // ========== ОБРАБОТЧИКИ ДЛЯ ФИЛЬТРОВ ==========
     const handleSearchChange = (e) => {
         setPage(0)
         setFilters((prev) => ({ ...prev, search: e.target.value }))
@@ -382,7 +496,6 @@ function OpportunitiesPage() {
                         />
                     </div>
 
-                    {/* Фильтр по зарплате */}
                     <div className="opportunities-page__salary-filter">
                         <div className="salary-filter__title">Зарплата</div>
                         <div className="salary-filter__inputs">
@@ -405,7 +518,6 @@ function OpportunitiesPage() {
                         </div>
                     </div>
 
-                    {/* Теги */}
                     {tags.length > 0 && (
                         <div className="opportunities-page__tag-list">
                             {tags.map((tag) => (
@@ -468,6 +580,7 @@ function OpportunitiesPage() {
                                             <div className="opportunities-page__compact-header">
                                                 <h3>{item.title}</h3>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__fav-star ${favoriteOpportunities.has(item.id) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleOpportunityFavorite(item)}
                                                 >
@@ -478,6 +591,7 @@ function OpportunitiesPage() {
                                                 <img src={companyIcon} alt="" className="icon" />
                                                 <span>{item.companyName}</span>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__company-fav ${favoriteCompanies.has(item.companyName) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleCompanyFavorite(item.companyName)}
                                                 >
@@ -498,12 +612,16 @@ function OpportunitiesPage() {
                                             </p>
                                             <p className="opportunities-page__short-desc">{item.shortDescription}</p>
                                             <div className="opportunities-page__compact-actions">
-                                                <button className="opportunities-page__map-btn" onClick={() => handleShowOnMap(item.id)}>
+                                                <button
+                                                    type="button"
+                                                    className="opportunities-page__map-btn"
+                                                    onClick={() => handleShowOnMap(item.id)}
+                                                >
                                                     <img src={locationIcon} alt="" className="icon" />
                                                     <span>Показать на карте</span>
                                                 </button>
                                                 <Link href={`/opportunities/${item.id}`}>
-                                                    <button className="opportunities-page__detail-btn">
+                                                    <button type="button" className="opportunities-page__detail-btn">
                                                         <span>Подробнее</span>
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <path d="M9 18L15 12L9 6" />
@@ -515,13 +633,13 @@ function OpportunitiesPage() {
                                     ))}
                                     {total > MAP_SIDE_LIMIT && (
                                         <div className="opportunities-page__map-pagination">
-                                            <button onClick={() => goToPage(page - 1)} disabled={page === 0}>
+                                            <button type="button" onClick={() => goToPage(page - 1)} disabled={page === 0}>
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                     <path d="M15 18L9 12L15 6" />
                                                 </svg>
                                             </button>
                                             <span>{page + 1} / {totalPages}</span>
-                                            <button onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
+                                            <button type="button" onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                     <path d="M9 18L15 12L9 6" />
                                                 </svg>
@@ -556,6 +674,7 @@ function OpportunitiesPage() {
                                                     </span>
                                                 </div>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__fav-star ${favoriteOpportunities.has(item.id) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleOpportunityFavorite(item)}
                                                 >
@@ -567,6 +686,7 @@ function OpportunitiesPage() {
                                                 <img src={companyIcon} alt="" className="icon" />
                                                 <span>{item.companyName}</span>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__company-fav ${favoriteCompanies.has(item.companyName) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleCompanyFavorite(item.companyName)}
                                                 >
@@ -579,7 +699,11 @@ function OpportunitiesPage() {
                                             </p>
                                             <p className="opportunities-page__desc">{item.shortDescription}</p>
                                             <div className="opportunities-page__card-footer">
-                                                <button className="opportunities-page__map-link" onClick={() => handleShowOnMap(item.id)}>
+                                                <button
+                                                    type="button"
+                                                    className="opportunities-page__map-link"
+                                                    onClick={() => handleShowOnMap(item.id)}
+                                                >
                                                     <img src={locationIcon} alt="" className="icon" />
                                                     <span>На карту</span>
                                                 </button>
@@ -598,14 +722,14 @@ function OpportunitiesPage() {
                                     ))}
                                 </div>
                                 <div className="opportunities-page__pagination">
-                                    <button onClick={() => goToPage(page - 1)} disabled={page === 0}>
+                                    <button type="button" onClick={() => goToPage(page - 1)} disabled={page === 0}>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M15 18L9 12L15 6" />
                                         </svg>
                                         <span>Назад</span>
                                     </button>
                                     <span>{page + 1} / {totalPages}</span>
-                                    <button onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
+                                    <button type="button" onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
                                         <span>Вперёд</span>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M9 18L15 12L9 6" />

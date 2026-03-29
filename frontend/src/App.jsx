@@ -1,44 +1,54 @@
-import { Switch, Route } from 'wouter'
+import { Route, Switch } from 'wouter'
+import OpportunitiesPage from './pages/Opportunities/OpportunitiesPage/OpportunitiesPage'
+import OpportunityDetailPage from './pages/Opportunities/OpportunityDetailPage/OpportunityDetailPage'
 import Login from './pages/Auth/Login/Login'
 import Register from './pages/Auth/Register/Register'
-import Toaster from './components/Toast/Toaster'
-
-import ProfileEditPage from './pages/ProfileEdit/ProfileEdit'
 import SeekerDashboard from './pages/Dashboard/SeekerDashboard/SeekerDashboard'
 import EmployerDashboard from './pages/Dashboard/EmployerDashboard/EmployerDashboard'
 import CuratorDashboard from './pages/Dashboard/CuratorDashboard/CuratorDashboard'
-import OpportunitiesPage from './pages/Opportunities/OpportunitiesPage/OpportunitiesPage'
-import OpportunityDetailPage from './pages/Opportunities/OpportunityDetailPage/OpportunityDetailPage'
+import ProfileEdit from './pages/ProfileEdit/ProfileEdit'
+import ProtectedRoute from './components/ProtectedRoute'
 import PublicProfile from './pages/PublicProfile/PublicProfile'
-
-function NotFound() {
-    return (
-        <main className="container" style={{ paddingBlock: '40px' }}>
-            <h1>404</h1>
-            <p>Страница не найдена.</p>
-        </main>
-    )
-}
+import './styles/main.scss'
 
 function App() {
     return (
-        <>
-            <Switch>
-                <Route path="/" component={OpportunitiesPage} />
-                <Route path="/opportunities/:id" component={OpportunityDetailPage} />
-                <Route path="/login" component={Login} />
-                <Route path="/register" component={Register} />
+        <Switch>
+            {/* Публичные маршруты */}
+            <Route path="/" component={OpportunitiesPage} />
+            <Route path="/opportunities/:id" component={OpportunityDetailPage} />
+            <Route path="/login" component={Login} />
+            <Route path="/register" component={Register} />
 
-                <Route path="/profile/edit" component={ProfileEditPage} />
-                <Route path="/seeker" component={SeekerDashboard} />
-                <Route path="/employer" component={EmployerDashboard} />
-                <Route path="/curator" component={CuratorDashboard} />
-                <Route path="/seekers/:id" component={PublicProfile} />
-                <Route component={NotFound} />
-            </Switch>
+            {/* Защищённые маршруты */}
+            <Route path="/seeker">
+                <ProtectedRoute allowedRoles={['APPLICANT']}>
+                    <SeekerDashboard />
+                </ProtectedRoute>
+            </Route>
 
-            <Toaster />
-        </>
+            <Route path="/employer">
+                <ProtectedRoute allowedRoles={['EMPLOYER']}>
+                    <EmployerDashboard />
+                </ProtectedRoute>
+            </Route>
+
+            <Route path="/curator">
+                <ProtectedRoute allowedRoles={['CURATOR', 'ADMIN']}>
+                    <CuratorDashboard />
+                </ProtectedRoute>
+            </Route>
+            <Route path="/seekers/:id" component={PublicProfile} />
+
+            <Route path="/profile/edit">
+                <ProtectedRoute allowedRoles={['APPLICANT', 'EMPLOYER']}>
+                    <ProfileEdit />
+                </ProtectedRoute>
+            </Route>
+
+            {/* 404 - перенаправляем на главную */}
+            <Route>{(params) => <Navigate to="/" />}</Route>
+        </Switch>
     )
 }
 

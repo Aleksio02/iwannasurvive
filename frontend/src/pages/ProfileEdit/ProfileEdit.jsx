@@ -6,12 +6,14 @@ import { INDUSTRIES } from '../../constants/industries'
 import { CITIES } from '../../constants/cities'
 import { FACULTIES } from '../../constants/faculties'
 import { STUDY_PROGRAMS } from '../../constants/studyPrograms'
+import { getCurrentUserInfo } from '../../api/auth'
+import { updateApplicantProfile, updateEmployerProfile } from '../../api/profile'
 import {
-    getCurrentUser as getLocalUser,
-    setCurrentUser,
-} from '../../utils/userHelpers'
-import { getCurrentUserInfo } from '../../utils/authApi'
-import { updateApplicantProfile, updateEmployerProfile } from '../../utils/profileApi'
+    clearSessionUser,
+    getSessionUser,
+    setSessionUser,
+    subscribeSessionChange,
+} from '../../utils/sessionStore'
 import {
     Card,
     CardContent,
@@ -49,13 +51,12 @@ function ProfileEdit() {
     const [, setLocation] = useLocation()
     const { toast } = useToast()
 
-    const [user, setUser] = useState(null)
+    const [user, setUser] = useState(getSessionUser())
     const [isLoading, setIsLoading] = useState(true)
     const [errors, setErrors] = useState({})
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showAdvanced, setShowAdvanced] = useState(false)
 
-    // ===== AUTOCOMPLETE STATE =====
     const [isUniversityOpen, setIsUniversityOpen] = useState(false)
     const [isIndustryOpen, setIsIndustryOpen] = useState(false)
     const [isCityOpen, setIsCityOpen] = useState(false)
@@ -74,7 +75,6 @@ function ProfileEdit() {
     const facultyRef = useRef(null)
     const studyProgramRef = useRef(null)
 
-    // ===== APPLICANT =====
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
     const [middleName, setMiddleName] = useState('')
@@ -99,7 +99,6 @@ function ProfileEdit() {
     const [openToWork, setOpenToWork] = useState(true)
     const [openToEvents, setOpenToEvents] = useState(true)
 
-    // ===== EMPLOYER =====
     const [companyName, setCompanyName] = useState('')
     const [legalName, setLegalName] = useState('')
     const [inn, setInn] = useState('')
@@ -115,59 +114,69 @@ function ProfileEdit() {
     const [socialRows, setSocialRows] = useState([createLinkRow()])
     const [publicContactRows, setPublicContactRows] = useState([createLinkRow()])
 
-    // Загрузка пользователя
     useEffect(() => {
+        const unsubscribe = subscribeSessionChange((nextUser) => {
+            setUser(nextUser)
+            if (!nextUser) {
+                setIsLoading(false)
+            }
+        })
+
         const loadUser = async () => {
             setIsLoading(true)
-            try {
-                let localUser = getLocalUser()
 
-                if (localUser && !localUser.role) {
-                    try {
-                        const apiUser = await getCurrentUserInfo()
-                        if (apiUser) {
-                            localUser = { ...localUser, ...apiUser }
-                            setCurrentUser(localUser)
-                        }
-                    } catch (err) {
-                        console.warn('Failed to get user info from API:', err)
-                    }
-                }
+            try {
+                const localUser = getSessionUser()
 
                 if (!localUser) {
-                    try {
-                        const apiUser = await getCurrentUserInfo()
-                        if (apiUser) {
-                            localUser = apiUser
-                            setCurrentUser(localUser)
-                        }
-                    } catch (err) {
-                        console.warn('No authenticated user found')
+                    const apiUserResponse = await getCurrentUserInfo()
+                    const apiUser = apiUserResponse?.user || apiUserResponse || null
+
+                    if (apiUser) {
+                        setSessionUser(apiUser)
+                        setUser(apiUser)
+                    } else {
+                        setUser(null)
                     }
+
+                    return
                 }
 
                 setUser(localUser)
+
+                const apiUserResponse = await getCurrentUserInfo()
+                const apiUser = apiUserResponse?.user || apiUserResponse || null
+
+                if (apiUser) {
+                    setSessionUser(apiUser)
+                    setUser(apiUser)
+                } else {
+                    clearSessionUser()
+                    setUser(null)
+                }
             } catch (error) {
                 console.error('Error loading user:', error)
+                clearSessionUser()
+                setUser(null)
             } finally {
                 setIsLoading(false)
             }
         }
 
         loadUser()
+
+        return unsubscribe
     }, [])
 
     const role = user?.role
     const isEmployer = role === 'EMPLOYER'
 
-    // ПОДСТАВЛЯЕМ НАЗВАНИЕ КОМПАНИИ ИЗ РЕГИСТРАЦИИ
     useEffect(() => {
         if (user && isEmployer && !companyName) {
             setCompanyName(user.displayName || '')
         }
     }, [user, isEmployer, companyName])
 
-    // Подсказки
     const universitySuggestions = useMemo(
         () => smartFilter(RUSSIAN_UNIVERSITIES, universityQuery),
         [universityQuery]
@@ -193,7 +202,6 @@ function ProfileEdit() {
         [studyProgramQuery]
     )
 
-    // Закрытие выпадающих списков при клике вне
     useEffect(() => {
         const handleOutsideClick = (event) => {
             if (universityRef.current && !universityRef.current.contains(event.target)) {
@@ -217,6 +225,7 @@ function ProfileEdit() {
                 setStudyProgramActiveIndex(-1)
             }
         }
+
         const handleEsc = (event) => {
             if (event.key === 'Escape') {
                 setIsUniversityOpen(false)
@@ -231,15 +240,16 @@ function ProfileEdit() {
                 setStudyProgramActiveIndex(-1)
             }
         }
+
         document.addEventListener('mousedown', handleOutsideClick)
         document.addEventListener('keydown', handleEsc)
+
         return () => {
             document.removeEventListener('mousedown', handleOutsideClick)
             document.removeEventListener('keydown', handleEsc)
         }
     }, [])
 
-    // Показываем загрузку
     if (isLoading) {
         return (
             <div className="profile-edit">
@@ -253,18 +263,17 @@ function ProfileEdit() {
         )
     }
 
-    // Проверка авторизации
     if (!user) {
         return (
             <div className="profile-edit">
                 <Card className="profile-edit__card">
                     <CardHeader>
                         <CardTitle>Пользователь не найден</CardTitle>
-                        <CardDescription>Сначала зарегистрируйтесь.</CardDescription>
+                        <CardDescription>Сначала войдите в систему.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Button onClick={() => setLocation('/register')}>
-                            Перейти к регистрации
+                        <Button onClick={() => setLocation('/login')}>
+                            Перейти ко входу
                         </Button>
                     </CardContent>
                 </Card>
@@ -272,7 +281,6 @@ function ProfileEdit() {
         )
     }
 
-    // Проверка наличия роли
     if (!role) {
         return (
             <div className="profile-edit">
@@ -285,7 +293,7 @@ function ProfileEdit() {
                     </CardHeader>
                     <CardContent>
                         <Button onClick={() => {
-                            localStorage.removeItem('tramplin_current_user')
+                            clearSessionUser()
                             setLocation('/login')
                         }}>
                             Выйти и войти заново
@@ -360,10 +368,7 @@ function ProfileEdit() {
                     verificationStatus: 'PENDING',
                 }
 
-                console.log('[ProfileEdit] Сохранение профиля работодателя:', employerProfileData)
                 await updateEmployerProfile(employerProfileData)
-
-                localStorage.setItem(`employer_profile_${user.email}`, JSON.stringify(employerProfileData))
 
                 toast({
                     title: 'Заявка отправлена',
@@ -394,10 +399,7 @@ function ProfileEdit() {
                     openToEvents,
                 }
 
-                console.log('[ProfileEdit] Сохранение профиля соискателя:', applicantProfileData)
                 await updateApplicantProfile(applicantProfileData)
-
-                localStorage.setItem(`applicant_profile_${user.email}`, JSON.stringify(applicantProfileData))
 
                 toast({
                     title: 'Профиль сохранён',
@@ -408,6 +410,18 @@ function ProfileEdit() {
             setLocation(isEmployer ? '/employer' : '/seeker')
         } catch (error) {
             console.error('[ProfileEdit] Ошибка сохранения:', error)
+
+            if ([401, 403, 500, 503].includes(error.status)) {
+                clearSessionUser()
+                toast({
+                    title: 'Сессия недоступна',
+                    description: 'Пожалуйста, войдите снова',
+                    variant: 'destructive',
+                })
+                setLocation('/login')
+                return
+            }
+
             toast({
                 title: 'Ошибка',
                 description: error.message || 'Не удалось сохранить профиль',

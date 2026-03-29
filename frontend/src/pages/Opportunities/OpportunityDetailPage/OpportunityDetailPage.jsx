@@ -5,9 +5,7 @@ import Button from '../../../components/Button'
 import { useToast } from '../../../hooks/use-toast'
 import YandexOpportunityMap from '../../../components/Map/YandexOpportunityMap'
 import { getOpportunity, OPPORTUNITY_LABELS } from '../../../api/opportunities'
-import { applyToOpportunity } from '../../../utils/profileApi'
-import { sendRecommendation } from '../../../api/recommendations'
-import { getContacts } from '../../../api/interaction'
+import { applyToOpportunity } from '../../../api/profile'
 import './OpportunityDetailPage.scss'
 
 // Импорт SVG иконок
@@ -139,29 +137,6 @@ export default function OpportunityDetailPage() {
         } finally {
             setIsApplying(false)
         }
-    }
-
-    const handleRecommend = async () => {
-        const contacts = await getContacts()
-        const accepted = contacts.filter(c => c.status === 'ACCEPTED')
-
-        if (!accepted.length) {
-            alert('Нет контактов')
-            return
-        }
-
-        const id = prompt(
-            'ID контакта: ' +
-            accepted.map(c => `${c.contactName} (${c.contactUserId})`).join(', ')
-        )
-
-        if (!id) return
-
-        await sendRecommendation({
-            opportunityId: item.id,
-            toApplicantUserId: Number(id),
-            message: ''
-        })
     }
 
     return (
@@ -345,11 +320,6 @@ export default function OpportunityDetailPage() {
                                         disabled={isApplying}
                                     >
                                         {isApplying ? 'Отправка...' : 'Откликнуться на вакансию'}
-                                    </Button>
-                                )}
-                                {isApplicant && (
-                                    <Button onClick={handleRecommend}>
-                                        Рекомендовать
                                     </Button>
                                 )}
                                 {role === 'EMPLOYER' && (
