@@ -17,6 +17,7 @@ import {
     removeFromSaved,
     applyToOpportunity
 } from '../../../utils/profileApi'
+import useGuestFavorites from '../../../hooks/useGuestFavorites'
 import './OpportunitiesPage.scss'
 
 // Импорт SVG иконок из папки assets
@@ -86,6 +87,12 @@ function getStorageSet(key) {
 function OpportunitiesPage() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
+
+    // ✅ сначала объявляем currentUser
+    const currentUser = useMemo(() => getCurrentUser(), [])
+    const isApplicant = currentUser?.role === 'APPLICANT'
+
+    // --------------------------
     const [viewMode, setViewMode] = useState('map')
     const [filters, setFilters] = useState({
         search: '',
@@ -104,11 +111,13 @@ function OpportunitiesPage() {
     const [focusedOpportunityId, setFocusedOpportunityId] = useState(null)
     const [tags, setTags] = useState([])
 
+    // ✅ теперь безопасно инициализируем избранное
     const [favoriteCompanies, setFavoriteCompanies] = useState(() => getStorageSet('favorite_companies'))
-    const [favoriteOpportunities, setFavoriteOpportunities] = useState(() => getStorageSet('favorite_opportunities'))
+    const { favorites: guestFavorites, toggle: toggleGuestFavorite } = useGuestFavorites()
 
-    const currentUser = useMemo(() => getCurrentUser(), [])
-    const isApplicant = currentUser?.role === 'APPLICANT'
+    const [favoriteOpportunities, setFavoriteOpportunities] = useState(() =>
+        currentUser ? getStorageSet('favorite_opportunities') : new Set(guestFavorites)
+    )
 
     const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT))
 
@@ -204,58 +213,38 @@ function OpportunitiesPage() {
         const isFavorite = favoriteOpportunities.has(opportunity.id)
 
         if (!currentUser) {
-            toast({
-                title: 'Требуется авторизация',
-                description: 'Войдите в аккаунт, чтобы добавить в избранное',
-                variant: 'destructive'
-            })
-            setTimeout(() => navigate('/auth/login'), 1500)
+            toggleGuestFavorite(opportunity.id)
+
+            const updated = new Set(guestFavorites.includes(opportunity.id)
+                ? guestFavorites.filter(id => id !== opportunity.id)
+                : [...guestFavorites, opportunity.id]
+            )
+
+            setFavoriteOpportunities(updated)
+
             return
         }
 
         try {
             if (isFavorite) {
                 await removeFromSaved(opportunity.id)
+
                 const next = new Set(favoriteOpportunities)
                 next.delete(opportunity.id)
                 setFavoriteOpportunities(next)
                 setStorageSet('favorite_opportunities', next)
-                toast({
-                    title: 'Удалено из избранного',
-                    description: `"${opportunity.title}" удалено из избранного`,
-                })
+
             } else {
                 await addToSaved(opportunity.id)
+
                 const next = new Set(favoriteOpportunities)
                 next.add(opportunity.id)
                 setFavoriteOpportunities(next)
                 setStorageSet('favorite_opportunities', next)
-                toast({
-                    title: 'Добавлено в избранное',
-                    description: `"${opportunity.title}" сохранено в избранное`,
-                })
             }
+
         } catch (error) {
-            console.error('Favorite error:', error)
-
-            // Если ошибка дубликата — всё равно считаем что добавилось
-            if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
-                const next = new Set(favoriteOpportunities)
-                next.add(opportunity.id)
-                setFavoriteOpportunities(next)
-                setStorageSet('favorite_opportunities', next)
-                toast({
-                    title: 'В избранном',
-                    description: `"${opportunity.title}" уже в избранном`,
-                })
-                return
-            }
-
-            toast({
-                title: 'Ошибка',
-                description: error.message || 'Не удалось изменить избранное',
-                variant: 'destructive'
-            })
+            console.error(error)
         }
     }
 

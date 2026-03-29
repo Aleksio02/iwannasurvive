@@ -9,6 +9,7 @@ import EmployerDashboard from './pages/Dashboard/EmployerDashboard/EmployerDashb
 import CuratorDashboard from './pages/Dashboard/CuratorDashboard/CuratorDashboard'
 import OpportunitiesPage from './pages/Opportunities/OpportunitiesPage/OpportunitiesPage'
 import OpportunityDetailPage from './pages/Opportunities/OpportunityDetailPage/OpportunityDetailPage'
+import PublicProfile from './pages/PublicProfile/PublicProfile'
 
 function NotFound() {
     return (
@@ -32,7 +33,7 @@ function App() {
                 <Route path="/seeker" component={SeekerDashboard} />
                 <Route path="/employer" component={EmployerDashboard} />
                 <Route path="/curator" component={CuratorDashboard} />
-
+                <Route path="/seekers/:id" component={PublicProfile} />
                 <Route component={NotFound} />
             </Switch>
 
