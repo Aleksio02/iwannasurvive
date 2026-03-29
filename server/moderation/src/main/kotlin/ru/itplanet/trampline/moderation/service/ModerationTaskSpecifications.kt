@@ -15,30 +15,48 @@ object ModerationTaskSpecifications {
 
     fun build(
         request: GetModerationTasksRequest,
-        currentUserId: Long
+        currentUserId: Long,
     ): Specification<ModerationTaskDto> {
         return Specification.allOf(
             listOfNotNull(
+                visibleToUser(currentUserId),
                 withStatus(request.status),
                 withTaskType(request.taskType),
                 withEntityType(request.entityType),
                 withPriority(request.priority),
                 withAssignee(resolveAssigneeUserId(request, currentUserId)),
                 withCreatedFrom(request.createdFrom),
-                withCreatedTo(request.createdTo)
-            )
+                withCreatedTo(request.createdTo),
+            ),
         )
+    }
+
+    fun visibleToUser(
+        currentUserId: Long,
+    ): Specification<ModerationTaskDto> {
+        return Specification { root, _, cb ->
+            val createdByJoin = root.join<ModerationTaskDto, ModerationUserRefDto>(
+                "createdByUser",
+                JoinType.LEFT,
+            )
+
+            cb.or(
+                cb.notEqual(root.get<ModerationEntityType>("entityType"), ModerationEntityType.TAG),
+                cb.isNull(createdByJoin.get<Long>("id")),
+                cb.notEqual(createdByJoin.get<Long>("id"), currentUserId),
+            )
+        }
     }
 
     private fun resolveAssigneeUserId(
         request: GetModerationTasksRequest,
-        currentUserId: Long
+        currentUserId: Long,
     ): Long? {
         return if (request.mine == true) currentUserId else request.assigneeUserId
     }
 
     private fun withStatus(
-        status: ModerationTaskStatus?
+        status: ModerationTaskStatus?,
     ): Specification<ModerationTaskDto>? {
         return status?.let {
             Specification { root, _, cb ->
@@ -48,7 +66,7 @@ object ModerationTaskSpecifications {
     }
 
     private fun withTaskType(
-        taskType: ModerationTaskType?
+        taskType: ModerationTaskType?,
     ): Specification<ModerationTaskDto>? {
         return taskType?.let {
             Specification { root, _, cb ->
@@ -58,7 +76,7 @@ object ModerationTaskSpecifications {
     }
 
     private fun withEntityType(
-        entityType: ModerationEntityType?
+        entityType: ModerationEntityType?,
     ): Specification<ModerationTaskDto>? {
         return entityType?.let {
             Specification { root, _, cb ->
@@ -68,7 +86,7 @@ object ModerationTaskSpecifications {
     }
 
     private fun withPriority(
-        priority: ModerationTaskPriority?
+        priority: ModerationTaskPriority?,
     ): Specification<ModerationTaskDto>? {
         return priority?.let {
             Specification { root, _, cb ->
@@ -78,13 +96,13 @@ object ModerationTaskSpecifications {
     }
 
     private fun withAssignee(
-        assigneeUserId: Long?
+        assigneeUserId: Long?,
     ): Specification<ModerationTaskDto>? {
         return assigneeUserId?.let {
             Specification { root, _, cb ->
                 val assigneeJoin = root.join<ModerationTaskDto, ModerationUserRefDto>(
                     "assigneeUser",
-                    JoinType.LEFT
+                    JoinType.LEFT,
                 )
                 cb.equal(assigneeJoin.get<Long>("id"), it)
             }
@@ -92,7 +110,7 @@ object ModerationTaskSpecifications {
     }
 
     private fun withCreatedFrom(
-        createdFrom: OffsetDateTime?
+        createdFrom: OffsetDateTime?,
     ): Specification<ModerationTaskDto>? {
         return createdFrom?.let {
             Specification { root, _, cb ->
@@ -102,7 +120,7 @@ object ModerationTaskSpecifications {
     }
 
     private fun withCreatedTo(
-        createdTo: OffsetDateTime?
+        createdTo: OffsetDateTime?,
     ): Specification<ModerationTaskDto>? {
         return createdTo?.let {
             Specification { root, _, cb ->
