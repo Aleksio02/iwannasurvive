@@ -5,7 +5,7 @@ import {
     archiveEmployerOpportunity,
     createEmployerOpportunity,
     listEmployerOpportunities
-} from '../api/opportunities'
+} from './opportunities'
 import {
     getContacts,
     addContact as addContactApi,
@@ -17,8 +17,8 @@ import {
     getFavorites,
     addToFavorites,
     removeFromFavorites,
-} from '../api/interaction'
-import { getSessionUser, getSessionUserId } from './sessionStore'
+} from './interaction'
+import { getSessionUser, getSessionUserId } from '../utils/sessionStore'
 
 async function apiRequest(endpoint, options = {}) {
     console.log(`[API] ${options.method || 'GET'} ${endpoint}`)

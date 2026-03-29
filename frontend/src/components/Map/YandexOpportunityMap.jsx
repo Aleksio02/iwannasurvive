@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { OPPORTUNITY_LABELS } from '../../api/opportunities'
 
-const YMAPS_API_KEY = 'd601eb63-a3ae-497f-b645-7370a96ef41c'
+const YMAPS_API_KEY = import.meta.env.VITE_YMAPS_API_KEY
 
 let ymapsScriptPromise = null
 

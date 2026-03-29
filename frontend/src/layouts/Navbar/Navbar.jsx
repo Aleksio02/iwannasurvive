@@ -1,8 +1,8 @@
 import { Link, useLocation } from 'wouter'
 import { useState, useEffect } from 'react'
 import brandMark from '../../assets/icons/brand-mark.svg'
-import { getCurrentUserInfo, logoutUser } from '../../utils/authApi'
-import { getApplicantProfile, getEmployerProfile } from '../../utils/profileApi'
+import { getCurrentUserInfo, logoutUser } from '../../api/auth'
+import { getApplicantProfile, getEmployerProfile } from '../../api/profile'
 import {
     clearSessionUser,
     getSessionUser,

@@ -15,7 +15,7 @@ import Label from '../../../components/Label'
 import PasswordField from '../../../components/auth/PasswordField'
 import AuthLayout from '../../../layouts/AuthLayout'
 import { useToast } from '../../../hooks/use-toast'
-import { registerUser, getCurrentUserInfo } from '../../../utils/authApi'
+import { registerUser, getCurrentUserInfo } from '../../../api/auth'
 import './Register.scss'
 
 function Register() {

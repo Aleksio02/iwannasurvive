@@ -5,7 +5,7 @@ import Button from '../../../components/Button'
 import { useToast } from '../../../hooks/use-toast'
 import YandexOpportunityMap from '../../../components/Map/YandexOpportunityMap'
 import { getOpportunity, OPPORTUNITY_LABELS } from '../../../api/opportunities'
-import { applyToOpportunity } from '../../../utils/profileApi'
+import { applyToOpportunity } from '../../../api/profile'
 import './OpportunityDetailPage.scss'
 
 // Импорт SVG иконок
