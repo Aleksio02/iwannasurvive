@@ -5,6 +5,14 @@ import {
     listEmployerOpportunities
 } from '../api/opportunities'
 import {
+    getContacts,
+    addContact as addContactApi,
+    acceptContactRequest,
+    declineContactRequest,
+    removeContact as removeContactApi,
+    getMyResponses,
+    createResponse,
+    getFavorites,
     addToFavorites,
     removeFromFavorites
 } from '../api/interaction'
@@ -152,6 +160,171 @@ export async function updateApplicantProfile(profile) {
     return data
 }
 
+// ========== КОНТАКТЫ (INTERACTION API) ==========
+
+/**
+ * Получение списка контактов соискателя
+ * GET /api/interaction/contacts
+ */
+export async function getSeekerContacts() {
+    try {
+        const contacts = await getContacts()
+        console.log('[API] Raw contacts from API:', contacts)
+
+        if (Array.isArray(contacts) && contacts.length > 0) {
+            const normalized = contacts.map(c => ({
+                id: c.contactUserId,
+                firstName: c.contactName?.split(' ')[0] || '',
+                lastName: c.contactName?.split(' ')[1] || '',
+                fullName: c.contactName,
+                universityName: c.universityName,
+                openToWork: c.openToWork,
+                openToEvents: c.openToEvents,
+                status: c.status,
+                createdAt: c.createdAt
+            }))
+            console.log('[API] Normalized contacts:', normalized)
+            return normalized
+        }
+        return []
+    } catch (error) {
+        console.error('Failed to load contacts:', error)
+        return []
+    }
+}
+
+export async function addContact(contactUserId) {
+    return await addContactApi(contactUserId)
+}
+
+export async function acceptContact(contactUserId) {
+    return await acceptContactRequest(contactUserId)
+}
+
+export async function declineContact(contactUserId) {
+    return await declineContactRequest(contactUserId)
+}
+
+export async function removeContact(contactUserId) {
+    return await removeContactApi(contactUserId)
+}
+
+// ========== ОТКЛИКИ (INTERACTION API) ==========
+
+/**
+ * Получение списка моих откликов
+ * GET /api/interaction/responses/my
+ */
+export async function getSeekerApplications() {
+    try {
+        const responses = await getMyResponses()
+        console.log('[API] Raw responses from API:', responses)
+
+        if (Array.isArray(responses) && responses.length > 0) {
+            const normalized = responses.map(r => ({
+                id: r.id,
+                opportunityId: r.opportunityId,
+                position: r.opportunityTitle || `Вакансия #${r.opportunityId}`,
+                title: r.opportunityTitle || `Вакансия #${r.opportunityId}`,
+                companyName: r.companyName || 'Компания',
+                status: r.status || 'SUBMITTED',
+                message: r.employerComment || r.applicantComment || 'Отклик отправлен',
+                appliedAt: r.createdAt,
+                createdAt: r.createdAt
+            }))
+            console.log('[API] Normalized responses:', normalized)
+            return normalized
+        }
+        return []
+    } catch (error) {
+        console.error('Failed to load applications:', error)
+        return []
+    }
+}
+
+/**
+ * Отклик на вакансию
+ * POST /api/interaction/responses
+ */
+export async function applyToOpportunity(opportunityId, message = '') {
+    const user = getCurrentUser()
+    if (!user) {
+        throw new Error('Чтобы откликнуться, необходимо войти в аккаунт')
+    }
+
+    const payload = { opportunityId: Number(opportunityId) }
+    if (message && message.trim()) {
+        payload.applicantComment = message.trim()
+    }
+
+    console.log('[API] POST apply:', `/api/interaction/responses`, payload)
+
+    try {
+        const response = await createResponse(opportunityId, payload.applicantComment)
+        console.log('[API] Apply response:', response)
+        return response
+    } catch (error) {
+        console.error('Failed to apply:', error)
+
+        if (error.message?.includes('already') || error.message?.includes('duplicate')) {
+            throw new Error('already_applied')
+        }
+        throw error
+    }
+}
+
+// ========== ИЗБРАННОЕ (INTERACTION API) ==========
+
+/**
+ * Получение списка избранного текущего пользователя
+ * GET /api/interaction/favorites
+ */
+export async function getSeekerSaved() {
+    try {
+        const favorites = await getFavorites()
+        console.log('[API] Raw favorites from API:', favorites)
+
+        if (Array.isArray(favorites) && favorites.length > 0) {
+            const normalized = favorites.map(f => ({
+                id: f.opportunityId,
+                title: f.opportunityTitle,
+                companyName: f.companyName,
+                shortDescription: f.shortDescription || '',
+                salaryFrom: f.salaryFrom,
+                salaryTo: f.salaryTo,
+                salaryCurrency: f.salaryCurrency,
+                type: f.type,
+                workFormat: f.workFormat,
+                savedAt: f.createdAt
+            }))
+            console.log('[API] Normalized favorites:', normalized)
+            return normalized
+        }
+        return []
+    } catch (error) {
+        console.error('Failed to load favorites:', error)
+        return []
+    }
+}
+
+export async function addToSaved(opportunityId) {
+    try {
+        return await addToFavorites(opportunityId)
+    } catch (error) {
+        console.error('Failed to add to favorites:', error)
+        throw error
+    }
+}
+
+export async function removeFromSaved(opportunityId) {
+    try {
+        return await removeFromFavorites(opportunityId)
+    } catch (error) {
+        console.error('Failed to remove from favorites:', error)
+        throw error
+    }
+}
+
 // ========== РАБОТОДАТЕЛЬ ==========
 
 /**
@@ -246,7 +419,6 @@ export async function updateEmployerProfile(profile) {
         }
     }
 
-    // Формируем payload, исключая null значения
     const payload = {}
 
     if (profile.companyName) payload.companyName = profile.companyName
@@ -290,96 +462,7 @@ export async function submitVerification(payload) {
         method: 'POST',
         body: JSON.stringify(payload),
     })
-    console.log('[API] Verification response:', data)
     return data
-}
-
-// ========== ИЗБРАННОЕ (с бэкендом) ==========
-
-/**
- * Получение списка избранного текущего пользователя
- * GET /api/interaction/favorites
- */
-export async function getSeekerSaved() {
-    try {
-        const { getFavorites } = await import('../api/interaction')
-        const favorites = await getFavorites()
-        return favorites || []
-    } catch (error) {
-        console.error('Failed to load favorites from API:', error)
-        // Fallback на localStorage
-        const user = getCurrentUser()
-        if (user) {
-            const key = `seeker_saved_${user.email}`
-            const saved = localStorage.getItem(key)
-            return saved ? JSON.parse(saved) : []
-        }
-        return []
-    }
-}
-
-/**
- * Добавить в избранное
- * POST /api/interaction/favorites/{opportunityId}
- */
-export async function addToSaved(opportunityId) {
-    try {
-        return await addToFavorites(opportunityId)
-    } catch (error) {
-        console.error('Failed to add to favorites:', error)
-        throw error
-    }
-}
-
-/**
- * Удалить из избранного
- * DELETE /api/interaction/favorites/{opportunityId}
- */
-export async function removeFromSaved(opportunityId) {
-    try {
-        return await removeFromFavorites(opportunityId)
-    } catch (error) {
-        console.error('Failed to remove from favorites:', error)
-        throw error
-    }
-}
-
-// ========== ОТКЛИКИ ==========
-
-export async function getSeekerApplications() {
-    const user = getCurrentUser()
-    if (!user) return []
-    const key = `seeker_applications_${user.email}`
-    const saved = localStorage.getItem(key)
-    return saved ? JSON.parse(saved) : []
-}
-
-export async function applyToOpportunity(opportunityId, message = '') {
-    const user = getCurrentUser()
-    if (!user) {
-        throw new Error('Чтобы откликнуться, необходимо войти в аккаунт')
-    }
-
-    const key = `seeker_applications_${user.email}`
-    const saved = localStorage.getItem(key)
-    const items = saved ? JSON.parse(saved) : []
-
-    if (items.some(item => item.opportunityId === opportunityId)) {
-        throw new Error('already_applied')
-    }
-
-    const nextItem = {
-        id: Date.now(),
-        opportunityId: opportunityId,
-        position: `Вакансия #${opportunityId}`,
-        companyName: 'Компания',
-        status: 'PENDING',
-        appliedAt: new Date().toISOString(),
-    }
-
-    const next = [nextItem, ...items]
-    localStorage.setItem(key, JSON.stringify(next))
-    return { success: true }
 }
 
 // ========== РАБОТОДАТЕЛЬ: ВАКАНСИИ И ОТКЛИКИ ==========
@@ -443,23 +526,40 @@ export async function deleteOpportunity(opportunityId) {
     return { success: true }
 }
 
+/**
+ * Получение списка откликов на вакансии работодателя
+ * GET /api/employer/applications
+ */
 export async function getEmployerApplications() {
     const user = getCurrentUser()
     if (!user) return []
-    const key = `employer_applications_${user.email}`
-    const saved = localStorage.getItem(key)
-    return saved ? JSON.parse(saved) : []
+
+    try {
+        const url = `/api/employer/applications`
+        console.log('[API] GET employer applications:', url)
+        const data = await apiRequest(url)
+        return data || []
+    } catch (error) {
+        console.error('[API] Failed to load employer applications:', error)
+        return []
+    }
 }
 
+/**
+ * Обновление статуса отклика
+ * PATCH /api/employer/applications/{id}
+ */
 export async function updateApplicationStatus(applicationId, status) {
     const user = getCurrentUser()
-    if (!user) throw new Error('Пользователь не авторизован')
-    const key = `employer_applications_${user.email}`
-    const saved = localStorage.getItem(key)
-    const applications = saved ? JSON.parse(saved) : []
-    const updated = applications.map(app =>
-        app.id === applicationId ? { ...app, status } : app
-    )
-    localStorage.setItem(key, JSON.stringify(updated))
-    return { success: true }
+    if (!user) {
+        throw new Error('Необходимо войти в аккаунт')
+    }
+
+    const url = `/api/employer/applications/${applicationId}`
+    console.log('[API] PATCH application status:', url)
+
+    return apiRequest(url, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+    })
 }
