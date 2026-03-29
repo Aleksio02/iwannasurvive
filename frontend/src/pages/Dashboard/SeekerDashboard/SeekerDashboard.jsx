@@ -1,6 +1,6 @@
-import {useState, useEffect, useRef} from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'wouter'
-import {useToast} from '../../../hooks/use-toast'
+import { useToast } from '../../../hooks/use-toast'
 import DashboardLayout from '../DashboardLayout'
 import Input from '../../../components/Input'
 import Label from '../../../components/Label'
@@ -8,7 +8,7 @@ import Textarea from '../../../components/Textarea'
 import CustomSelect from '../../../components/CustomSelect'
 import CustomCheckbox from '../../../components/CustomCheckbox'
 import LinksEditor from '../../../components/LinksEditor'
-import {getCurrentUser} from '../../../utils/userHelpers'
+import { getCurrentUser } from '../../../utils/userHelpers'
 import {
     getApplicantProfile,
     updateApplicantProfile,
@@ -31,9 +31,9 @@ import pencilIcon from '../../../assets/icons/pencil.svg'
 import linkIcon from '../../../assets/icons/link.svg'
 
 const VISIBILITY_OPTIONS = [
-    {value: 'PUBLIC', label: 'Публично'},
-    {value: 'AUTHENTICATED', label: 'Только зарегистрированным'},
-    {value: 'PRIVATE', label: 'Только мне'},
+    { value: 'PUBLIC', label: 'Публично' },
+    { value: 'AUTHENTICATED', label: 'Только зарегистрированным' },
+    { value: 'PRIVATE', label: 'Только мне' },
 ]
 
 function SeekerDashboard() {
@@ -46,7 +46,7 @@ function SeekerDashboard() {
     const [isEditingContacts, setIsEditingContacts] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [errors, setErrors] = useState({})
-    const {toast} = useToast()
+    const { toast } = useToast()
 
     const [profile, setProfile] = useState({
         firstName: '',
@@ -87,7 +87,6 @@ function SeekerDashboard() {
     const citySearchRef = useRef(null)
     const [, navigate] = useLocation()
 
-    // Форматирование даты
     const formatDate = (dateString) => {
         if (!dateString) return 'Дата не указана'
         const date = new Date(dateString)
@@ -139,7 +138,6 @@ function SeekerDashboard() {
         setIsCitySearchOpen(false)
     }
 
-    // Загрузка данных
     useEffect(() => {
         const loadData = async () => {
             setIsLoading(true)
@@ -160,7 +158,7 @@ function SeekerDashboard() {
                         course: profileData.course,
                         graduationYear: profileData.graduationYear,
                         cityId: profileData.cityId,
-                        cityName: profileData.city?.name || '',
+                        cityName: profileData.cityName || '',
                         about: profileData.about || '',
                         resumeText: profileData.resumeText || '',
                         portfolioLinks: profileData.portfolioLinks || [],
@@ -172,10 +170,11 @@ function SeekerDashboard() {
                         openToWork: profileData.openToWork ?? true,
                         openToEvents: profileData.openToEvents ?? true,
                     }))
-                    if (profileData.city?.name) {
-                        setCitySearchQuery(profileData.city.name)
+                    if (profileData.cityName) {
+                        setCitySearchQuery(profileData.cityName)
                     }
 
+                    // Инициализируем временные массивы для ссылок
                     setTempPortfolioLinks(linksToArray(profileData.portfolioLinks || []))
                     setTempContactLinks(linksToArray(profileData.contactLinks || []))
                 }
@@ -189,7 +188,6 @@ function SeekerDashboard() {
                 const contactsList = await getSeekerContacts()
                 setContacts(contactsList)
             } catch {
-                console.error('Load error:', error)
                 toast({
                     title: 'Ошибка',
                     description: 'Не удалось загрузить профиль',
@@ -228,6 +226,7 @@ function SeekerDashboard() {
             setIsEditing(false)
             setErrors({})
 
+            // Диспатчим событие обновления профиля
             window.dispatchEvent(new CustomEvent('profile-updated', {
                 detail: {
                     firstName: profile.firstName,
@@ -261,7 +260,7 @@ function SeekerDashboard() {
                 title: 'Обновлено',
                 description: 'Информация о себе сохранена',
             })
-        } catch (error) {
+        } catch {
             toast({
                 title: 'Ошибка',
                 description: 'Не удалось сохранить',
@@ -281,7 +280,7 @@ function SeekerDashboard() {
                 title: 'Обновлено',
                 description: 'Резюме сохранено',
             })
-        } catch (error) {
+        } catch {
             toast({
                 title: 'Ошибка',
                 description: 'Не удалось сохранить',
@@ -299,7 +298,7 @@ function SeekerDashboard() {
                 .filter(link => link.url?.trim())
                 .map(link => link.url.trim())
 
-            const updatedProfile = {...profile, portfolioLinks}
+            const updatedProfile = { ...profile, portfolioLinks }
             await updateApplicantProfile(updatedProfile)
             setProfile(updatedProfile)
             setIsEditingPortfolio(false)
@@ -326,7 +325,7 @@ function SeekerDashboard() {
                 .filter(link => link.url?.trim())
                 .map(link => link.url.trim())
 
-            const updatedProfile = {...profile, contactLinks}
+            const updatedProfile = { ...profile, contactLinks }
             await updateApplicantProfile(updatedProfile)
             setProfile(updatedProfile)
             setIsEditingContacts(false)
@@ -347,9 +346,9 @@ function SeekerDashboard() {
     }
 
     const handleFieldChange = (field, value) => {
-        setProfile(prev => ({...prev, [field]: value}))
+        setProfile(prev => ({ ...prev, [field]: value }))
         if (errors[field]) {
-            setErrors(prev => ({...prev, [field]: ''}))
+            setErrors(prev => ({ ...prev, [field]: '' }))
         }
     }
 
@@ -361,7 +360,7 @@ function SeekerDashboard() {
                 title: 'Удалено из избранного',
                 description: `"${title}" удалено из избранного`,
             })
-        } catch (error) {
+        } catch {
             toast({
                 title: 'Ошибка',
                 description: 'Не удалось удалить из избранного',
@@ -387,10 +386,11 @@ function SeekerDashboard() {
         }
     }
 
+    // Открытие редактирования портфолио
     const handleOpenPortfolioEdit = () => {
         if (!isEditingPortfolio) {
             if (tempPortfolioLinks.length === 0) {
-                setTempPortfolioLinks([{id: Date.now(), title: '', url: ''}])
+                setTempPortfolioLinks([{ id: Date.now(), title: '', url: '' }])
             }
             setIsEditingPortfolio(true)
         } else {
@@ -398,16 +398,30 @@ function SeekerDashboard() {
         }
     }
 
+    // Открытие редактирования контактов
     const handleOpenContactsEdit = () => {
         if (!isEditingContacts) {
             if (tempContactLinks.length === 0) {
-                setTempContactLinks([{id: Date.now() + 1, title: '', url: ''}])
+                setTempContactLinks([{ id: Date.now() + 1, title: '', url: '' }])
             }
             setIsEditingContacts(true)
         } else {
             handleCancelContactsEdit()
         }
     }
+
+    if (isLoading && !profile.firstName) {
+        return (
+            <DashboardLayout title="Мой профиль">
+                <div className="dashboard-loading">
+                    <div className="loading-spinner"></div>
+                    <p>Загрузка профиля...</p>
+                </div>
+            </DashboardLayout>
+        )
+    }
+
+    // ===== ФУНКЦИИ ДЛЯ ОТОБРАЖЕНИЯ ИМЕНИ =====
 
     const getInitials = () => {
         if (profile.firstName || profile.lastName) {
@@ -418,6 +432,7 @@ function SeekerDashboard() {
         }
         return '?'
     }
+
 
     const getFullNameWithPatronymic = () => {
         const parts = []
@@ -435,6 +450,8 @@ function SeekerDashboard() {
         return user?.email?.split('@')[0] || 'Пользователь'
     }
 
+
+    // Функция для отображения ссылок
     const renderLinks = (links, title) => {
         if (!links || links.length === 0) return null
 
@@ -452,7 +469,7 @@ function SeekerDashboard() {
                         }
                         return (
                             <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="link-item">
-                                <img src={linkIcon} alt="" className="icon-small"/>
+                                <img src={linkIcon} alt="" className="icon-small" />
                                 <span>{displayName}</span>
                             </a>
                         )
@@ -462,61 +479,38 @@ function SeekerDashboard() {
         )
     }
 
-    if (isLoading && !profile.firstName) {
-        return (
-            <DashboardLayout title="Мой профиль">
-                <div className="dashboard-loading">
-                    <div className="loading-spinner"></div>
-                    <p>Загрузка профиля...</p>
-                </div>
-            </DashboardLayout>
-        )
-    }
-
     return (
         <DashboardLayout
             title="Мой профиль"
             subtitle={getDisplayName() ? `Добро пожаловать, ${getDisplayName()}!` : 'Управляйте своей карьерой'}
         >
             <div className="dashboard-tabs">
-                <button className={`dashboard-tabs__btn ${activeTab === 'profile' ? 'is-active' : ''}`}
-                        onClick={() => setActiveTab('profile')}>
+                <button className={`dashboard-tabs__btn ${activeTab === 'profile' ? 'is-active' : ''}`} onClick={() => setActiveTab('profile')}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M20 21V19C20 16.8 18.2 15 16 15H8C5.8 15 4 16.8 4 19V21" stroke="currentColor"
-                              strokeWidth="1.5" strokeLinecap="round"/>
+                        <path d="M20 21V19C20 16.8 18.2 15 16 15H8C5.8 15 4 16.8 4 19V21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                         <circle cx="12" cy="7" r="4" stroke="currentColor" strokeWidth="1.5"/>
                     </svg>
                     Профиль
                 </button>
-                <button className={`dashboard-tabs__btn ${activeTab === 'applications' ? 'is-active' : ''}`}
-                        onClick={() => setActiveTab('applications')}>
+                <button className={`dashboard-tabs__btn ${activeTab === 'applications' ? 'is-active' : ''}`} onClick={() => setActiveTab('applications')}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M9 12H15M9 16H15M17 21H7C5.9 21 5 20.1 5 19V5C5 3.9 5.9 3 7 3H12.6C12.8 3 13 3.1 13.1 3.2L18.8 8.9C18.9 9 19 9.2 19 9.4V19C19 20.1 18.1 21 17 21Z"
-                            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <path d="M9 12H15M9 16H15M17 21H7C5.9 21 5 20.1 5 19V5C5 3.9 5.9 3 7 3H12.6C12.8 3 13 3.1 13.1 3.2L18.8 8.9C18.9 9 19 9.2 19 9.4V19C19 20.1 18.1 21 17 21Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                         <path d="M13 3V9H19" stroke="currentColor" strokeWidth="1.5"/>
                     </svg>
                     Отклики
                 </button>
-                <button className={`dashboard-tabs__btn ${activeTab === 'saved' ? 'is-active' : ''}`}
-                        onClick={() => setActiveTab('saved')}>
+                <button className={`dashboard-tabs__btn ${activeTab === 'saved' ? 'is-active' : ''}`} onClick={() => setActiveTab('saved')}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M12 21L10.6 19.8C7.5 17.1 5 14.9 5 12.2C5 9.9 6.9 8 9.2 8C10.5 8 11.8 8.7 12 9.6C12.2 8.7 13.5 8 14.8 8C17.1 8 19 9.9 19 12.2C19 14.9 16.5 17.1 13.4 19.8L12 21Z"
-                            stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M12 21L10.6 19.8C7.5 17.1 5 14.9 5 12.2C5 9.9 6.9 8 9.2 8C10.5 8 11.8 8.7 12 9.6C12.2 8.7 13.5 8 14.8 8C17.1 8 19 9.9 19 12.2C19 14.9 16.5 17.1 13.4 19.8L12 21Z" stroke="currentColor" strokeWidth="1.5"/>
                     </svg>
                     Избранное
                 </button>
-                <button className={`dashboard-tabs__btn ${activeTab === 'contacts' ? 'is-active' : ''}`}
-                        onClick={() => setActiveTab('contacts')}>
+                <button className={`dashboard-tabs__btn ${activeTab === 'contacts' ? 'is-active' : ''}`} onClick={() => setActiveTab('contacts')}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M17 21V19C17 16.8 15.2 15 13 15H5C2.8 15 1 16.8 1 19V21" stroke="currentColor"
-                              strokeWidth="1.5"/>
+                        <path d="M17 21V19C17 16.8 15.2 15 13 15H5C2.8 15 1 16.8 1 19V21" stroke="currentColor" strokeWidth="1.5"/>
                         <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="1.5"/>
-                        <path d="M23 21V19C22.6 17 21 15.6 19 15.3" stroke="currentColor" strokeWidth="1.5"
-                              strokeLinecap="round"/>
-                        <path d="M16 3.3C18 3.6 19.6 5 20 7" stroke="currentColor" strokeWidth="1.5"
-                              strokeLinecap="round"/>
+                        <path d="M23 21V19C22.6 17 21 15.6 19 15.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        <path d="M16 3.3C18 3.6 19.6 5 20 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                     </svg>
                     Контакты
                 </button>
@@ -673,8 +667,7 @@ function SeekerDashboard() {
                                                 onChange={(e) => handleFieldChange('graduationYear', e.target.value)}
                                                 placeholder="2025"
                                             />
-                                            {errors.graduationYear &&
-                                                <p className="field-error">{errors.graduationYear}</p>}
+                                            {errors.graduationYear && <p className="field-error">{errors.graduationYear}</p>}
                                         </div>
                                         <div className="form-group" ref={citySearchRef}>
                                             <Label>Город</Label>
@@ -821,8 +814,7 @@ function SeekerDashboard() {
                                             {profile.about ? (
                                                 <p>{profile.about}</p>
                                             ) : (
-                                                <p className="info-block__empty">Расскажите о себе — это поможет
-                                                    работодателям узнать вас лучше</p>
+                                                <p className="info-block__empty">Расскажите о себе — это поможет работодателям узнать вас лучше</p>
                                             )}
                                         </div>
                                     )}
@@ -868,8 +860,7 @@ function SeekerDashboard() {
                                             {profile.resumeText ? (
                                                 <p>{profile.resumeText}</p>
                                             ) : (
-                                                <p className="info-block__empty">Добавьте резюме — расскажите о своих
-                                                    навыках, опыте и достижениях</p>
+                                                <p className="info-block__empty">Добавьте резюме — расскажите о своих навыках, опыте и достижениях</p>
                                             )}
                                         </div>
                                     )}
@@ -916,8 +907,7 @@ function SeekerDashboard() {
                                             {profile.portfolioLinks && profile.portfolioLinks.length > 0 ? (
                                                 renderLinks(profile.portfolioLinks, 'Ссылки портфолио')
                                             ) : (
-                                                <p className="info-block__empty">Добавьте ссылки на ваши проекты,
-                                                    GitHub, Behance и т.д.</p>
+                                                <p className="info-block__empty">Добавьте ссылки на ваши проекты, GitHub, Behance и т.д.</p>
                                             )}
                                         </div>
                                     )}
@@ -964,8 +954,7 @@ function SeekerDashboard() {
                                             {profile.contactLinks && profile.contactLinks.length > 0 ? (
                                                 renderLinks(profile.contactLinks, 'Контакты для связи')
                                             ) : (
-                                                <p className="info-block__empty">Добавьте ссылки на Telegram, LinkedIn,
-                                                    WhatsApp и т.д.</p>
+                                                <p className="info-block__empty">Добавьте ссылки на Telegram, LinkedIn, WhatsApp и т.д.</p>
                                             )}
                                         </div>
                                     )}
@@ -975,6 +964,7 @@ function SeekerDashboard() {
                     </div>
                 )}
 
+                {/* Остальные табы */}
                 {activeTab === 'applications' && (
                     <div className="seeker-applications">
                         <div className="section-header">
@@ -992,13 +982,21 @@ function SeekerDashboard() {
                             </div>
                         ) : (
                             <div className="applications-list">
-                                {applications.map(app => (
-                                    <div key={app.id} className="application-card" onClick={() => navigate(`/opportunities/${app.opportunityId}`)}>
-                                        <div className="application-card__content">
-                                            <h3>{app.position}</h3>
-                                            <p className="application-card__company">{app.companyName}</p>
-                                            <p className="application-card__description">{app.message || 'Отклик отправлен'}</p>
-                                            <div className="application-card__footer">
+                                {applications.map((app, index) => {
+                                    const appKey = app.id ?? `${app.opportunityId ?? 'unknown'}-${app.createdAt ?? index}`
+                                    const canOpenOpportunity = app.opportunityId !== null && app.opportunityId !== undefined
+
+                                    return (
+                                        <div
+                                            key={appKey}
+                                            className="application-card"
+                                            onClick={() => canOpenOpportunity && navigate(`/opportunities/${app.opportunityId}`)}
+                                        >
+                                            <div className="application-card__content">
+                                                <h3>{app.position || app.title || 'Вакансия'}</h3>
+                                                <p className="application-card__company">{app.companyName}</p>
+                                                <p className="application-card__description">{app.message || 'Отклик отправлен'}</p>
+                                                <div className="application-card__footer">
                                                 <span className={`status-badge status-${app.status?.toLowerCase() || 'pending'}`}>
                                                     {app.status === 'SUBMITTED' && 'Отправлено'}
                                                     {app.status === 'IN_REVIEW' && 'На рассмотрении'}
@@ -1008,13 +1006,13 @@ function SeekerDashboard() {
                                                     {app.status === 'WITHDRAWN' && 'Отозвано'}
                                                     {!app.status && 'Отправлено'}
                                                 </span>
-                                                <span className="application-card__date">
+                                                    <span className="application-card__date">
                                                     {formatDate(app.appliedAt)}
                                                 </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    )})}
                             </div>
                         )}
                     </div>
@@ -1036,27 +1034,35 @@ function SeekerDashboard() {
                             </div>
                         ) : (
                             <div className="saved-list">
-                                {savedOpportunities.map(opp => (
-                                    <div key={opp.id} className="saved-card" onClick={() => navigate(`/opportunities/${opp.id}`)}>
-                                        <div className="saved-card__content">
-                                            <h3>{opp.title}</h3>
-                                            <p className="saved-card__company">{opp.companyName}</p>
-                                            <p className="saved-card__description">{opp.shortDescription}</p>
-                                        </div>
-                                        <button
-                                            className="saved-card__remove"
-                                            onClick={(event) => {
-                                                event.stopPropagation()
-                                                handleRemoveSaved(opp.id, opp.title)
-                                            }}
+                                {savedOpportunities.map((opp, index) => {
+                                    const oppKey = opp.id ?? `${opp.title ?? 'saved'}-${opp.savedAt ?? index}`
+                                    const canOpenOpportunity = opp.id !== null && opp.id !== undefined
+
+                                    return (
+                                        <div
+                                            key={oppKey}
+                                            className="saved-card"
+                                            onClick={() => canOpenOpportunity && navigate(`/opportunities/${opp.id}`)}
                                         >
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                                <path d="M18 6L6 18M6 6L18 18" strokeWidth="1.5" strokeLinecap="round"/>
-                                            </svg>
-                                            Удалить
-                                        </button>
-                                    </div>
-                                ))}
+                                            <div className="saved-card__content">
+                                                <h3>{opp.title || 'Вакансия'}</h3>
+                                                <p className="saved-card__company">{opp.companyName}</p>
+                                                <p className="saved-card__description">{opp.shortDescription}</p>
+                                            </div>
+                                            <button
+                                                className="saved-card__remove"
+                                                onClick={(event) => {
+                                                    event.stopPropagation()
+                                                    handleRemoveSaved(opp.id, opp.title)
+                                                }}
+                                            >
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                    <path d="M18 6L6 18M6 6L18 18" strokeWidth="1.5" strokeLinecap="round"/>
+                                                </svg>
+                                                Удалить
+                                            </button>
+                                        </div>
+                                    )})}
                             </div>
                         )}
                     </div>

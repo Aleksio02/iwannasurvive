@@ -1,3 +1,4 @@
+import { clearSessionUser, setSessionUser } from './sessionStore'
 const API_BASE = '/api/auth'
 
 async function request(url, options = {}) {
@@ -11,6 +12,7 @@ async function request(url, options = {}) {
     })
 
     let data = null
+
     try {
         data = await response.json()
     } catch {
@@ -18,7 +20,6 @@ async function request(url, options = {}) {
     }
 
     if (!response.ok) {
-        // Для 401 — специальная обработка
         if (response.status === 401) {
             const errorMessage = data?.message || 'Сессия истекла. Пожалуйста, войдите заново.'
             throw new Error(`401: ${errorMessage}`)
@@ -43,10 +44,8 @@ export async function loginUser(payload) {
         body: JSON.stringify(payload),
     })
 
-    // При успешном логине сохраняем пользователя в localStorage
     if (response?.user) {
-        const { setCurrentUser } = await import('../utils/userHelpers')
-        setCurrentUser(response.user)
+        setSessionUser(response.user)
     }
 
     return response
@@ -59,15 +58,28 @@ export async function validateSession() {
 }
 
 export async function getCurrentUserInfo() {
-    return request(`${API_BASE}/me`, {
+    const response = await request(`${API_BASE}/me`, {
         method: 'GET',
     })
+
+    const user = response?.user || response || null
+    if (user) {
+        setSessionUser(user)
+    } else {
+        clearSessionUser()
+    }
+
+    return response
 }
 
 export async function logoutUser() {
-    return request(`${API_BASE}/logout`, {
+    const response = await request(`${API_BASE}/logout`, {
         method: 'POST',
     })
+
+    clearSessionUser()
+
+    return response
 }
 
 export async function requestPasswordReset(payload) {
