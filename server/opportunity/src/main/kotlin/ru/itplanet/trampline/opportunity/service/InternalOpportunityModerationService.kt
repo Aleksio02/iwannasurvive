@@ -61,7 +61,7 @@ class InternalOpportunityModerationService(
         opportunity.moderationComment = request.comment
 
         return InternalModerationActionResultResponse(
-            affectedUserId = opportunity.employerUserId
+            affectedUserId = opportunity.employerUserId,
         )
     }
 
@@ -78,7 +78,7 @@ class InternalOpportunityModerationService(
         opportunity.moderationComment = request.comment
 
         return InternalModerationActionResultResponse(
-            affectedUserId = opportunity.employerUserId
+            affectedUserId = opportunity.employerUserId,
         )
     }
 
@@ -92,11 +92,20 @@ class InternalOpportunityModerationService(
         }
 
         applyTagPatch(tag, request.applyPatch)
+
+        val normalizedName = normalizeName(tag.name)
+        ensureNoApprovedDuplicate(
+            currentTagId = requireNotNull(tag.id),
+            name = normalizedName,
+            category = tag.category,
+        )
+
+        tag.name = normalizedName
         tag.moderationStatus = TagModerationStatus.APPROVED
         tag.isActive = true
 
         return InternalModerationActionResultResponse(
-            affectedUserId = tag.createdByUserId
+            affectedUserId = tag.createdByUserId,
         )
     }
 
@@ -113,7 +122,7 @@ class InternalOpportunityModerationService(
         tag.isActive = false
 
         return InternalModerationActionResultResponse(
-            affectedUserId = tag.createdByUserId
+            affectedUserId = tag.createdByUserId,
         )
     }
 
@@ -215,6 +224,30 @@ class InternalOpportunityModerationService(
         }
     }
 
+    private fun ensureNoApprovedDuplicate(
+        currentTagId: Long,
+        name: String,
+        category: TagCategory,
+    ) {
+        val sameTags = tagDao.findAllByCategoryAndNameIgnoreCaseOrderByIdAsc(
+            category = category,
+            name = name,
+        )
+
+        val duplicateApproved = sameTags.firstOrNull {
+            it.id != currentTagId &&
+                    it.moderationStatus == TagModerationStatus.APPROVED &&
+                    it.isActive
+        }
+
+        if (duplicateApproved != null) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Tag with same name and category already exists",
+            )
+        }
+    }
+
     private fun replaceResourceLinks(
         opportunity: OpportunityDto,
         node: JsonNode,
@@ -231,13 +264,13 @@ class InternalOpportunityModerationService(
                 OpportunityResourceLinkDto().apply {
                     id = OpportunityResourceLinkId(
                         opportunityId = opportunity.id ?: 0L,
-                        sortOrder = index
+                        sortOrder = index,
                     )
                     this.opportunity = opportunity
                     this.label = item.label
                     this.linkType = item.linkType
                     this.url = item.url
-                }
+                },
             )
         }
     }
@@ -281,7 +314,7 @@ class InternalOpportunityModerationService(
                 .takeUnless { it.isNull }
                 ?.asText()
                 ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() },
         )
     }
 
@@ -294,7 +327,7 @@ class InternalOpportunityModerationService(
         setter(
             patch.get(fieldName)
                 .takeUnless { it.isNull }
-                ?.intValue()
+                ?.intValue(),
         )
     }
 
@@ -319,8 +352,15 @@ class InternalOpportunityModerationService(
                 ?.asText()
                 ?.trim()
                 ?.uppercase()
-                ?.let { enumValueOf<E>(it) }
+                ?.let { enumValueOf<E>(it) },
         )
+    }
+
+    private fun normalizeName(
+        value: String,
+    ): String {
+        return value.trim()
+            .replace(WHITESPACE_REGEX, " ")
     }
 
     private fun notFound(message: String): ResponseStatusException {
@@ -332,4 +372,8 @@ class InternalOpportunityModerationService(
         val linkType: ResourceLinkType,
         val url: String,
     )
+
+    private companion object {
+        private val WHITESPACE_REGEX = "\\s+".toRegex()
+    }
 }
