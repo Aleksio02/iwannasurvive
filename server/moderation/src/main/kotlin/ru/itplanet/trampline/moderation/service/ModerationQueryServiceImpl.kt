@@ -49,26 +49,37 @@ class ModerationQueryServiceImpl(
 
     @Transactional(readOnly = true)
     override fun getDashboard(currentUser: AuthenticatedUser): ModerationDashboardResponse {
-        val activeStatuses = ACTIVE_TASK_STATUSES
-
         val countsByEntityType = LinkedHashMap<ModerationEntityType, Long>()
-        ModerationEntityType.entries.forEach { countsByEntityType[it] = 0L }
-        moderationTaskDao.countActiveByEntityType(activeStatuses).forEach { projection ->
-            countsByEntityType[projection.getEntityType()] = projection.getCount()
+        ModerationEntityType.entries.forEach { entityType ->
+            countsByEntityType[entityType] = countActiveTasks(
+                currentUser = currentUser,
+                entityType = entityType,
+            )
         }
 
         val countsByPriority = LinkedHashMap<ModerationTaskPriority, Long>()
-        ModerationTaskPriority.entries.forEach { countsByPriority[it] = 0L }
-        moderationTaskDao.countActiveByPriority(activeStatuses).forEach { projection ->
-            countsByPriority[projection.getPriority()] = projection.getCount()
+        ModerationTaskPriority.entries.forEach { priority ->
+            countsByPriority[priority] = countActiveTasks(
+                currentUser = currentUser,
+                priority = priority,
+            )
         }
 
         return ModerationDashboardResponse(
-            openCount = moderationTaskDao.countByStatus(ModerationTaskStatus.OPEN),
-            inProgressCount = moderationTaskDao.countByStatus(ModerationTaskStatus.IN_PROGRESS),
-            myInProgressCount = moderationTaskDao.countByStatusAndAssigneeUser_Id(
-                ModerationTaskStatus.IN_PROGRESS,
-                currentUser.userId,
+            openCount = countTasks(
+                currentUser = currentUser,
+                request = GetModerationTasksRequest(status = ModerationTaskStatus.OPEN),
+            ),
+            inProgressCount = countTasks(
+                currentUser = currentUser,
+                request = GetModerationTasksRequest(status = ModerationTaskStatus.IN_PROGRESS),
+            ),
+            myInProgressCount = countTasks(
+                currentUser = currentUser,
+                request = GetModerationTasksRequest(
+                    status = ModerationTaskStatus.IN_PROGRESS,
+                    mine = true,
+                ),
             ),
             countsByEntityType = countsByEntityType,
             countsByPriority = countsByPriority,
@@ -130,6 +141,8 @@ class ModerationQueryServiceImpl(
         val task = moderationTaskDao.findById(taskId)
             .orElseThrow { ModerationTaskNotFoundException(taskId) }
 
+        ensureTaskVisible(task, currentUser)
+
         val history = moderationLogDao.findByTaskIdOrderByCreatedAtAscIdAsc(taskId)
         val createdSnapshot = history
             .firstOrNull { it.action == ModerationLogAction.CREATED }
@@ -185,8 +198,10 @@ class ModerationQueryServiceImpl(
         currentUser: AuthenticatedUser,
         fileId: Long,
     ): InternalFileDownloadUrlResponse {
-        moderationTaskDao.findById(taskId)
+        val task = moderationTaskDao.findById(taskId)
             .orElseThrow { ModerationTaskNotFoundException(taskId) }
+
+        ensureTaskVisible(task, currentUser)
 
         val attachment = findTaskAttachmentByFileId(taskId, fileId)
         ensureCanDownloadAttachment(currentUser, attachment)
@@ -220,6 +235,54 @@ class ModerationQueryServiceImpl(
             exists = task != null,
             taskId = task?.id,
         )
+    }
+
+    private fun countTasks(
+        currentUser: AuthenticatedUser,
+        request: GetModerationTasksRequest,
+    ): Long {
+        return moderationTaskDao.count(
+            ModerationTaskSpecifications.build(request, currentUser.userId),
+        )
+    }
+
+    private fun countActiveTasks(
+        currentUser: AuthenticatedUser,
+        entityType: ModerationEntityType? = null,
+        priority: ModerationTaskPriority? = null,
+    ): Long {
+        return countTasks(
+            currentUser = currentUser,
+            request = GetModerationTasksRequest(
+                status = ModerationTaskStatus.OPEN,
+                entityType = entityType,
+                priority = priority,
+            ),
+        ) + countTasks(
+            currentUser = currentUser,
+            request = GetModerationTasksRequest(
+                status = ModerationTaskStatus.IN_PROGRESS,
+                entityType = entityType,
+                priority = priority,
+            ),
+        )
+    }
+
+    private fun ensureTaskVisible(
+        task: ModerationTaskDto,
+        currentUser: AuthenticatedUser,
+    ) {
+        if (isOwnCreatedTagTask(task, currentUser)) {
+            throw ModerationTaskNotFoundException(task.id ?: 0L)
+        }
+    }
+
+    private fun isOwnCreatedTagTask(
+        task: ModerationTaskDto,
+        currentUser: AuthenticatedUser,
+    ): Boolean {
+        return task.entityType == ModerationEntityType.TAG &&
+                task.createdByUser?.id == currentUser.userId
     }
 
     private fun findTaskAttachmentByFileId(
