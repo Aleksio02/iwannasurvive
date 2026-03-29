@@ -12,10 +12,10 @@ import {
     CardTitle,
 } from '../../../components/Card'
 import Label from '../../../components/Label'
-import PasswordField from '../../../components/auth/PasswordField'
+import PasswordField from '../../../components/Auth/PasswordField'
 import AuthLayout from '../../../layouts/AuthLayout'
 import { useToast } from '../../../hooks/use-toast'
-import { registerUser, getCurrentUserInfo } from '../../../utils/authApi'
+import { registerUser } from '../../../api/auth'
 import './Register.scss'
 
 function Register() {
@@ -50,43 +50,7 @@ function Register() {
                 email: email.trim(),
                 password,
                 role,
-                status: 'ACTIVE',
             })
-
-            await new Promise(resolve => setTimeout(resolve, 500))
-
-            let userData = null
-            try {
-                const response = await getCurrentUserInfo()
-                console.log('[Register] getCurrentUserInfo response:', response)
-
-                if (response && response.user) {
-                    userData = response.user
-                } else if (response && response.userId) {
-                    userData = response
-                } else if (response && response.id) {
-                    userData = {
-                        userId: response.id,
-                        displayName: response.displayName,
-                        email: response.email,
-                        role: response.role,
-                    }
-                } else {
-                    userData = response
-                }
-            } catch (err) {
-                console.warn('[Register] Failed to get user info after registration:', err)
-            }
-
-            const finalUserData = {
-                userId: userData?.userId || userData?.id,
-                displayName: userData?.displayName || displayName.trim(),
-                email: userData?.email || email.trim(),
-                role: userData?.role || role,
-            }
-
-            localStorage.setItem('tramplin_current_user', JSON.stringify(finalUserData))
-            console.log('[Register] Saved user to localStorage:', finalUserData)
 
             toast({
                 title: 'Аккаунт создан!',

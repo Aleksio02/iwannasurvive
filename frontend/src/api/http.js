@@ -1,45 +1,68 @@
-export async function httpJson(url, options = {}) {
-    const fullUrl = url.startsWith('http') ? url : url
+import { clearSessionUser } from '../utils/sessionStore'
 
-    console.log('[HTTP]', options.method || 'GET', fullUrl)
+function createHttpError(message, status = 0) {
+    const error = new Error(message)
+    error.status = status
+    return error
+}
 
-    const response = await fetch(fullUrl, {
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(options.headers || {}),
-        },
-        ...options,
-    })
+async function parseResponseBody(response) {
+    if (response.status === 204) return null
 
-    // Для 204 No Content — возвращаем null, не пытаемся парсить JSON
-    if (response.status === 204) {
-        console.log('[HTTP] No content (204)')
-        return null
-    }
+    const contentType = response.headers.get('content-type') || ''
+    const isJson = contentType.includes('application/json')
 
-    if (!response.ok) {
-        let message = 'Ошибка запроса'
+    if (isJson) {
         try {
-            const payload = await response.json()
-            message = payload?.message || payload?.error || message
+            return await response.json()
         } catch {
-            // ignore
+            return null
         }
-        throw new Error(message)
-    }
-
-    // Проверяем, есть ли тело ответа
-    const text = await response.text()
-    if (!text) {
-        return null
     }
 
     try {
-        return JSON.parse(text)
+        const text = await response.text()
+        return text || null
     } catch {
         return null
     }
+}
+
+export async function httpJson(url, options = {}) {
+    const fullUrl = url.startsWith('http') ? url : url
+    console.log('[HTTP]', options.method || 'GET', fullUrl)
+
+    let response
+    try {
+        response = await fetch(fullUrl, {
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(options.headers || {}),
+            },
+            ...options,
+        })
+    } catch {
+        throw createHttpError('Сервер недоступен. Попробуйте позже.', 0)
+    }
+
+    const data = await parseResponseBody(response)
+
+    if (!response.ok) {
+        const message =
+            (typeof data === 'object' && data?.message) ||
+            (typeof data === 'object' && data?.error) ||
+            (typeof data === 'string' && data) ||
+            'Ошибка запроса'
+
+        if (response.status === 401 || response.status === 403) {
+            clearSessionUser()
+        }
+
+        throw createHttpError(message, response.status)
+    }
+
+    return data
 }
 
 export function toQuery(params = {}) {
@@ -47,11 +70,13 @@ export function toQuery(params = {}) {
 
     Object.entries(params).forEach(([key, value]) => {
         if (value === null || value === undefined || value === '') return
+
         if (Array.isArray(value)) {
             if (value.length === 0) return
             query.set(key, value.join(','))
             return
         }
+
         query.set(key, String(value))
     })
 
