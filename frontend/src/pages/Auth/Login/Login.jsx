@@ -13,7 +13,7 @@ import Label from '../../../components/Label'
 import PasswordField from '../../../components/Auth/PasswordField'
 import AuthLayout from '../../../layouts/AuthLayout'
 import { useToast } from '../../../hooks/use-toast'
-import { loginUser, getCurrentUserInfo } from '../../../api/auth'
+import { loginUser } from '../../../api/auth'
 import './Login.scss'
 
 function Login() {
@@ -39,54 +39,18 @@ function Login() {
         try {
             setIsPending(true)
 
-            // Логин через API (кука sessionId установится автоматически)
-            await loginUser({
+            const response = await loginUser({
                 email: email.trim(),
                 password,
             })
 
-            // Ждём немного, чтобы сессия успела установиться
-            await new Promise(resolve => setTimeout(resolve, 500))
-
-            // Получаем данные пользователя через /me
-            const response = await getCurrentUserInfo()
-            console.log('[Login] getCurrentUserInfo response:', response)
-
-            // Обрабатываем разные форматы ответа
-            let userData
-            if (response && response.user) {
-                userData = response.user
-            } else if (response && response.userId) {
-                userData = response
-            } else if (response && response.id) {
-                userData = {
-                    userId: response.id,
-                    displayName: response.displayName,
-                    email: response.email,
-                    role: response.role,
-                }
-            } else {
-                userData = response
-            }
-
-            // Сохраняем в localStorage для быстрого доступа
-            const storedUser = {
-                userId: userData?.userId || userData?.id,
-                displayName: userData?.displayName,
-                email: userData?.email,
-                role: userData?.role,
-            }
-            localStorage.setItem('tramplin_current_user', JSON.stringify(storedUser))
-            console.log('[Login] Saved user to localStorage:', storedUser)
-
-            const role = userData?.role
+            const role = response?.user?.role
 
             toast({
                 title: 'Добро пожаловать!',
                 description: 'Вы успешно вошли в систему',
             })
 
-            // Редирект в зависимости от роли
             if (role === 'EMPLOYER') {
                 setLocation('/employer')
             } else if (role === 'CURATOR' || role === 'ADMIN') {

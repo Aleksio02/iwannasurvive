@@ -1,22 +1,60 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
-import { getSessionUser } from '../../utils/sessionStore'
+import { getCurrentUserInfo } from '../../api/auth'
+import { getSessionUser, subscribeSessionChange } from '../../utils/sessionStore'
 
 function ProtectedRoute({ children, allowedRoles = [] }) {
     const [, navigate] = useLocation()
-    const user = getSessionUser()
+    const [user, setUser] = useState(getSessionUser())
+    const [isChecking, setIsChecking] = useState(!!getSessionUser())
 
     useEffect(() => {
-        if (!user) {
-            navigate('/')
-            return
+        const unsubscribe = subscribeSessionChange((nextUser) => {
+            setUser(nextUser)
+            if (!nextUser) {
+                setIsChecking(false)
+            }
+        })
+
+        const checkSession = async () => {
+            const localUser = getSessionUser()
+
+            if (!localUser) {
+                setUser(null)
+                setIsChecking(false)
+                navigate('/login')
+                return
+            }
+
+            try {
+                const session = await getCurrentUserInfo()
+                const nextUser = session?.user || session || null
+
+                if (!nextUser) {
+                    setUser(null)
+                    navigate('/login')
+                    return
+                }
+
+                setUser(nextUser)
+
+                if (allowedRoles.length > 0 && !allowedRoles.includes(nextUser.role)) {
+                    navigate('/')
+                }
+            } catch {
+                setUser(null)
+                navigate('/login')
+            } finally {
+                setIsChecking(false)
+            }
         }
 
-        if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-            navigate('/')
-        }
-    }, [user, navigate, allowedRoles])
+        checkSession()
 
+        return unsubscribe
+    }, [navigate, allowedRoles])
+
+    if (isChecking) return null
     if (!user) return null
     if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) return null
 
