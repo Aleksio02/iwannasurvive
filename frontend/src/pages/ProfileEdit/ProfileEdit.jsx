@@ -10,8 +10,8 @@ import {
     getCurrentUser as getLocalUser,
     setCurrentUser,
 } from '../../utils/userHelpers'
-import { getCurrentUserInfo } from '../../utils/authApi'
-import { updateApplicantProfile, updateEmployerProfile } from '../../utils/profileApi'
+import { getCurrentUserInfo } from '../../api/auth'
+import { updateApplicantProfile, updateEmployerProfile } from '../../api/profile'
 import {
     Card,
     CardContent,
