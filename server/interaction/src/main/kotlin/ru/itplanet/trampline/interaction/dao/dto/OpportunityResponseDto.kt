@@ -1,8 +1,19 @@
 package ru.itplanet.trampline.interaction.dao.dto
 
-import jakarta.persistence.*
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.JsonNodeFactory
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import org.hibernate.annotations.CreationTimestamp
+import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.annotations.UpdateTimestamp
+import org.hibernate.type.SqlTypes
 import java.time.OffsetDateTime
 
 @Entity
@@ -22,9 +33,16 @@ open class OpportunityResponseDto {
     @Column(name = "cover_letter")
     open var coverLetter: String? = null
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "resume_snapshot", nullable = false, columnDefinition = "jsonb")
+    open var resumeSnapshot: JsonNode = JsonNodeFactory.instance.objectNode()
+
+    @Column(name = "resume_file_id")
+    open var resumeFileId: Long? = null
+
     @Column(name = "status", nullable = false, length = 32)
     @Enumerated(EnumType.STRING)
-    open var status: OpportunityResponseStatus = OpportunityResponseStatus.IN_REVIEW
+    open var status: OpportunityResponseStatus = OpportunityResponseStatus.SUBMITTED
 
     @Column(name = "employer_comment")
     open var employerComment: String? = null
@@ -43,20 +61,22 @@ open class OpportunityResponseDto {
     @Column(name = "responded_at")
     open var respondedAt: OffsetDateTime? = null
 
-    constructor() {}
+    constructor()
 
     constructor(
         applicantUserId: Long,
         opportunityId: Long,
-        employerComment: String? = null,
         applicantComment: String? = null,
-        coverLetter: String? = null
+        coverLetter: String? = null,
+        resumeFileId: Long? = null,
+        resumeSnapshot: JsonNode = JsonNodeFactory.instance.objectNode(),
     ) {
         this.applicantUserId = applicantUserId
         this.opportunityId = opportunityId
-        employerComment?.let { this.employerComment = it }
-        applicantComment?.let { this.applicantComment = it }
-        coverLetter?.let { this.coverLetter = it }
+        this.applicantComment = applicantComment
+        this.coverLetter = coverLetter
+        this.resumeFileId = resumeFileId
+        this.resumeSnapshot = resumeSnapshot
     }
 }
 
@@ -66,5 +86,5 @@ enum class OpportunityResponseStatus {
     ACCEPTED,
     REJECTED,
     RESERVE,
-    WITHDRAWN
+    WITHDRAWN,
 }

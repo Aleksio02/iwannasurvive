@@ -1,4 +1,4 @@
-package ru.itplanet.trampline.moderation.client
+package ru.itplanet.trampline.opportunity.client
 
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.http.MediaType
@@ -10,10 +10,16 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.multipart.MultipartFile
-import ru.itplanet.trampline.commons.model.file.*
+import ru.itplanet.trampline.commons.model.file.FileAssetKind
+import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
+import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
+import ru.itplanet.trampline.commons.model.file.InternalCreateFileAttachmentRequest
+import ru.itplanet.trampline.commons.model.file.InternalCreatedFileResponse
+import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
+import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
 
 @FeignClient(
-    name = "moderation-media-service-client",
+    name = "opportunity-media-service-client",
     url = "\${media.service.url}",
     configuration = [InternalServiceFeignConfig::class],
 )
@@ -35,16 +41,16 @@ interface MediaServiceClient {
         @PathVariable fileId: Long,
     ): InternalFileDownloadUrlResponse
 
+    @PostMapping("/internal/attachments")
+    fun createAttachment(
+        @RequestBody request: InternalCreateFileAttachmentRequest,
+    ): InternalFileAttachmentResponse
+
     @GetMapping("/internal/entities/{entityType}/{entityId}/attachments")
     fun getAttachments(
         @PathVariable entityType: FileAttachmentEntityType,
         @PathVariable entityId: Long,
     ): List<InternalFileAttachmentResponse>
-
-    @PostMapping("/internal/attachments")
-    fun createAttachment(
-        @RequestBody request: InternalCreateFileAttachmentRequest,
-    ): InternalFileAttachmentResponse
 
     @DeleteMapping("/internal/attachments/{attachmentId}")
     fun deleteAttachment(
