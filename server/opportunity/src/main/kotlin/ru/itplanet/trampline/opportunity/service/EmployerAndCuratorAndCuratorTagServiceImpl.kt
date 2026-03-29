@@ -19,17 +19,20 @@ import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerTagRequest
 
 @Service
-class EmployerTagServiceImpl(
+class EmployerAndCuratorAndCuratorTagServiceImpl(
     private val tagDao: TagDao,
     private val moderationServiceClient: ModerationServiceClient,
     private val objectMapper: ObjectMapper,
-) : EmployerTagService {
+) : EmployerAndCuratorTagService {
 
     @Transactional
     override fun create(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         request: CreateEmployerTagRequest,
     ): EmployerTagResponse {
+        ensureSupportedCreatedByType(createdByType)
+
         val normalizedName = normalizeName(request.name)
 
         val sameTags = tagDao.findAllByCategoryAndNameIgnoreCaseOrderByIdAsc(
@@ -49,7 +52,7 @@ class EmployerTagServiceImpl(
 
         val foreignPendingTag = sameTags.firstOrNull {
             it.moderationStatus == TagModerationStatus.PENDING &&
-                    (it.createdByType != CreatedByType.EMPLOYER || it.createdByUserId != employerUserId)
+                    (it.createdByType != createdByType || it.createdByUserId != currentUserId)
         }
         if (foreignPendingTag != null) {
             throw ResponseStatusException(
@@ -59,16 +62,20 @@ class EmployerTagServiceImpl(
         }
 
         val ownTag = sameTags.firstOrNull {
-            it.createdByType == CreatedByType.EMPLOYER && it.createdByUserId == employerUserId
+            it.createdByType == createdByType && it.createdByUserId == currentUserId
         }
 
         if (ownTag != null) {
             when (ownTag.moderationStatus) {
                 TagModerationStatus.PENDING -> {
+                    ownTag.name = normalizedName
+                    ownTag.category = request.category
                     ownTag.isActive = false
                 }
 
                 TagModerationStatus.REJECTED -> {
+                    ownTag.name = normalizedName
+                    ownTag.category = request.category
                     ownTag.moderationStatus = TagModerationStatus.PENDING
                     ownTag.isActive = false
                 }
@@ -82,7 +89,8 @@ class EmployerTagServiceImpl(
             }
 
             ensureModerationTask(
-                employerUserId = employerUserId,
+                currentUserId = currentUserId,
+                createdByType = createdByType,
                 tag = ownTag,
             )
 
@@ -100,15 +108,16 @@ class EmployerTagServiceImpl(
             TagDto().apply {
                 name = normalizedName
                 category = request.category
-                createdByType = CreatedByType.EMPLOYER
-                createdByUserId = employerUserId
+                this.createdByType = createdByType
+                createdByUserId = currentUserId
                 moderationStatus = TagModerationStatus.PENDING
                 isActive = false
             },
         )
 
         ensureModerationTask(
-            employerUserId = employerUserId,
+            currentUserId = currentUserId,
+            createdByType = createdByType,
             tag = saved,
         )
 
@@ -117,10 +126,15 @@ class EmployerTagServiceImpl(
 
     @Transactional(readOnly = true)
     override fun getModerationTask(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         tagId: Long,
     ): InternalModerationTaskLookupResponse {
-        val tag = getOwnedTag(employerUserId, tagId)
+        val tag = getOwnedTag(
+            currentUserId = currentUserId,
+            createdByType = createdByType,
+            tagId = tagId,
+        )
 
         return moderationServiceClient.getTaskByEntity(
             entityType = ModerationEntityType.TAG,
@@ -131,10 +145,15 @@ class EmployerTagServiceImpl(
 
     @Transactional
     override fun cancelModerationTask(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         tagId: Long,
     ) {
-        val tag = getOwnedTag(employerUserId, tagId)
+        val tag = getOwnedTag(
+            currentUserId = currentUserId,
+            createdByType = createdByType,
+            tagId = tagId,
+        )
 
         if (tag.moderationStatus != TagModerationStatus.PENDING) {
             throw ResponseStatusException(
@@ -159,7 +178,8 @@ class EmployerTagServiceImpl(
     }
 
     private fun ensureModerationTask(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         tag: TagDto,
     ) {
         moderationServiceClient.createTask(
@@ -168,27 +188,30 @@ class EmployerTagServiceImpl(
                 entityId = requireNotNull(tag.id),
                 taskType = ModerationTaskType.TAG_REVIEW,
                 priority = ModerationTaskPriority.MEDIUM,
-                createdByUserId = employerUserId,
+                createdByUserId = currentUserId,
                 snapshot = objectMapper.valueToTree(toResponse(tag)),
                 sourceService = "opportunity",
-                sourceAction = "createEmployerTag",
+                sourceAction = sourceAction(createdByType),
             ),
         )
     }
 
     private fun getOwnedTag(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         tagId: Long,
     ): TagDto {
+        ensureSupportedCreatedByType(createdByType)
+
         val tag = tagDao.findById(tagId)
             .orElseThrow {
                 ResponseStatusException(HttpStatus.NOT_FOUND, "Tag not found")
             }
 
-        if (tag.createdByType != CreatedByType.EMPLOYER || tag.createdByUserId != employerUserId) {
+        if (tag.createdByType != createdByType || tag.createdByUserId != currentUserId) {
             throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
-                "Only employer-created tag owner can manage moderation state",
+                "Only tag owner can manage moderation state",
             )
         }
 
@@ -207,6 +230,28 @@ class EmployerTagServiceImpl(
             moderationStatus = tag.moderationStatus,
             isActive = tag.isActive,
         )
+    }
+
+    private fun sourceAction(
+        createdByType: CreatedByType,
+    ): String {
+        return when (createdByType) {
+            CreatedByType.EMPLOYER -> "createEmployerTag"
+            CreatedByType.CURATOR -> "createCuratorTag"
+            CreatedByType.ADMIN -> "createAdminTag"
+            CreatedByType.SYSTEM -> "createSystemTag"
+        }
+    }
+
+    private fun ensureSupportedCreatedByType(
+        createdByType: CreatedByType,
+    ) {
+        if (createdByType == CreatedByType.SYSTEM) {
+            throw ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "System-created tags cannot be managed through public API",
+            )
+        }
     }
 
     private fun normalizeName(

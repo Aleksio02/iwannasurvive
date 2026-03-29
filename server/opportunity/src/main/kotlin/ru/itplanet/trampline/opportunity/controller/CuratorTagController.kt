@@ -24,8 +24,8 @@ import ru.itplanet.trampline.opportunity.service.EmployerAndCuratorTagService
 
 @Validated
 @RestController
-@RequestMapping("/api/employer/tags")
-class EmployerTagController(
+@RequestMapping("/api/curator/tags")
+class CuratorTagController(
     private val employerAndCuratorTagService: EmployerAndCuratorTagService,
 ) {
 
@@ -35,11 +35,11 @@ class EmployerTagController(
         @CurrentUser currentUser: AuthenticatedUser,
         @Valid @RequestBody request: CreateEmployerTagRequest,
     ): EmployerTagResponse {
-        ensureEmployer(currentUser)
+        val createdByType = resolveCuratorCreatedByType(currentUser)
 
         return employerAndCuratorTagService.create(
             currentUserId = currentUser.userId,
-            createdByType = CreatedByType.EMPLOYER,
+            createdByType = createdByType,
             request = request,
         )
     }
@@ -49,11 +49,11 @@ class EmployerTagController(
         @CurrentUser currentUser: AuthenticatedUser,
         @PathVariable @Positive id: Long,
     ): InternalModerationTaskLookupResponse {
-        ensureEmployer(currentUser)
+        val createdByType = resolveCuratorCreatedByType(currentUser)
 
         return employerAndCuratorTagService.getModerationTask(
             currentUserId = currentUser.userId,
-            createdByType = CreatedByType.EMPLOYER,
+            createdByType = createdByType,
             tagId = id,
         )
     }
@@ -63,24 +63,26 @@ class EmployerTagController(
         @CurrentUser currentUser: AuthenticatedUser,
         @PathVariable @Positive id: Long,
     ): ResponseEntity<Unit> {
-        ensureEmployer(currentUser)
+        val createdByType = resolveCuratorCreatedByType(currentUser)
 
         employerAndCuratorTagService.cancelModerationTask(
             currentUserId = currentUser.userId,
-            createdByType = CreatedByType.EMPLOYER,
+            createdByType = createdByType,
             tagId = id,
         )
 
         return ResponseEntity.noContent().build()
     }
 
-    private fun ensureEmployer(
+    private fun resolveCuratorCreatedByType(
         currentUser: AuthenticatedUser,
-    ) {
-        if (currentUser.role != Role.EMPLOYER) {
-            throw ResponseStatusException(
+    ): CreatedByType {
+        return when (currentUser.role) {
+            Role.CURATOR -> CreatedByType.CURATOR
+            Role.ADMIN -> CreatedByType.ADMIN
+            else -> throw ResponseStatusException(
                 HttpStatus.FORBIDDEN,
-                "Only employer can manage employer-created tags",
+                "Only curator or admin can manage curator-created tags",
             )
         }
     }

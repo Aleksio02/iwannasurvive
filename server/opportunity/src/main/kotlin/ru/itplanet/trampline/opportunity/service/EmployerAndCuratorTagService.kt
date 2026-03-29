@@ -2,22 +2,26 @@ package ru.itplanet.trampline.opportunity.service
 
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.opportunity.model.EmployerTagResponse
+import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerTagRequest
 
-interface EmployerTagService {
+interface EmployerAndCuratorTagService {
 
     fun create(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         request: CreateEmployerTagRequest,
     ): EmployerTagResponse
 
     fun getModerationTask(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         tagId: Long,
     ): InternalModerationTaskLookupResponse
 
     fun cancelModerationTask(
-        employerUserId: Long,
+        currentUserId: Long,
+        createdByType: CreatedByType,
         tagId: Long,
     )
 }
