@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useLocation } from 'wouter'
 import Button from '../../../components/Button'
 import Input from '../../../components/Input'
@@ -15,7 +15,8 @@ import {
 import {
     addToSaved,
     removeFromSaved,
-    applyToOpportunity
+    applyToOpportunity,
+    getSeekerSaved,
 } from '../../../utils/profileApi'
 import './OpportunitiesPage.scss'
 
@@ -83,6 +84,18 @@ function getStorageSet(key) {
     }
 }
 
+// ========== DEBOUNCE HOOK ==========
+function useDebounce(value, delay) {
+    const [debouncedValue, setDebouncedValue] = useState(value)
+
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedValue(value), delay)
+        return () => clearTimeout(timer)
+    }, [value, delay])
+
+    return debouncedValue
+}
+
 function OpportunitiesPage() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
@@ -112,11 +125,33 @@ function OpportunitiesPage() {
 
     const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT))
 
+    // Debounce для поиска
+    const debouncedSearch = useDebounce(filters.search, 500)
+    const debouncedSkills = useDebounce(filters.skillsQuery, 500)
+
+    const syncFavoriteOpportunities = useCallback(async () => {
+        if (!currentUser) {
+            const emptySet = new Set()
+            setFavoriteOpportunities(emptySet)
+            setStorageSet('favorite_opportunities', emptySet)
+            return
+        }
+
+        try {
+            const saved = await getSeekerSaved()
+            const next = new Set(saved.map((item) => item.id))
+            setFavoriteOpportunities(next)
+            setStorageSet('favorite_opportunities', next)
+        } catch (syncError) {
+            console.error('Failed to sync favorites:', syncError)
+        }
+    }, [currentUser])
+
     const queryParams = useMemo(() => {
         const params = {
             limit: PAGE_LIMIT,
             offset: page * PAGE_LIMIT,
-            search: `${filters.search} ${filters.skillsQuery}`.trim(),
+            search: `${debouncedSearch} ${debouncedSkills}`.trim(),
             type: filters.type,
             workFormat: filters.format,
             sortBy: 'PUBLISHED_AT',
@@ -134,7 +169,7 @@ function OpportunitiesPage() {
         }
 
         return params
-    }, [filters, page, salaryRange, selectedTags])
+    }, [debouncedSearch, debouncedSkills, filters.type, filters.format, page, salaryRange, selectedTags])
 
     // Загрузка тегов
     useEffect(() => {
@@ -147,6 +182,33 @@ function OpportunitiesPage() {
                 setTags([])
             })
     }, [])
+
+    // Синхронизация избранного при открытии страницы
+    useEffect(() => {
+        syncFavoriteOpportunities()
+    }, [syncFavoriteOpportunities])
+
+    // Слушаем обновления избранного с других страниц
+    useEffect(() => {
+        const handleFavoritesUpdated = async () => {
+            await syncFavoriteOpportunities()
+        }
+
+        const handleStorage = (event) => {
+            const storageKey = getStorageKey('favorite_opportunities')
+            if (event.key === storageKey) {
+                setFavoriteOpportunities(getStorageSet('favorite_opportunities'))
+            }
+        }
+
+        window.addEventListener('favorites-updated', handleFavoritesUpdated)
+        window.addEventListener('storage', handleStorage)
+
+        return () => {
+            window.removeEventListener('favorites-updated', handleFavoritesUpdated)
+            window.removeEventListener('storage', handleStorage)
+        }
+    }, [syncFavoriteOpportunities])
 
     // Загрузка данных
     useEffect(() => {
@@ -216,20 +278,24 @@ function OpportunitiesPage() {
         try {
             if (isFavorite) {
                 await removeFromSaved(opportunity.id)
+
                 const next = new Set(favoriteOpportunities)
                 next.delete(opportunity.id)
                 setFavoriteOpportunities(next)
                 setStorageSet('favorite_opportunities', next)
+
                 toast({
                     title: 'Удалено из избранного',
                     description: `"${opportunity.title}" удалено из избранного`,
                 })
             } else {
                 await addToSaved(opportunity.id)
+
                 const next = new Set(favoriteOpportunities)
                 next.add(opportunity.id)
                 setFavoriteOpportunities(next)
                 setStorageSet('favorite_opportunities', next)
+
                 toast({
                     title: 'Добавлено в избранное',
                     description: `"${opportunity.title}" сохранено в избранное`,
@@ -238,12 +304,12 @@ function OpportunitiesPage() {
         } catch (error) {
             console.error('Favorite error:', error)
 
-            // Если ошибка дубликата — всё равно считаем что добавилось
             if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
                 const next = new Set(favoriteOpportunities)
                 next.add(opportunity.id)
                 setFavoriteOpportunities(next)
                 setStorageSet('favorite_opportunities', next)
+
                 toast({
                     title: 'В избранном',
                     description: `"${opportunity.title}" уже в избранном`,
@@ -393,7 +459,6 @@ function OpportunitiesPage() {
                         />
                     </div>
 
-                    {/* Фильтр по зарплате */}
                     <div className="opportunities-page__salary-filter">
                         <div className="salary-filter__title">Зарплата</div>
                         <div className="salary-filter__inputs">
@@ -416,7 +481,6 @@ function OpportunitiesPage() {
                         </div>
                     </div>
 
-                    {/* Теги */}
                     {tags.length > 0 && (
                         <div className="opportunities-page__tag-list">
                             {tags.map((tag) => (
@@ -479,6 +543,7 @@ function OpportunitiesPage() {
                                             <div className="opportunities-page__compact-header">
                                                 <h3>{item.title}</h3>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__fav-star ${favoriteOpportunities.has(item.id) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleOpportunityFavorite(item)}
                                                 >
@@ -489,6 +554,7 @@ function OpportunitiesPage() {
                                                 <img src={companyIcon} alt="" className="icon" />
                                                 <span>{item.companyName}</span>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__company-fav ${favoriteCompanies.has(item.companyName) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleCompanyFavorite(item.companyName)}
                                                 >
@@ -509,12 +575,16 @@ function OpportunitiesPage() {
                                             </p>
                                             <p className="opportunities-page__short-desc">{item.shortDescription}</p>
                                             <div className="opportunities-page__compact-actions">
-                                                <button className="opportunities-page__map-btn" onClick={() => handleShowOnMap(item.id)}>
+                                                <button
+                                                    type="button"
+                                                    className="opportunities-page__map-btn"
+                                                    onClick={() => handleShowOnMap(item.id)}
+                                                >
                                                     <img src={locationIcon} alt="" className="icon" />
                                                     <span>Показать на карте</span>
                                                 </button>
                                                 <Link href={`/opportunities/${item.id}`}>
-                                                    <button className="opportunities-page__detail-btn">
+                                                    <button type="button" className="opportunities-page__detail-btn">
                                                         <span>Подробнее</span>
                                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <path d="M9 18L15 12L9 6" />
@@ -526,13 +596,13 @@ function OpportunitiesPage() {
                                     ))}
                                     {total > MAP_SIDE_LIMIT && (
                                         <div className="opportunities-page__map-pagination">
-                                            <button onClick={() => goToPage(page - 1)} disabled={page === 0}>
+                                            <button type="button" onClick={() => goToPage(page - 1)} disabled={page === 0}>
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                     <path d="M15 18L9 12L15 6" />
                                                 </svg>
                                             </button>
                                             <span>{page + 1} / {totalPages}</span>
-                                            <button onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
+                                            <button type="button" onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                     <path d="M9 18L15 12L9 6" />
                                                 </svg>
@@ -567,6 +637,7 @@ function OpportunitiesPage() {
                                                     </span>
                                                 </div>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__fav-star ${favoriteOpportunities.has(item.id) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleOpportunityFavorite(item)}
                                                 >
@@ -578,6 +649,7 @@ function OpportunitiesPage() {
                                                 <img src={companyIcon} alt="" className="icon" />
                                                 <span>{item.companyName}</span>
                                                 <button
+                                                    type="button"
                                                     className={`opportunities-page__company-fav ${favoriteCompanies.has(item.companyName) ? 'is-favorite' : ''}`}
                                                     onClick={() => toggleCompanyFavorite(item.companyName)}
                                                 >
@@ -590,7 +662,11 @@ function OpportunitiesPage() {
                                             </p>
                                             <p className="opportunities-page__desc">{item.shortDescription}</p>
                                             <div className="opportunities-page__card-footer">
-                                                <button className="opportunities-page__map-link" onClick={() => handleShowOnMap(item.id)}>
+                                                <button
+                                                    type="button"
+                                                    className="opportunities-page__map-link"
+                                                    onClick={() => handleShowOnMap(item.id)}
+                                                >
                                                     <img src={locationIcon} alt="" className="icon" />
                                                     <span>На карту</span>
                                                 </button>
@@ -609,14 +685,14 @@ function OpportunitiesPage() {
                                     ))}
                                 </div>
                                 <div className="opportunities-page__pagination">
-                                    <button onClick={() => goToPage(page - 1)} disabled={page === 0}>
+                                    <button type="button" onClick={() => goToPage(page - 1)} disabled={page === 0}>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M15 18L9 12L15 6" />
                                         </svg>
                                         <span>Назад</span>
                                     </button>
                                     <span>{page + 1} / {totalPages}</span>
-                                    <button onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
+                                    <button type="button" onClick={() => goToPage(page + 1)} disabled={page + 1 >= totalPages}>
                                         <span>Вперёд</span>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path d="M9 18L15 12L9 6" />
