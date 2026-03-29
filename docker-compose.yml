@@ -184,6 +184,8 @@ services:
     container_name: tramplin_media
     image: tramplin_media:latest
     build: ./server/media
+    env_file:
+      - creds.env
     environment:
       PORT: 8091
 #      AUTH_SERVER_HOST: http://auth:9999
