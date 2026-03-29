@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter'
 import { useState, useEffect } from 'react'
 import brandMark from '../../assets/icons/brand-mark.svg'
-import { getCurrentUserInfo, logoutUser } from '../../api/authApi'
+import { getCurrentUserInfo, logoutUser } from '../../utils/authApi'
 import { getApplicantProfile, getEmployerProfile } from '../../utils/profileApi'
 import { getCurrentUser, setCurrentUser, clearCurrentUser } from '../../utils/userHelpers'
 import './Navbar.scss'
