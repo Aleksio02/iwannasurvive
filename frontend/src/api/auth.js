@@ -1,41 +1,81 @@
 import { clearSessionUser, setSessionUser } from '../utils/sessionStore'
+
 const API_BASE = '/api/auth'
 
-async function request(url, options = {}) {
-    const response = await fetch(url, {
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(options.headers || {}),
-        },
-        ...options,
-    })
+function createError(message, status = 0) {
+    const error = new Error(message)
+    error.status = status
+    return error
+}
 
-    let data = null
+async function parseResponseBody(response) {
+    if (response.status === 204) return null
 
-    try {
-        data = await response.json()
-    } catch {
-        data = null
+    const contentType = response.headers.get('content-type') || ''
+    const isJson = contentType.includes('application/json')
+
+    if (isJson) {
+        try {
+            return await response.json()
+        } catch {
+            return null
+        }
     }
 
+    try {
+        const text = await response.text()
+        return text || null
+    } catch {
+        return null
+    }
+}
+
+async function request(url, options = {}) {
+    let response
+
+    try {
+        response = await fetch(url, {
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(options.headers || {}),
+            },
+            ...options,
+        })
+    } catch {
+        throw createError('Сервер недоступен. Проверьте подключение и попробуйте снова.', 0)
+    }
+
+    const data = await parseResponseBody(response)
+
     if (!response.ok) {
-        if (response.status === 401) {
-            const errorMessage = data?.message || 'Сессия истекла. Пожалуйста, войдите заново.'
-            throw new Error(`401: ${errorMessage}`)
+        const message =
+            (typeof data === 'object' && data?.message) ||
+            (typeof data === 'object' && data?.error) ||
+            (typeof data === 'string' && data) ||
+            'Произошла ошибка запроса'
+
+        if (response.status === 401 || response.status === 403) {
+            clearSessionUser()
         }
-        const errorMessage = data?.message || data?.error || 'Произошла ошибка запроса'
-        throw new Error(errorMessage)
+
+        throw createError(message, response.status)
     }
 
     return data
 }
 
 export async function registerUser(payload) {
-    return request(`${API_BASE}/register`, {
+    const response = await request(`${API_BASE}/register`, {
         method: 'POST',
         body: JSON.stringify(payload),
     })
+
+    if (response?.user) {
+        setSessionUser(response.user)
+    }
+
+    return response
 }
 
 export async function loginUser(payload) {
@@ -58,47 +98,38 @@ export async function validateSession() {
 }
 
 export async function getCurrentUserInfo() {
-    const response = await request(`${API_BASE}/me`, {
-        method: 'GET',
-    })
+    try {
+        const response = await request(`${API_BASE}/me`, {
+            method: 'GET',
+        })
 
-    const user = response?.user || response || null
-    if (user) {
-        setSessionUser(user)
-    } else {
-        clearSessionUser()
+        const user = response?.user || response || null
+
+        if (user) {
+            setSessionUser(user)
+        } else {
+            clearSessionUser()
+        }
+
+        return response
+    } catch (error) {
+        if ([401, 403, 404, 500, 502, 503].includes(error.status)) {
+            clearSessionUser()
+            return null
+        }
+
+        throw error
     }
-
-    return response
 }
 
 export async function logoutUser() {
-    const response = await request(`${API_BASE}/logout`, {
-        method: 'POST',
-    })
+    try {
+        await request(`${API_BASE}/logout`, {
+            method: 'POST',
+        })
+    } finally {
+        clearSessionUser()
+    }
 
-    clearSessionUser()
-
-    return response
-}
-
-export async function requestPasswordReset(payload) {
-    return request(`${API_BASE}/forgot-password`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    })
-}
-
-export async function confirmPasswordReset(payload) {
-    return request(`${API_BASE}/reset-password`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    })
-}
-
-export async function changePassword(payload) {
-    return request(`${API_BASE}/change-password`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    })
+    return null
 }

@@ -18,32 +18,70 @@ import {
     addToFavorites,
     removeFromFavorites,
 } from './interaction'
-import { getSessionUser, getSessionUserId } from '../utils/sessionStore'
+import { clearSessionUser, getSessionUser, getSessionUserId } from '../utils/sessionStore'
+
+function createApiError(message, status = 0) {
+    const error = new Error(message)
+    error.status = status
+    return error
+}
+
+async function parseApiResponse(response) {
+    if (response.status === 204) return null
+
+    const contentType = response.headers.get('content-type') || ''
+    const isJson = contentType.includes('application/json')
+
+    if (isJson) {
+        try {
+            return await response.json()
+        } catch {
+            return null
+        }
+    }
+
+    try {
+        const text = await response.text()
+        return text || null
+    } catch {
+        return null
+    }
+}
 
 async function apiRequest(endpoint, options = {}) {
     console.log(`[API] ${options.method || 'GET'} ${endpoint}`)
 
-    const response = await fetch(endpoint, {
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(options.headers || {}),
-        },
-        ...options,
-    })
-
-    if (!response.ok) {
-        let errorMessage = 'Ошибка запроса'
-        try {
-            const errorData = await response.json()
-            errorMessage = errorData.message || errorData.error || errorMessage
-        } catch {
-            // ignore
-        }
-        throw new Error(errorMessage)
+    let response
+    try {
+        response = await fetch(endpoint, {
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(options.headers || {}),
+            },
+            ...options,
+        })
+    } catch {
+        throw createApiError('Сервер недоступен. Попробуйте позже.', 0)
     }
 
-    return response.json()
+    const data = await parseApiResponse(response)
+
+    if (!response.ok) {
+        const errorMessage =
+            (typeof data === 'object' && data?.message) ||
+            (typeof data === 'object' && data?.error) ||
+            (typeof data === 'string' && data) ||
+            'Ошибка запроса'
+
+        if (response.status === 401 || response.status === 403) {
+            clearSessionUser()
+        }
+
+        throw createApiError(errorMessage, response.status)
+    }
+
+    return data
 }
 
 // ========== HELPERS ==========
@@ -166,10 +204,6 @@ export async function searchCities(query) {
 
 // ========== СОИСКАТЕЛЬ ==========
 
-/**
- * Получение профиля соискателя
- * GET /api/profile/applicant/{userId}
- */
 export async function getApplicantProfile() {
     const userId = getSessionUserId()
     if (!userId) {
@@ -189,19 +223,19 @@ export async function getApplicantProfile() {
             contactLinks: normalizeContactMethods(data.contactLinks),
         }
     } catch (error) {
-        console.log('[API] Profile not found:', error.message)
-        return null
+        if ([401, 403, 404, 500, 503].includes(error.status)) {
+            console.log('[API] Applicant profile unavailable:', error.message)
+            return null
+        }
+
+        throw error
     }
 }
 
-/**
- * Обновление профиля соискателя
- * PATCH /api/profile/applicant
- */
 export async function updateApplicantProfile(profile) {
     const user = getSessionUser()
     if (!user) {
-        throw new Error('Пользователь не авторизован')
+        throw createApiError('Пользователь не авторизован', 401)
     }
 
     const payload = {
@@ -228,20 +262,14 @@ export async function updateApplicantProfile(profile) {
 
     console.log('[API] Saving applicant profile with PATCH:', payload)
 
-    const url = `${API_BASE}/profile/applicant`
-    const data = await apiRequest(url, {
+    return apiRequest(`${API_BASE}/profile/applicant`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
     })
-    return data
 }
 
 // ========== РАБОТОДАТЕЛЬ ==========
 
-/**
- * Получение профиля работодателя
- * GET /api/profile/employer/{userId}
- */
 export async function getEmployerProfile() {
     const userId = getSessionUserId()
     if (!userId) {
@@ -260,19 +288,19 @@ export async function getEmployerProfile() {
             publicContacts: normalizeContactMethods(data.publicContacts),
         }
     } catch (error) {
-        console.log('[API] Profile not found:', error.message)
-        return null
+        if ([401, 403, 404, 500, 503].includes(error.status)) {
+            console.log('[API] Employer profile unavailable:', error.message)
+            return null
+        }
+
+        throw error
     }
 }
 
-/**
- * Обновление профиля работодателя
- * PATCH /api/profile/employer
- */
 export async function updateEmployerProfile(profile) {
     const user = getSessionUser()
     if (!user) {
-        throw new Error('Пользователь не авторизован')
+        throw createApiError('Пользователь не авторизован', 401)
     }
 
     const payload = {
@@ -293,36 +321,24 @@ export async function updateEmployerProfile(profile) {
 
     console.log('[API] Saving employer profile with PATCH:', JSON.stringify(payload, null, 2))
 
-    const url = `${API_BASE}/profile/employer`
-    console.log('[API] PATCH employer profile:', url)
-
-    const data = await apiRequest(url, {
+    return apiRequest(`${API_BASE}/profile/employer`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
     })
-    console.log('[API] Employer profile saved:', data)
-    return data
 }
 
-/**
- * Отправка на верификацию
- * POST /api/employer/verification
- */
 export async function submitVerification(payload) {
     const user = getSessionUser()
     if (!user) {
-        throw new Error('Пользователь не авторизован')
+        throw createApiError('Пользователь не авторизован', 401)
     }
 
-    const url = `${API_BASE}/employer/verification`
     console.log('[API] Submitting verification:', payload)
 
-    const data = await apiRequest(url, {
+    return apiRequest(`${API_BASE}/employer/verification`, {
         method: 'POST',
         body: JSON.stringify(payload),
     })
-    console.log('[API] Verification response:', data)
-    return data
 }
 
 // ========== INTERACTION API: СОИСКАТЕЛЬ ==========
@@ -340,8 +356,12 @@ export async function getSeekerContacts() {
             createdAt: c.createdAt,
         }))
     } catch (error) {
-        console.error('[API] Failed to load contacts:', error)
-        return []
+        if ([401, 403, 500, 503].includes(error.status)) {
+            console.error('[API] Failed to load contacts:', error.message)
+            return []
+        }
+
+        throw error
     }
 }
 
@@ -383,8 +403,12 @@ export async function getSeekerApplications() {
             }
         })
     } catch (error) {
-        console.error('[API] Failed to load applications:', error)
-        return []
+        if ([401, 403, 500, 503].includes(error.status)) {
+            console.error('[API] Failed to load applications:', error.message)
+            return []
+        }
+
+        throw error
     }
 }
 
@@ -393,7 +417,7 @@ export async function applyToOpportunity(opportunityId, message = '') {
         return await createResponse(opportunityId, message)
     } catch (error) {
         if (error.message?.toLowerCase().includes('already')) {
-            throw new Error('already_applied')
+            throw createApiError('already_applied', error.status || 409)
         }
         throw error
     }
@@ -435,8 +459,12 @@ export async function getSeekerSaved() {
             })
             .filter((item) => item.id !== null && item.id !== undefined)
     } catch (error) {
-        console.error('[API] Failed to load favorites:', error)
-        return []
+        if ([401, 403, 500, 503].includes(error.status)) {
+            console.error('[API] Failed to load favorites:', error.message)
+            return []
+        }
+
+        throw error
     }
 }
 
@@ -531,7 +559,7 @@ export async function getEmployerApplications() {
 
 export async function updateApplicationStatus(applicationId, status) {
     const user = getSessionUser()
-    if (!user) throw new Error('Пользователь не авторизован')
+    if (!user) throw createApiError('Пользователь не авторизован', 401)
 
     const key = `employer_applications_${user.email}`
     const saved = localStorage.getItem(key)
