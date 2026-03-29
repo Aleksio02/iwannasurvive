@@ -55,17 +55,29 @@ class InteractionController(
         @CurrentUser userId: Long,
     ): List<OpportunityResponseResponse> = interactionService.getOpportunityApplications(opportunityId, userId)
 
-    @PostMapping("/favorites/{opportunityId}")
-    fun addToFavorites(
+    @PostMapping("/favorites/opportunities/{opportunityId}")
+    fun addOpportunityToFavorites(
         @CurrentUser userId: Long,
         @PathVariable opportunityId: Long,
-    ): FavoriteResponse = interactionService.addToFavorites(userId, opportunityId)
+    ): FavoriteResponse = interactionService.addOpportunityToFavorites(userId, opportunityId)
 
-    @DeleteMapping("/favorites/{opportunityId}")
-    fun removeFromFavorites(
+    @DeleteMapping("/favorites/opportunities/{opportunityId}")
+    fun removeOpportunityFromFavorites(
         @CurrentUser userId: Long,
         @PathVariable opportunityId: Long,
-    ) = interactionService.removeFromFavorites(userId, opportunityId)
+    ) = interactionService.removeOpportunityFromFavorites(userId, opportunityId)
+
+    @PostMapping("/favorites/employers/{employerUserId}")
+    fun addEmployerToFavorites(
+        @CurrentUser userId: Long,
+        @PathVariable employerUserId: Long,
+    ): FavoriteResponse = interactionService.addEmployerToFavorites(userId, employerUserId)
+
+    @DeleteMapping("/favorites/employers/{employerUserId}")
+    fun removeEmployerFromFavorites(
+        @CurrentUser userId: Long,
+        @PathVariable employerUserId: Long,
+    ) = interactionService.removeEmployerFromFavorites(userId, employerUserId)
 
     @GetMapping("/favorites")
     fun getFavorites(

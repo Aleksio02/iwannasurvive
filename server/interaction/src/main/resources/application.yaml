@@ -19,6 +19,9 @@ opportunity:
 media:
   service:
     url: ${MEDIA_SERVICE_URL:http://localhost:8091}
+profile:
+  service:
+    url: ${PROFILE_SERVER_HOST:http://localhost:8080}
 
 feign:
   client:
