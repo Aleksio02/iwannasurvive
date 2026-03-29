@@ -1,5 +1,5 @@
 server:
-  port: 8083
+  port: ${PORT:8083}
 
 spring:
   application:
@@ -18,7 +18,7 @@ opportunity:
     url: ${OPPORTUNITY_SERVER_HOST:http://localhost:8081}
 media:
   service:
-    url: ${MEDIA_SERVICE_URL:http://localhost:8091}
+    url: ${MEDIA_SERVER_HOST:http://localhost:8091}
 profile:
   service:
     url: ${PROFILE_SERVER_HOST:http://localhost:8080}

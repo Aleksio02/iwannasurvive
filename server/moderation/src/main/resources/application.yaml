@@ -1,5 +1,5 @@
 server:
-  port: 8082
+  port: ${PORT:8082}
 
 spring:
   application:
@@ -24,19 +24,19 @@ feign:
 
 auth:
   service:
-    url: ${AUTH_SERVICE_URL:http://localhost:9999}
+    url: ${AUTH_SERVER_HOST:http://localhost:9999}
 
 profile:
   service:
-    url: ${PROFILE_SERVICE_URL:http://localhost:8080}
+    url: ${PROFILE_SERVER_HOST:http://localhost:8080}
 
 opportunity:
   service:
-    url: ${OPPORTUNITY_SERVICE_URL:http://localhost:8081}
+    url: ${OPPORTUNITY_SERVER_HOST:http://localhost:8081}
 
 media:
   service:
-    url: ${MEDIA_SERVICE_URL:http://localhost:8091}
+    url: ${MEDIA_SERVER_HOST:http://localhost:8091}
 
 internal-api:
   api-key: moderation-api-key
