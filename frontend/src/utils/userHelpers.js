@@ -1,35 +1,28 @@
+import {
+    getSessionUser,
+    setSessionUser,
+    clearSessionUser,
+} from './sessionStore'
+
 /**
- * Получение текущего пользователя из localStorage
+ * Получение текущего пользователя из единого sessionStore
  */
 export function getCurrentUser() {
-    try {
-        const stored = localStorage.getItem('tramplin_current_user')
-        if (stored) {
-            return JSON.parse(stored)
-        }
-        return null
-    } catch (error) {
-        console.error('Error getting current user:', error)
-        return null
-    }
+    return getSessionUser()
 }
 
 /**
- * Сохранение текущего пользователя в localStorage
+ * Сохранение текущего пользователя в sessionStore
  */
 export function setCurrentUser(user) {
-    try {
-        localStorage.setItem('tramplin_current_user', JSON.stringify(user))
-    } catch (error) {
-        console.error('Error saving current user:', error)
-    }
+    return setSessionUser(user)
 }
 
 /**
  * Очистка данных пользователя (при выходе)
  */
 export function clearCurrentUser() {
-    localStorage.removeItem('tramplin_current_user')
+    clearSessionUser()
 }
 
 /**
