@@ -16,8 +16,10 @@ import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
 import ru.itplanet.trampline.commons.model.file.FileAssetKind
 import ru.itplanet.trampline.commons.model.file.FileAssetStatus
 import ru.itplanet.trampline.commons.model.file.InternalFileMetadataResponse
+import ru.itplanet.trampline.interaction.client.EmployerProfileSummary
 import ru.itplanet.trampline.interaction.client.MediaServiceClient
 import ru.itplanet.trampline.interaction.client.OpportunityServiceClient
+import ru.itplanet.trampline.interaction.client.ProfileServiceClient
 import ru.itplanet.trampline.interaction.dao.ContactDao
 import ru.itplanet.trampline.interaction.dao.ContactInfoApplicantProfileDao
 import ru.itplanet.trampline.interaction.dao.ContactRecommendationDao
@@ -50,6 +52,7 @@ class InteractionServiceImpl(
     private val contactInfoApplicantProfileDao: ContactInfoApplicantProfileDao,
     private val contactRecommendationDao: ContactRecommendationDao,
     private val opportunityServiceClient: OpportunityServiceClient,
+    private val profileServiceClient: ProfileServiceClient,
     private val mediaServiceClient: MediaServiceClient,
     private val objectMapper: ObjectMapper,
 ) : InteractionService {
@@ -127,24 +130,88 @@ class InteractionServiceImpl(
         }
     }
 
-    override fun addToFavorites(userId: Long, opportunityId: Long): FavoriteResponse {
-        if (!favoriteDao.existsByUserIdAndOpportunityId(userId, opportunityId)) {
-            val favoriteDto = FavoriteDto(userId, opportunityId, FavoriteTargetType.OPPORTUNITY)
-            favoriteDao.save(favoriteDto)
-        }
-
+    override fun addOpportunityToFavorites(
+        userId: Long,
+        opportunityId: Long,
+    ): FavoriteResponse {
         val opportunity = opportunityServiceClient.getPublicOpportunity(opportunityId)
-        return FavoriteResponse(opportunityId, opportunity.title, OffsetDateTime.now())
+
+        val favorite = favoriteDao.findByUserIdAndOpportunityId(userId, opportunityId)
+            ?: favoriteDao.saveAndFlush(
+                FavoriteDto.forOpportunity(
+                    userId = userId,
+                    opportunityId = opportunityId,
+                ),
+            )
+
+        val employer = loadEmployerProfileSummaryOrNull(opportunity.employerUserId)
+        return toOpportunityFavoriteResponse(favorite, opportunity, employer)
     }
 
-    override fun removeFromFavorites(userId: Long, opportunityId: Long) {
+    override fun removeOpportunityFromFavorites(
+        userId: Long,
+        opportunityId: Long,
+    ) {
         favoriteDao.deleteByUserIdAndOpportunityId(userId, opportunityId)
     }
 
+    override fun addEmployerToFavorites(
+        userId: Long,
+        employerUserId: Long,
+    ): FavoriteResponse {
+        val employer = profileServiceClient.getEmployerProfile(employerUserId)
+
+        val favorite = favoriteDao.findByUserIdAndEmployerUserId(userId, employerUserId)
+            ?: favoriteDao.saveAndFlush(
+                FavoriteDto.forEmployer(
+                    userId = userId,
+                    employerUserId = employerUserId,
+                ),
+            )
+
+        return toEmployerFavoriteResponse(favorite, employer)
+    }
+
+    override fun removeEmployerFromFavorites(
+        userId: Long,
+        employerUserId: Long,
+    ) {
+        favoriteDao.deleteByUserIdAndEmployerUserId(userId, employerUserId)
+    }
+
     override fun getUserFavorites(userId: Long): List<FavoriteResponse> {
-        return favoriteDao.findByUserId(userId).map { fav ->
-            val opportunity = opportunityServiceClient.getPublicOpportunity(fav.opportunityId)
-            FavoriteResponse(fav.opportunityId, opportunity.title, fav.createdAt)
+        val employerCache = mutableMapOf<Long, EmployerProfileSummary>()
+
+        return favoriteDao.findByUserIdOrderByCreatedAtDescIdDesc(userId).map { favorite ->
+            favorite.validateTargetConsistency()
+
+            when (favorite.targetType) {
+                FavoriteTargetType.OPPORTUNITY -> {
+                    val opportunityId = favorite.opportunityId
+                        ?: throw IllegalStateException("Opportunity favorite must contain opportunityId")
+
+                    val opportunity = opportunityServiceClient.getPublicOpportunity(opportunityId)
+                    val employer = opportunity.employerUserId?.let { employerUserId ->
+                        employerCache[employerUserId]
+                            ?: loadEmployerProfileSummaryOrNull(employerUserId)?.also {
+                                employerCache[employerUserId] = it
+                            }
+                    }
+
+                    toOpportunityFavoriteResponse(favorite, opportunity, employer)
+                }
+
+                FavoriteTargetType.EMPLOYER -> {
+                    val employerUserId = favorite.employerUserId
+                        ?: throw IllegalStateException("Employer favorite must contain employerUserId")
+
+                    val employer = employerCache.getOrPut(employerUserId) {
+                        profileServiceClient.getEmployerProfile(employerUserId)
+                    }
+
+                    toEmployerFavoriteResponse(favorite, employer)
+                }
+            }
         }
     }
 
@@ -403,6 +470,20 @@ class InteractionServiceImpl(
             .orElseThrow { EntityNotFoundException("Applicant $userId not found") }
     }
 
+    private fun loadEmployerProfileSummaryOrNull(
+        employerUserId: Long?,
+    ): EmployerProfileSummary? {
+        if (employerUserId == null) {
+            return null
+        }
+
+        return try {
+            profileServiceClient.getEmployerProfile(employerUserId)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun orderedPair(
         firstUserId: Long,
         secondUserId: Long,
@@ -436,6 +517,58 @@ class InteractionServiceImpl(
             resumeFileId = oppResp.resumeFileId,
             createdAt = oppResp.createdAt,
         )
+    }
+
+    private fun toOpportunityFavoriteResponse(
+        favorite: FavoriteDto,
+        opportunity: OpportunityCard,
+        employer: EmployerProfileSummary?,
+    ): FavoriteResponse {
+        return FavoriteResponse(
+            targetType = FavoriteTargetType.OPPORTUNITY,
+            targetId = opportunity.id,
+            title = opportunity.title,
+            subtitle = opportunity.companyName.takeIf { it.isNotBlank() },
+            logo = employer?.logo,
+            createdAt = favorite.createdAt,
+        )
+    }
+
+    private fun toEmployerFavoriteResponse(
+        favorite: FavoriteDto,
+        employer: EmployerProfileSummary,
+    ): FavoriteResponse {
+        return FavoriteResponse(
+            targetType = FavoriteTargetType.EMPLOYER,
+            targetId = employer.userId,
+            title = employerDisplayName(employer),
+            subtitle = buildEmployerSubtitle(employer),
+            logo = employer.logo,
+            createdAt = favorite.createdAt,
+        )
+    }
+
+    private fun employerDisplayName(
+        employer: EmployerProfileSummary,
+    ): String {
+        return employer.companyName?.takeIf { it.isNotBlank() }
+            ?: employer.legalName?.takeIf { it.isNotBlank() }
+            ?: "Employer #${employer.userId}"
+    }
+
+    private fun buildEmployerSubtitle(
+        employer: EmployerProfileSummary,
+    ): String? {
+        val cityName = employer.city?.name ?: employer.location?.city?.name
+
+        return listOfNotNull(
+            employer.industry?.takeIf { it.isNotBlank() },
+            cityName?.takeIf { it.isNotBlank() },
+        ).joinToString(" • ")
+            .ifBlank {
+                employer.legalName?.takeIf { it.isNotBlank() }.orEmpty()
+            }
+            .ifBlank { null }
     }
 
     private fun toContactResponse(
