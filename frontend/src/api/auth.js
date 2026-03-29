@@ -1,4 +1,4 @@
-import { clearSessionUser, setSessionUser } from './sessionStore'
+import { clearSessionUser, setSessionUser } from '../utils/sessionStore'
 const API_BASE = '/api/auth'
 
 async function request(url, options = {}) {

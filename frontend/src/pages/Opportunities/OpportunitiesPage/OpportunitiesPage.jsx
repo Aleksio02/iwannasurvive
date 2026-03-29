@@ -17,7 +17,7 @@ import {
     removeFromSaved,
     applyToOpportunity,
     getSeekerSaved,
-} from '../../../utils/profileApi'
+} from '../../../api/profile'
 import './OpportunitiesPage.scss'
 
 // Импорт SVG иконок из папки assets
