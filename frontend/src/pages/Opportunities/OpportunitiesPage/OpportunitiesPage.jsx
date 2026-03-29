@@ -18,9 +18,12 @@ import {
     applyToOpportunity,
     getSeekerSaved,
 } from '../../../api/profile'
+import {
+    getSessionUser,
+    subscribeSessionChange,
+} from '../../../utils/sessionStore'
 import './OpportunitiesPage.scss'
 
-// Импорт SVG иконок из папки assets
 import locationIcon from '../../../assets/icons/location.svg'
 import briefcaseIcon from '../../../assets/icons/briefcase.svg'
 import companyIcon from '../../../assets/icons/company.svg'
@@ -52,29 +55,18 @@ function formatMoney(from, to, currency) {
     return `${values.join(' ')} ${currency || ''}`.trim()
 }
 
-function getCurrentUser() {
-    try {
-        const stored = localStorage.getItem('tramplin_current_user')
-        return stored ? JSON.parse(stored) : null
-    } catch {
-        return null
-    }
+function getStorageKey(key, user = getSessionUser()) {
+    if (!user || !user.id) return key
+    return `${key}_user_${user.id}`
 }
 
-// User-specific storage keys
-function getStorageKey(key) {
-    const user = getCurrentUser()
-    if (!user || !user.userId) return key
-    return `${key}_user_${user.userId}`
-}
-
-function setStorageSet(key, setValue) {
-    const storageKey = getStorageKey(key)
+function setStorageSet(key, setValue, user = getSessionUser()) {
+    const storageKey = getStorageKey(key, user)
     localStorage.setItem(storageKey, JSON.stringify(Array.from(setValue)))
 }
 
-function getStorageSet(key) {
-    const storageKey = getStorageKey(key)
+function getStorageSet(key, user = getSessionUser()) {
+    const storageKey = getStorageKey(key, user)
     try {
         const raw = localStorage.getItem(storageKey)
         if (!raw) return new Set()
@@ -84,7 +76,6 @@ function getStorageSet(key) {
     }
 }
 
-// ========== DEBOUNCE HOOK ==========
 function useDebounce(value, delay) {
     const [debouncedValue, setDebouncedValue] = useState(value)
 
@@ -99,6 +90,8 @@ function useDebounce(value, delay) {
 function OpportunitiesPage() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
+
+    const [currentUser, setCurrentUser] = useState(getSessionUser())
     const [viewMode, setViewMode] = useState('map')
     const [filters, setFilters] = useState({
         search: '',
@@ -117,23 +110,40 @@ function OpportunitiesPage() {
     const [focusedOpportunityId, setFocusedOpportunityId] = useState(null)
     const [tags, setTags] = useState([])
 
-    const [favoriteCompanies, setFavoriteCompanies] = useState(() => getStorageSet('favorite_companies'))
-    const [favoriteOpportunities, setFavoriteOpportunities] = useState(() => getStorageSet('favorite_opportunities'))
+    const [favoriteCompanies, setFavoriteCompanies] = useState(() =>
+        getStorageSet('favorite_companies', getSessionUser())
+    )
+    const [favoriteOpportunities, setFavoriteOpportunities] = useState(() =>
+        getStorageSet('favorite_opportunities', getSessionUser())
+    )
 
-    const currentUser = useMemo(() => getCurrentUser(), [])
     const isApplicant = currentUser?.role === 'APPLICANT'
-
     const totalPages = Math.max(1, Math.ceil(total / PAGE_LIMIT))
 
-    // Debounce для поиска
     const debouncedSearch = useDebounce(filters.search, 500)
     const debouncedSkills = useDebounce(filters.skillsQuery, 500)
 
+    useEffect(() => {
+        const unsubscribe = subscribeSessionChange((nextUser) => {
+            setCurrentUser(nextUser)
+
+            if (!nextUser?.id) {
+                setFavoriteCompanies(getStorageSet('favorite_companies', null))
+                setFavoriteOpportunities(getStorageSet('favorite_opportunities', null))
+                return
+            }
+
+            setFavoriteCompanies(getStorageSet('favorite_companies', nextUser))
+            setFavoriteOpportunities(getStorageSet('favorite_opportunities', nextUser))
+        })
+
+        return unsubscribe
+    }, [])
+
     const syncFavoriteOpportunities = useCallback(async () => {
-        if (!currentUser) {
-            const emptySet = new Set()
-            setFavoriteOpportunities(emptySet)
-            setStorageSet('favorite_opportunities', emptySet)
+        if (!currentUser?.id) {
+            const localFavorites = getStorageSet('favorite_opportunities', null)
+            setFavoriteOpportunities(localFavorites)
             return
         }
 
@@ -141,9 +151,14 @@ function OpportunitiesPage() {
             const saved = await getSeekerSaved()
             const next = new Set(saved.map((item) => item.id))
             setFavoriteOpportunities(next)
-            setStorageSet('favorite_opportunities', next)
+            setStorageSet('favorite_opportunities', next, currentUser)
         } catch (syncError) {
             console.error('Failed to sync favorites:', syncError)
+
+            if ([401, 403, 500, 503].includes(syncError.status)) {
+                setFavoriteOpportunities(getStorageSet('favorite_opportunities', null))
+                return
+            }
         }
     }, [currentUser])
 
@@ -171,7 +186,6 @@ function OpportunitiesPage() {
         return params
     }, [debouncedSearch, debouncedSkills, filters.type, filters.format, page, salaryRange, selectedTags])
 
-    // Загрузка тегов
     useEffect(() => {
         listTags('TECH')
             .then((data) => {
@@ -183,21 +197,19 @@ function OpportunitiesPage() {
             })
     }, [])
 
-    // Синхронизация избранного при открытии страницы
     useEffect(() => {
         syncFavoriteOpportunities()
     }, [syncFavoriteOpportunities])
 
-    // Слушаем обновления избранного с других страниц
     useEffect(() => {
         const handleFavoritesUpdated = async () => {
             await syncFavoriteOpportunities()
         }
 
         const handleStorage = (event) => {
-            const storageKey = getStorageKey('favorite_opportunities')
+            const storageKey = getStorageKey('favorite_opportunities', currentUser)
             if (event.key === storageKey) {
-                setFavoriteOpportunities(getStorageSet('favorite_opportunities'))
+                setFavoriteOpportunities(getStorageSet('favorite_opportunities', currentUser))
             }
         }
 
@@ -208,9 +220,8 @@ function OpportunitiesPage() {
             window.removeEventListener('favorites-updated', handleFavoritesUpdated)
             window.removeEventListener('storage', handleStorage)
         }
-    }, [syncFavoriteOpportunities])
+    }, [syncFavoriteOpportunities, currentUser])
 
-    // Загрузка данных
     useEffect(() => {
         let mounted = true
 
@@ -253,8 +264,9 @@ function OpportunitiesPage() {
         const next = new Set(favoriteCompanies)
         if (next.has(companyName)) next.delete(companyName)
         else next.add(companyName)
+
         setFavoriteCompanies(next)
-        setStorageSet('favorite_companies', next)
+        setStorageSet('favorite_companies', next, currentUser)
 
         toast({
             title: next.has(companyName) ? 'Компания добавлена в избранное' : 'Компания удалена из избранного',
@@ -266,12 +278,18 @@ function OpportunitiesPage() {
         const isFavorite = favoriteOpportunities.has(opportunity.id)
 
         if (!currentUser) {
+            const next = new Set(favoriteOpportunities)
+
+            if (isFavorite) next.delete(opportunity.id)
+            else next.add(opportunity.id)
+
+            setFavoriteOpportunities(next)
+            setStorageSet('favorite_opportunities', next, null)
+
             toast({
-                title: 'Требуется авторизация',
-                description: 'Войдите в аккаунт, чтобы добавить в избранное',
-                variant: 'destructive'
+                title: isFavorite ? 'Удалено из избранного' : 'Добавлено в избранное',
+                description: `"${opportunity.title}" ${isFavorite ? 'удалено из избранного' : 'сохранено в избранное'}`,
             })
-            setTimeout(() => navigate('/auth/login'), 1500)
             return
         }
 
@@ -282,7 +300,7 @@ function OpportunitiesPage() {
                 const next = new Set(favoriteOpportunities)
                 next.delete(opportunity.id)
                 setFavoriteOpportunities(next)
-                setStorageSet('favorite_opportunities', next)
+                setStorageSet('favorite_opportunities', next, currentUser)
 
                 toast({
                     title: 'Удалено из избранного',
@@ -294,7 +312,7 @@ function OpportunitiesPage() {
                 const next = new Set(favoriteOpportunities)
                 next.add(opportunity.id)
                 setFavoriteOpportunities(next)
-                setStorageSet('favorite_opportunities', next)
+                setStorageSet('favorite_opportunities', next, currentUser)
 
                 toast({
                     title: 'Добавлено в избранное',
@@ -308,12 +326,22 @@ function OpportunitiesPage() {
                 const next = new Set(favoriteOpportunities)
                 next.add(opportunity.id)
                 setFavoriteOpportunities(next)
-                setStorageSet('favorite_opportunities', next)
+                setStorageSet('favorite_opportunities', next, currentUser)
 
                 toast({
                     title: 'В избранном',
                     description: `"${opportunity.title}" уже в избранном`,
                 })
+                return
+            }
+
+            if (error.status === 401 || error.status === 403 || error.status === 500 || error.status === 503) {
+                toast({
+                    title: 'Сессия недоступна',
+                    description: 'Пожалуйста, войдите снова',
+                    variant: 'destructive',
+                })
+                navigate('/login')
                 return
             }
 
@@ -340,7 +368,7 @@ function OpportunitiesPage() {
                 description: 'Войдите в аккаунт, чтобы откликнуться',
                 variant: 'destructive'
             })
-            setTimeout(() => navigate('/auth/login'), 1500)
+            navigate('/login')
             return
         }
 
@@ -372,6 +400,16 @@ function OpportunitiesPage() {
                 return
             }
 
+            if (applyError.status === 401 || applyError.status === 403 || applyError.status === 500 || applyError.status === 503) {
+                toast({
+                    title: 'Сессия недоступна',
+                    description: 'Пожалуйста, войдите снова',
+                    variant: 'destructive'
+                })
+                navigate('/login')
+                return
+            }
+
             toast({
                 title: 'Ошибка',
                 description: applyError.message || 'Не удалось отправить отклик',
@@ -387,7 +425,6 @@ function OpportunitiesPage() {
         }
     }
 
-    // ========== ОБРАБОТЧИКИ ДЛЯ ФИЛЬТРОВ ==========
     const handleSearchChange = (e) => {
         setPage(0)
         setFilters((prev) => ({ ...prev, search: e.target.value }))
