@@ -23,6 +23,7 @@ import ru.itplanet.trampline.commons.model.moderation.InternalModerationActionRe
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationApproveRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationRejectRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskResponse
+import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.moderation.client.MediaServiceClient
 import ru.itplanet.trampline.moderation.client.OpportunityModerationOwnerClient
 import ru.itplanet.trampline.moderation.client.ProfileModerationOwnerClient
@@ -147,6 +148,7 @@ class ModerationCommandServiceImpl(
         request: AssignModerationTaskRequest,
     ) {
         val task = getTaskForUpdate(taskId)
+        ensureCurrentUserCanModerateTask(task, currentUser)
 
         if (task.status != ModerationTaskStatus.OPEN) {
             throw conflict("Only OPEN moderation tasks can be assigned")
@@ -187,6 +189,7 @@ class ModerationCommandServiceImpl(
         request: ApproveModerationTaskRequest,
     ) {
         val task = getTaskForUpdate(taskId)
+        ensureCurrentUserCanModerateTask(task, currentUser)
         ensureTaskCanBeResolved(task, currentUser)
 
         dispatchApprove(
@@ -237,6 +240,7 @@ class ModerationCommandServiceImpl(
         request: RejectModerationTaskRequest,
     ) {
         val task = getTaskForUpdate(taskId)
+        ensureCurrentUserCanModerateTask(task, currentUser)
         ensureTaskCanBeResolved(task, currentUser)
 
         val ownerActionResult = dispatchReject(
@@ -288,6 +292,7 @@ class ModerationCommandServiceImpl(
         request: CommentModerationTaskRequest,
     ) {
         val task = getTaskForUpdate(taskId)
+        ensureCurrentUserCanModerateTask(task, currentUser)
 
         if (task.status != ModerationTaskStatus.OPEN && task.status != ModerationTaskStatus.IN_PROGRESS) {
             throw conflict("Comments can be added only to OPEN or IN_PROGRESS tasks")
@@ -313,13 +318,13 @@ class ModerationCommandServiceImpl(
         currentUser: AuthenticatedUser,
         file: MultipartFile,
     ) {
-        ensureAttachmentCanBeModified(taskId)
+        ensureAttachmentCanBeModified(taskId, currentUser)
 
         val createdFile = mediaServiceClient.uploadFile(
             file = file,
             ownerUserId = currentUser.userId,
             kind = FileAssetKind.MODERATION_ATTACHMENT,
-            visibility = FileAssetVisibility.PRIVATE,
+            visibility = FileAssetVisibility.AUTHENTICATED,
         )
 
         val attachment = mediaServiceClient.createAttachment(
@@ -333,6 +338,7 @@ class ModerationCommandServiceImpl(
 
         transactionTemplate.executeWithoutResult {
             val task = getTaskForUpdate(taskId)
+            ensureCurrentUserCanModerateTask(task, currentUser)
             validateAttachmentAllowed(task)
 
             val now = OffsetDateTime.now()
@@ -354,7 +360,7 @@ class ModerationCommandServiceImpl(
         currentUser: AuthenticatedUser,
         attachmentId: Long,
     ) {
-        ensureAttachmentCanBeModified(taskId)
+        ensureAttachmentCanBeModified(taskId, currentUser)
 
         val attachment = loadTaskAttachment(taskId, attachmentId)
 
@@ -362,6 +368,7 @@ class ModerationCommandServiceImpl(
 
         transactionTemplate.executeWithoutResult {
             val task = getTaskForUpdate(taskId)
+            ensureCurrentUserCanModerateTask(task, currentUser)
             validateAttachmentAllowed(task)
 
             val now = OffsetDateTime.now()
@@ -384,6 +391,7 @@ class ModerationCommandServiceImpl(
         currentUser: AuthenticatedUser,
     ) {
         val task = getTaskForUpdate(taskId)
+        ensureCurrentUserCanModerateTask(task, currentUser)
 
         if (task.status == ModerationTaskStatus.CANCELLED) {
             return
@@ -417,9 +425,13 @@ class ModerationCommandServiceImpl(
         )
     }
 
-    private fun ensureAttachmentCanBeModified(taskId: Long) {
+    private fun ensureAttachmentCanBeModified(
+        taskId: Long,
+        currentUser: AuthenticatedUser,
+    ) {
         transactionTemplate.executeWithoutResult {
             val task = getTaskForUpdate(taskId)
+            ensureCurrentUserCanModerateTask(task, currentUser)
             validateAttachmentAllowed(task)
         }
     }
@@ -540,16 +552,16 @@ class ModerationCommandServiceImpl(
         request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         return when (task.entityType) {
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.EMPLOYER_PROFILE ->
+            ModerationEntityType.EMPLOYER_PROFILE ->
                 profileModerationOwnerClient.approveEmployerProfile(task.entityId, request)
 
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.EMPLOYER_VERIFICATION ->
+            ModerationEntityType.EMPLOYER_VERIFICATION ->
                 profileModerationOwnerClient.approveEmployerVerification(task.entityId, request)
 
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.OPPORTUNITY ->
+            ModerationEntityType.OPPORTUNITY ->
                 opportunityModerationOwnerClient.approveOpportunity(task.entityId, request)
 
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.TAG ->
+            ModerationEntityType.TAG ->
                 opportunityModerationOwnerClient.approveTag(task.entityId, request)
         }
     }
@@ -559,16 +571,16 @@ class ModerationCommandServiceImpl(
         request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         return when (task.entityType) {
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.EMPLOYER_PROFILE ->
+            ModerationEntityType.EMPLOYER_PROFILE ->
                 profileModerationOwnerClient.rejectEmployerProfile(task.entityId, request)
 
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.EMPLOYER_VERIFICATION ->
+            ModerationEntityType.EMPLOYER_VERIFICATION ->
                 profileModerationOwnerClient.rejectEmployerVerification(task.entityId, request)
 
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.OPPORTUNITY ->
+            ModerationEntityType.OPPORTUNITY ->
                 opportunityModerationOwnerClient.rejectOpportunity(task.entityId, request)
 
-            ru.itplanet.trampline.commons.model.moderation.ModerationEntityType.TAG ->
+            ModerationEntityType.TAG ->
                 opportunityModerationOwnerClient.rejectTag(task.entityId, request)
         }
     }
@@ -613,6 +625,23 @@ class ModerationCommandServiceImpl(
         ) {
             throw forbidden("Task ${task.id} is assigned to another curator")
         }
+    }
+
+    private fun ensureCurrentUserCanModerateTask(
+        task: ModerationTaskDto,
+        currentUser: AuthenticatedUser,
+    ) {
+        if (isOwnCreatedTagTask(task, currentUser)) {
+            throw ModerationTaskNotFoundException(task.id ?: 0L)
+        }
+    }
+
+    private fun isOwnCreatedTagTask(
+        task: ModerationTaskDto,
+        currentUser: AuthenticatedUser,
+    ): Boolean {
+        return task.entityType == ModerationEntityType.TAG &&
+                task.createdByUser?.id == currentUser.userId
     }
 
     private fun getTaskForUpdate(taskId: Long): ModerationTaskDto {

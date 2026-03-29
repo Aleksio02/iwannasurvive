@@ -19,6 +19,10 @@ media:
   service:
     url: ${MEDIA_SERVICE_URL:http://localhost:8091}
 
+moderation:
+  service:
+    url: ${MODERATION_SERVICE_URL:http://localhost:8082}
+
 feign:
   client:
     config:

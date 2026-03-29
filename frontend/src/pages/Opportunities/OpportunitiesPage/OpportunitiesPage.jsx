@@ -12,7 +12,11 @@ import {
     listTags,
     OPPORTUNITY_LABELS
 } from '../../../api/opportunities'
-import { addToSaved, removeFromSaved, applyToOpportunity } from '../../../utils/profileApi'
+import {
+    addToSaved,
+    removeFromSaved,
+    applyToOpportunity
+} from '../../../utils/profileApi'
 import './OpportunitiesPage.scss'
 
 // Импорт SVG иконок из папки assets

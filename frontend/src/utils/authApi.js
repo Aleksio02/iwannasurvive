@@ -11,7 +11,6 @@ async function request(url, options = {}) {
     })
 
     let data = null
-
     try {
         data = await response.json()
     } catch {
@@ -19,6 +18,11 @@ async function request(url, options = {}) {
     }
 
     if (!response.ok) {
+        // Для 401 — специальная обработка
+        if (response.status === 401) {
+            const errorMessage = data?.message || 'Сессия истекла. Пожалуйста, войдите заново.'
+            throw new Error(`401: ${errorMessage}`)
+        }
         const errorMessage = data?.message || data?.error || 'Произошла ошибка запроса'
         throw new Error(errorMessage)
     }
@@ -34,10 +38,18 @@ export async function registerUser(payload) {
 }
 
 export async function loginUser(payload) {
-    return request(`${API_BASE}/login`, {
+    const response = await request(`${API_BASE}/login`, {
         method: 'POST',
         body: JSON.stringify(payload),
     })
+
+    // При успешном логине сохраняем пользователя в localStorage
+    if (response?.user) {
+        const { setCurrentUser } = await import('../utils/userHelpers')
+        setCurrentUser(response.user)
+    }
+
+    return response
 }
 
 export async function validateSession() {
