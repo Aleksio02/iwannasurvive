@@ -26,9 +26,25 @@ interface InteractionService {
         currentUserId: Long,
     ): List<OpportunityResponseResponse>
 
-    fun addToFavorites(userId: Long, opportunityId: Long): FavoriteResponse
+    fun addOpportunityToFavorites(
+        userId: Long,
+        opportunityId: Long,
+    ): FavoriteResponse
 
-    fun removeFromFavorites(userId: Long, opportunityId: Long)
+    fun removeOpportunityFromFavorites(
+        userId: Long,
+        opportunityId: Long,
+    )
+
+    fun addEmployerToFavorites(
+        userId: Long,
+        employerUserId: Long,
+    ): FavoriteResponse
+
+    fun removeEmployerFromFavorites(
+        userId: Long,
+        employerUserId: Long,
+    )
 
     fun getUserFavorites(userId: Long): List<FavoriteResponse>
 
