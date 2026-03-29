@@ -11,5 +11,7 @@ data class OpportunityResponseResponse(
     val status: OpportunityResponseStatus,
     val employerComment: String?,
     val applicantComment: String?,
-    val createdAt: OffsetDateTime?
+    val coverLetter: String?,
+    val resumeFileId: Long?,
+    val createdAt: OffsetDateTime?,
 )
