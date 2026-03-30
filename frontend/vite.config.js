@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   const opportunityTarget = env.VITE_OPPORTUNITY_PROXY_TARGET || 'http://localhost:8081'
   const moderationTarget = env.VITE_MODERATION_PROXY_TARGET || 'http://localhost:8082'
   const interactionTarget = env.VITE_INTERACTION_PROXY_TARGET || 'http://localhost:8083'
+  const mediaTarget = env.VITE_MEDIA_PROXY_TARGET || 'http://localhost:8091'
 
   return {
     plugins: [react()],
@@ -62,6 +63,16 @@ export default defineConfig(({ mode }) => {
         },
         '/api/admin': {
           target: authTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/api/media': {
+          target: mediaTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/api/files': {
+          target: mediaTarget,
           changeOrigin: true,
           secure: false,
         },
