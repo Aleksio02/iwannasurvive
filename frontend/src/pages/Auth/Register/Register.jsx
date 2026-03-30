@@ -52,9 +52,18 @@ function Register() {
                 role,
             })
 
+            if (isEmployer) {
+                toast({
+                    title: 'Аккаунт работодателя создан',
+                    description: 'Теперь заполните профиль компании. Верификацию вы сможете пройти на следующем шаге.',
+                })
+                setLocation('/profile/edit')
+                return
+            }
+
             toast({
-                title: 'Аккаунт создан!',
-                description: 'Заполните профиль, чтобы продолжить работу с платформой',
+                title: 'Аккаунт создан',
+                description: 'Заполните профиль, чтобы продолжить работу с платформой.',
             })
 
             setLocation('/profile/edit')
@@ -85,9 +94,7 @@ function Register() {
                         <div className="register-form__roles">
                             <button
                                 type="button"
-                                className={`register-form__role-card ${
-                                    role === 'APPLICANT' ? 'is-active' : ''
-                                }`}
+                                className={`register-form__role-card ${role === 'APPLICANT' ? 'is-active' : ''}`}
                                 onClick={() => setRole('APPLICANT')}
                             >
                                 <img
@@ -101,9 +108,7 @@ function Register() {
 
                             <button
                                 type="button"
-                                className={`register-form__role-card ${
-                                    role === 'EMPLOYER' ? 'is-active' : ''
-                                }`}
+                                className={`register-form__role-card ${role === 'EMPLOYER' ? 'is-active' : ''}`}
                                 onClick={() => setRole('EMPLOYER')}
                             >
                                 <img
@@ -151,6 +156,12 @@ function Register() {
                             onChange={(event) => setPassword(event.target.value)}
                             required
                         />
+
+                        {isEmployer && (
+                            <div className="register-form__field-hint">
+                                После регистрации вы заполните профиль компании и сможете пройти обязательную верификацию.
+                            </div>
+                        )}
 
                         <Button
                             type="submit"

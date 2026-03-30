@@ -1,5 +1,5 @@
 import { httpJson, toQuery } from './http'
-import { getSessionUser } from '../utils/sessionStore'
+import { getSessionUser, getSessionUserId } from '../utils/sessionStore'
 
 const API_BASE = '/api/interaction'
 
@@ -14,79 +14,85 @@ function getCurrentUser() {
     }
 }
 
+function getRequiredUserId() {
+    const userId = getSessionUserId()
+    if (!userId) {
+        const error = new Error('Пользователь не авторизован')
+        error.status = 401
+        throw error
+    }
+    return userId
+}
+
 function getCurrentUserQueryValue() {
     const currentUser = getCurrentUser()
     return currentUser ? JSON.stringify(currentUser) : null
 }
 
-export async function getContacts() {
-    const user = getSessionUser()
-    if (!user?.id) return []
+function getRequiredCurrentUser() {
+    const currentUser = getCurrentUserQueryValue()
+    if (!currentUser) {
+        const error = new Error('Пользователь не авторизован')
+        error.status = 401
+        throw error
+    }
+    return currentUser
+}
 
-    const result = await httpJson(`${API_BASE}/contacts`)
-    console.log('[interaction] getContacts raw response:', result)
-    return result
+export async function getContacts() {
+    const userId = getSessionUserId()
+    if (!userId) return []
+
+    const query = toQuery({ userId })
+    return httpJson(`${API_BASE}/contacts?${query}`)
 }
 
 export async function addContact(contactUserId) {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
 
-    console.log('[interaction] addContact request body:', { contactUserId })
-
-    const result = await httpJson(`${API_BASE}/contacts`, {
+    return httpJson(`${API_BASE}/contacts?${query}`, {
         method: 'POST',
         body: JSON.stringify({ contactUserId }),
     })
-
-    console.log('[interaction] addContact response:', result)
-    return result
 }
 
 export async function acceptContactRequest(contactUserId) {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
 
-    const result = await httpJson(`${API_BASE}/contacts/${contactUserId}/accept`, {
+    return httpJson(`${API_BASE}/contacts/${contactUserId}/accept?${query}`, {
         method: 'PATCH',
     })
-
-    console.log('[interaction] acceptContactRequest response:', result)
-    return result
 }
 
 export async function declineContactRequest(contactUserId) {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
 
-    const result = await httpJson(`${API_BASE}/contacts/${contactUserId}/decline`, {
+    return httpJson(`${API_BASE}/contacts/${contactUserId}/decline?${query}`, {
         method: 'PATCH',
     })
-
-    console.log('[interaction] declineContactRequest response:', result)
-    return result
 }
 
 export async function removeContact(contactUserId) {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
 
-    const result = await httpJson(`${API_BASE}/contacts/${contactUserId}`, {
+    return httpJson(`${API_BASE}/contacts/${contactUserId}?${query}`, {
         method: 'DELETE',
     })
-
-    console.log('[interaction] removeContact response:', result)
-    return result
 }
 
 export async function getMyResponses() {
-    const user = getSessionUser()
-    if (!user?.id) return []
-    return httpJson(`${API_BASE}/responses/my?${toQuery({ userId: user.id })}`)
+    const userId = getSessionUserId()
+    if (!userId) return []
+
+    return httpJson(`${API_BASE}/responses/my?${toQuery({ userId })}`)
 }
 
 export async function getEmployerResponses(params = {}) {
-    const currentUser = getCurrentUserQueryValue()
+    const currentUser = getRequiredCurrentUser()
 
     const query = toQuery({
         limit: params.limit ?? 20,
@@ -103,10 +109,10 @@ export async function getEmployerResponses(params = {}) {
 }
 
 export async function createResponse(opportunityId, applicantComment = '', coverLetter = '') {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
 
-    return httpJson(`${API_BASE}/responses?${toQuery({ userId: user.id })}`, {
+    return httpJson(`${API_BASE}/responses?${query}`, {
         method: 'POST',
         body: JSON.stringify({
             opportunityId,
@@ -117,42 +123,40 @@ export async function createResponse(opportunityId, applicantComment = '', cover
 }
 
 export async function updateResponseStatus(responseId, status, employerComment = '') {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
 
-    return httpJson(`${API_BASE}/responses/${responseId}/status?${toQuery({ userId: user.id })}`, {
+    return httpJson(`${API_BASE}/responses/${responseId}/status?${query}`, {
         method: 'PATCH',
         body: JSON.stringify({ status, employerComment }),
     })
 }
 
 export async function getFavorites() {
-    const user = getSessionUser()
-    if (!user?.id) return []
-    return httpJson(`${API_BASE}/favorites?${toQuery({ userId: user.id })}`)
+    const userId = getSessionUserId()
+    if (!userId) return []
+
+    return httpJson(`${API_BASE}/favorites?${toQuery({ userId })}`)
 }
 
 export async function addToFavorites(opportunityId) {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
 
-    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId: user.id })}`, {
+    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
         method: 'POST',
     })
 }
 
 export async function removeFromFavorites(opportunityId) {
-    const user = getSessionUser()
-    if (!user?.id) throw new Error('Пользователь не авторизован')
+    const userId = getRequiredUserId()
 
-    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId: user.id })}`, {
+    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
         method: 'DELETE',
     })
 }
 
 export async function createRecommendation({ opportunityId, toApplicantUserId, message = '' }) {
-    const currentUser = getCurrentUserQueryValue()
-    if (!currentUser) throw new Error('Пользователь не авторизован')
+    const currentUser = getRequiredCurrentUser()
 
     return httpJson(`${API_BASE}/recommendations?${toQuery({ currentUser })}`, {
         method: 'POST',
@@ -179,8 +183,7 @@ export async function getOutgoingRecommendations() {
 }
 
 export async function deleteRecommendation(recommendationId) {
-    const currentUser = getCurrentUserQueryValue()
-    if (!currentUser) throw new Error('Пользователь не авторизован')
+    const currentUser = getRequiredCurrentUser()
 
     return httpJson(`${API_BASE}/recommendations/${recommendationId}?${toQuery({ currentUser })}`, {
         method: 'DELETE',
