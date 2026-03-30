@@ -1,8 +1,9 @@
-import { Route, Switch } from 'wouter'
+import { Redirect, Route, Switch } from 'wouter'
 import OpportunitiesPage from './pages/Opportunities/OpportunitiesPage/OpportunitiesPage'
 import OpportunityDetailPage from './pages/Opportunities/OpportunityDetailPage/OpportunityDetailPage'
 import Login from './pages/Auth/Login/Login'
 import Register from './pages/Auth/Register/Register'
+import ForgotPassword from './pages/Auth/ForgotPassword/ForgotPassword'
 import SeekerDashboard from './pages/Dashboard/SeekerDashboard/SeekerDashboard'
 import EmployerDashboard from './pages/Dashboard/EmployerDashboard/EmployerDashboard'
 import CuratorDashboard from './pages/Dashboard/CuratorDashboard/CuratorDashboard'
@@ -18,6 +19,7 @@ function App() {
             <Route path="/opportunities/:id" component={OpportunityDetailPage} />
             <Route path="/login" component={Login} />
             <Route path="/register" component={Register} />
+            <Route path="/forgot-password" component={ForgotPassword} />
 
             {/* Защищённые маршруты */}
             <Route path="/seeker">
@@ -45,7 +47,9 @@ function App() {
             </Route>
 
             {/* 404 - перенаправляем на главную */}
-            <Route>{(params) => <Navigate to="/" />}</Route>
+            <Route>
+                <Redirect to="/" />
+            </Route>
         </Switch>
     )
 }

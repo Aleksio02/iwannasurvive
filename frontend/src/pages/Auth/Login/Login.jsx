@@ -103,6 +103,15 @@ function Login() {
                             required
                         />
 
+                        <div className="login-form__actions">
+                            <Link
+                                href="/forgot-password"
+                                className="login-form__forgot-link"
+                            >
+                                Забыли пароль?
+                            </Link>
+                        </div>
+
                         <Button
                             type="submit"
                             className="login-form__submit"
