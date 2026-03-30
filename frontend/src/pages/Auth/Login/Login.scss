@@ -58,6 +58,22 @@
   row-gap: 8px;
 }
 
+.login-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
+.login-form__forgot-link {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-primary);
+
+  @include hover {
+    color: var(--color-primary-dark);
+  }
+}
+
 .login-form__submit {
   margin-top: 4px;
 }
