@@ -783,3 +783,23 @@ $transition: all 0.2s ease;
     transform: translateY(0);
   }
 }
+
+.employer-create-form__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.employer-opportunities__filters input::placeholder {
+  font-size: 14px;
+}
+
+.employer-applicants .employer-opportunities__filters > *:first-child {
+  min-width: 280px;
+}
+
+.employer-opportunities__filters .custom-select__button,
+.employer-opportunities__filters input {
+  height: 44px;
+}
