@@ -239,6 +239,17 @@ function buildOpportunityPayload(opportunity) {
     }
 }
 
+function buildAuthenticatedUserParam() {
+    const user = getSessionUser()
+    if (!user?.id || !user?.email || !user?.role) return null
+
+    return JSON.stringify({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+    })
+}
+
 export async function searchCities(query) {
     if (!query || query.length < 2) return []
 
@@ -383,7 +394,7 @@ export async function submitVerification(payload) {
         submittedComment: payload.submittedComment || null,
     }
 
-    return apiRequest(`${API_BASE}/employer/verification`, {
+    return apiRequest(`${API_BASE}/employer/verification?employerUserId=${user.id}`, {
         method: 'POST',
         body: JSON.stringify(body),
     })
@@ -618,7 +629,12 @@ export async function getEmployerApplications(params = {}) {
                 : [],
         }
     } catch (error) {
-        if ([401, 403, 500, 503].includes(error.status)) {
+        if ([401, 403].includes(error.status)) {
+            return { items: [], total: 0, limit: params.limit || 50, offset: params.offset || 0 }
+        }
+
+        if ([500, 503].includes(error.status)) {
+            console.warn('[API] Employer responses temporarily unavailable:', error.message)
             return { items: [], total: 0, limit: params.limit || 50, offset: params.offset || 0 }
         }
 

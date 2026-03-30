@@ -1,6 +1,18 @@
 import { httpJson, toQuery } from './http'
+import { getSessionUser } from '../utils/sessionStore'
 
 const API_BASE = '/api/interaction'
+
+function getCurrentUserQueryValue() {
+    const user = getSessionUser()
+    if (!user?.id || !user?.email || !user?.role) return null
+
+    return JSON.stringify({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+    })
+}
 
 export async function getContacts() {
     return httpJson(`${API_BASE}/contacts`)
@@ -36,6 +48,8 @@ export async function getMyResponses() {
 }
 
 export async function getEmployerResponses(params = {}) {
+    const currentUser = getCurrentUserQueryValue()
+
     const query = toQuery({
         limit: params.limit ?? 20,
         offset: params.offset ?? 0,
@@ -44,6 +58,7 @@ export async function getEmployerResponses(params = {}) {
         opportunityId: params.opportunityId,
         status: params.status,
         search: params.search,
+        currentUser,
     })
 
     return httpJson(`/api/employer/responses${query ? `?${query}` : ''}`)

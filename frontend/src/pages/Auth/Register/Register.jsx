@@ -58,11 +58,12 @@ function Register() {
                     description: 'Теперь заполните профиль компании. Верификацию вы сможете пройти на следующем шаге.',
                 })
                 setLocation('/profile/edit')
+                return
             }
 
             toast({
-                title: 'Аккаунт создан!',
-                description: 'Заполните профиль, чтобы продолжить работу с платформой',
+                title: 'Аккаунт создан',
+                description: 'Заполните профиль, чтобы продолжить работу с платформой.',
             })
 
             setLocation('/profile/edit')
