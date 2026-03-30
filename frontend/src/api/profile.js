@@ -17,11 +17,6 @@ import {
     getFavorites,
     addToFavorites,
     removeFromFavorites,
-    createRecommendation,
-    getIncomingRecommendations,
-    getOutgoingRecommendations,
-    deleteRecommendation,
-    getEmployerResponses,
 } from './interaction'
 import { clearSessionUser, getSessionUser, getSessionUserId } from '../utils/sessionStore'
 
@@ -29,6 +24,19 @@ function createApiError(message, status = 0) {
     const error = new Error(message)
     error.status = status
     return error
+}
+
+function getAuthenticatedUserPayload() {
+    const user = getSessionUser()
+    if (!user?.id || !user?.email || !user?.role) {
+        throw createApiError('Пользователь не авторизован', 401)
+    }
+
+    return {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+    }
 }
 
 async function parseApiResponse(response) {
@@ -87,6 +95,53 @@ async function apiRequest(endpoint, options = {}) {
     }
 
     return data
+}
+
+async function multipartRequest(endpoint, formData, options = {}) {
+    console.log(`[API] ${options.method || 'POST'} ${endpoint}`)
+
+    let response
+    try {
+        response = await fetch(endpoint, {
+            credentials: 'include',
+            method: options.method || 'POST',
+            body: formData,
+            ...options,
+        })
+    } catch {
+        throw createApiError('Сервер недоступен. Попробуйте позже.', 0)
+    }
+
+    const data = await parseApiResponse(response)
+
+    if (!response.ok) {
+        const errorMessage =
+            (typeof data === 'object' && data?.message) ||
+            (typeof data === 'object' && data?.error) ||
+            (typeof data === 'string' && data) ||
+            'Ошибка загрузки файла'
+
+        if (response.status === 401 || response.status === 403) {
+            clearSessionUser()
+        }
+
+        throw createApiError(errorMessage, response.status)
+    }
+
+    return data
+}
+
+function createMultipartWithCurrentUser(file) {
+    const currentUser = getAuthenticatedUserPayload()
+    const formData = new FormData()
+
+    formData.append('file', file)
+    formData.append(
+        'currentUser',
+        new Blob([JSON.stringify(currentUser)], { type: 'application/json' })
+    )
+
+    return formData
 }
 
 // ========== HELPERS ==========
@@ -193,107 +248,142 @@ function normalizeContactMethods(contacts) {
     return []
 }
 
-function getContactDirectionStorageKey() {
-    const user = getSessionUser()
-    return user?.id ? `tramplin_contact_directions_${user.id}` : 'tramplin_contact_directions_guest'
-}
-
-function readContactDirections() {
-    try {
-        const raw = localStorage.getItem(getContactDirectionStorageKey())
-        return raw ? JSON.parse(raw) : {}
-    } catch {
-        return {}
+function normalizeApplicantProfile(data) {
+    return {
+        ...data,
+        portfolioLinks: normalizeProfileLinks(data.portfolioLinks),
+        contactLinks: normalizeContactMethods(data.contactLinks),
+        portfolioFiles: Array.isArray(data.portfolioFiles) ? data.portfolioFiles : [],
+        avatar: data.avatar || null,
+        resumeFile: data.resumeFile || null,
     }
 }
 
-function writeContactDirections(value) {
-    localStorage.setItem(getContactDirectionStorageKey(), JSON.stringify(value))
-}
-
-function markContactDirection(contactUserId, direction) {
-    const map = readContactDirections()
-    map[String(contactUserId)] = direction
-    writeContactDirections(map)
-}
-
-function removeContactDirection(contactUserId) {
-    const map = readContactDirections()
-    delete map[String(contactUserId)]
-    writeContactDirections(map)
-}
-
-function getContactDirection(contactUserId) {
-    const map = readContactDirections()
-    return map[String(contactUserId)] || null
-}
-
-// guest favorites
-function getGuestFavoritesStorageKey() {
-    return 'tramplin_guest_favorite_opportunities'
-}
-
-function readGuestFavorites() {
-    try {
-        const raw = localStorage.getItem(getGuestFavoritesStorageKey())
-        return raw ? JSON.parse(raw) : []
-    } catch {
-        return []
+function normalizeEmployerProfile(data) {
+    return {
+        ...data,
+        socialLinks: normalizeProfileLinks(data.socialLinks),
+        publicContacts: normalizeContactMethods(data.publicContacts),
+        logo: data.logo || null,
     }
 }
 
-function writeGuestFavorites(items) {
-    localStorage.setItem(getGuestFavoritesStorageKey(), JSON.stringify(items))
-}
+export function getFileDownloadUrlByUserAndFile(role, userId, fileId) {
+    if (!userId || !fileId) return null
 
-export function getGuestFavoriteOpportunityIds() {
-    return readGuestFavorites()
-}
-
-export function isGuestFavoriteOpportunity(opportunityId) {
-    return readGuestFavorites().includes(Number(opportunityId))
-}
-
-export function addGuestFavoriteOpportunity(opportunityId) {
-    const id = Number(opportunityId)
-    const current = readGuestFavorites()
-    if (!current.includes(id)) {
-        const next = [...current, id]
-        writeGuestFavorites(next)
-        window.dispatchEvent(new CustomEvent('favorites-updated', {
-            detail: { action: 'added', opportunityId: id, scope: 'guest' }
-        }))
-    }
-}
-
-export function removeGuestFavoriteOpportunity(opportunityId) {
-    const id = Number(opportunityId)
-    const next = readGuestFavorites().filter((item) => item !== id)
-    writeGuestFavorites(next)
-    window.dispatchEvent(new CustomEvent('favorites-updated', {
-        detail: { action: 'removed', opportunityId: id, scope: 'guest' }
-    }))
-}
-
-export async function migrateGuestFavoritesToAccount() {
-    const user = getSessionUser()
-    if (!user?.id) return
-
-    const guestIds = readGuestFavorites()
-    if (!guestIds.length) return
-
-    for (const opportunityId of guestIds) {
-        try {
-            await addToFavorites(opportunityId)
-        } catch {
-            // не прерываем миграцию
-        }
+    if (role === 'EMPLOYER') {
+        return `${API_BASE}/profile/employer/${userId}/files/${fileId}`
     }
 
-    writeGuestFavorites([])
-    window.dispatchEvent(new CustomEvent('favorites-updated', {
-        detail: { action: 'migrated', opportunityIds: guestIds, scope: 'guest' }
-    }))
+    return `${API_BASE}/profile/applicant/${userId}/files/${fileId}`
+}
+
+// ========== MEDIA / FILES ==========
+
+export async function uploadApplicantAvatar(file) {
+    if (!file) throw createApiError('Файл не выбран', 400)
+
+    const formData = createMultipartWithCurrentUser(file)
+    const data = await multipartRequest(`${API_BASE}/applicant/profile/avatar`, formData, {
+        method: 'PUT',
+    })
+
+    return normalizeApplicantProfile(data)
+}
+
+export async function uploadApplicantResumeFile(file) {
+    if (!file) throw createApiError('Файл не выбран', 400)
+
+    const formData = createMultipartWithCurrentUser(file)
+    const data = await multipartRequest(`${API_BASE}/applicant/profile/resume-file`, formData, {
+        method: 'PUT',
+    })
+
+    return normalizeApplicantProfile(data)
+}
+
+export async function uploadApplicantPortfolioFile(file) {
+    if (!file) throw createApiError('Файл не выбран', 400)
+
+    const formData = createMultipartWithCurrentUser(file)
+    return multipartRequest(`${API_BASE}/applicant/profile/portfolio/files`, formData, {
+        method: 'POST',
+    })
+}
+
+export async function deleteApplicantFile(fileId) {
+    if (!fileId) throw createApiError('Не указан fileId', 400)
+
+    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
+    const data = await apiRequest(`${API_BASE}/applicant/profile/files/${fileId}?currentUser=${currentUser}`, {
+        method: 'DELETE',
+    })
+
+    return normalizeApplicantProfile(data)
+}
+
+export async function uploadEmployerLogo(file) {
+    if (!file) throw createApiError('Файл не выбран', 400)
+
+    const formData = createMultipartWithCurrentUser(file)
+    const data = await multipartRequest(`${API_BASE}/employer/profile/logo`, formData, {
+        method: 'PUT',
+    })
+
+    return normalizeEmployerProfile(data)
+}
+
+export async function deleteEmployerFile(fileId) {
+    if (!fileId) throw createApiError('Не указан fileId', 400)
+
+    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
+    const data = await apiRequest(`${API_BASE}/employer/profile/files/${fileId}?currentUser=${currentUser}`, {
+        method: 'DELETE',
+    })
+
+    return normalizeEmployerProfile(data)
+}
+
+export async function createEmployerVerification(payload) {
+    const userId = getSessionUserId()
+    if (!userId) {
+        throw createApiError('Пользователь не авторизован', 401)
+    }
+
+    return apiRequest(`${API_BASE}/employer/verification?employerUserId=${userId}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
+}
+
+export async function uploadEmployerVerificationAttachment(verificationId, file) {
+    if (!verificationId) throw createApiError('Не указан verificationId', 400)
+    if (!file) throw createApiError('Файл не выбран', 400)
+
+    const formData = createMultipartWithCurrentUser(file)
+    return multipartRequest(`${API_BASE}/employer/verifications/${verificationId}/attachments`, formData, {
+        method: 'POST',
+    })
+}
+
+export async function getEmployerVerificationModerationTask(verificationId) {
+    const userId = getSessionUserId()
+    if (!userId) {
+        throw createApiError('Пользователь не авторизован', 401)
+    }
+
+    return apiRequest(`${API_BASE}/employer/verification/${verificationId}/moderation-task?employerUserId=${userId}`)
+}
+
+export async function cancelEmployerVerificationModerationTask(verificationId) {
+    const userId = getSessionUserId()
+    if (!userId) {
+        throw createApiError('Пользователь не авторизован', 401)
+    }
+
+    return apiRequest(`${API_BASE}/employer/verification/${verificationId}/moderation-task/cancel?employerUserId=${userId}`, {
+        method: 'POST',
+    })
 }
 
 // ========== ПОИСК ГОРОДОВ (локальная версия) ==========
@@ -324,12 +414,7 @@ export async function getApplicantProfile() {
     try {
         const data = await apiRequest(url)
         console.log('[API] Applicant profile received:', data)
-
-        return {
-            ...data,
-            portfolioLinks: normalizeProfileLinks(data.portfolioLinks),
-            contactLinks: normalizeContactMethods(data.contactLinks),
-        }
+        return normalizeApplicantProfile(data)
     } catch (error) {
         if ([401, 403, 404, 500, 503].includes(error.status)) {
             console.log('[API] Applicant profile unavailable:', error.message)
@@ -345,6 +430,8 @@ export async function updateApplicantProfile(profile) {
     if (!user) {
         throw createApiError('Пользователь не авторизован', 401)
     }
+
+    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
 
     const payload = {
         firstName: profile.firstName || '',
@@ -366,9 +453,13 @@ export async function updateApplicantProfile(profile) {
         contactsVisibility: profile.contactsVisibility || 'AUTHENTICATED',
         openToWork: profile.openToWork ?? true,
         openToEvents: profile.openToEvents ?? true,
+        skillTagIds: Array.isArray(profile.skillTagIds) ? profile.skillTagIds : undefined,
+        interestTagIds: Array.isArray(profile.interestTagIds) ? profile.interestTagIds : undefined,
     }
 
-    return apiRequest(`${API_BASE}/profile/applicant`, {
+    console.log('[API] Saving applicant profile with PATCH:', payload)
+
+    return apiRequest(`${API_BASE}/profile/applicant?currentUser=${currentUser}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
     })
@@ -382,17 +473,16 @@ export async function getEmployerProfile() {
         return null
     }
 
-    const url = `${API_BASE}/profile/employer/${userId}`
+    const currentUserId = getSessionUserId()
+    const url = `${API_BASE}/profile/employer/${userId}${currentUserId ? `?currentUserId=${currentUserId}` : ''}`
 
     try {
         const data = await apiRequest(url)
-        return {
-            ...data,
-            socialLinks: normalizeProfileLinks(data.socialLinks),
-            publicContacts: normalizeContactMethods(data.publicContacts),
-        }
+        console.log('[API] Employer profile received:', data)
+        return normalizeEmployerProfile(data)
     } catch (error) {
         if ([401, 403, 404, 500, 503].includes(error.status)) {
+            console.log('[API] Employer profile unavailable:', error.message)
             return null
         }
 
@@ -405,6 +495,8 @@ export async function updateEmployerProfile(profile) {
     if (!user) {
         throw createApiError('Пользователь не авторизован', 401)
     }
+
+    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
 
     const payload = {
         companyName: profile.companyName || '',
@@ -419,20 +511,18 @@ export async function updateEmployerProfile(profile) {
         foundedYear: profile.foundedYear ? Number(profile.foundedYear) : null,
         socialLinks: normalizeProfileLinks(profile.socialLinks),
         publicContacts: normalizeContactMethods(profile.publicContacts),
-        verificationStatus: profile.verificationStatus || 'PENDING',
     }
 
-    return apiRequest(`${API_BASE}/profile/employer`, {
+    console.log('[API] Saving employer profile with PATCH:', JSON.stringify(payload, null, 2))
+
+    return apiRequest(`${API_BASE}/profile/employer?currentUser=${currentUser}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
     })
 }
 
 export async function submitVerification(payload) {
-    return apiRequest(`${API_BASE}/employer/verification`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    })
+    return createEmployerVerification(payload)
 }
 
 // ========== INTERACTION API: СОИСКАТЕЛЬ ==========
@@ -442,23 +532,16 @@ export async function getSeekerContacts() {
         const contacts = await getContacts()
         if (!Array.isArray(contacts)) return []
 
-        return contacts.map((c) => {
-            const direction = getContactDirection(c.contactUserId)
-
-            return {
-                id: c.contactUserId,
-                firstName: c.contactName?.split(' ')[0] || '',
-                lastName: c.contactName?.split(' ').slice(1).join(' ') || '',
-                fullName: c.contactName || '',
-                status: c.status,
-                createdAt: c.createdAt,
-                direction: c.status === 'ACCEPTED'
-                    ? 'confirmed'
-                    : (direction || 'incoming'),
-            }
-        })
+        return contacts.map((c) => ({
+            id: c.contactUserId,
+            firstName: c.contactName?.split(' ')[0] || '',
+            lastName: c.contactName?.split(' ').slice(1).join(' ') || '',
+            status: c.status,
+            createdAt: c.createdAt,
+        }))
     } catch (error) {
         if ([401, 403, 500, 503].includes(error.status)) {
+            console.error('[API] Failed to load contacts:', error.message)
             return []
         }
 
@@ -467,27 +550,19 @@ export async function getSeekerContacts() {
 }
 
 export async function addContact(contactUserId) {
-    const result = await addContactApi(contactUserId)
-    markContactDirection(contactUserId, 'outgoing')
-    return result
+    return addContactApi(contactUserId)
 }
 
 export async function acceptContact(contactUserId) {
-    const result = await acceptContactRequest(contactUserId)
-    markContactDirection(contactUserId, 'confirmed')
-    return result
+    return acceptContactRequest(contactUserId)
 }
 
 export async function declineContact(contactUserId) {
-    const result = await declineContactRequest(contactUserId)
-    removeContactDirection(contactUserId)
-    return result
+    return declineContactRequest(contactUserId)
 }
 
 export async function removeContact(contactUserId) {
-    const result = await removeContactApi(contactUserId)
-    removeContactDirection(contactUserId)
-    return result
+    return removeContactApi(contactUserId)
 }
 
 export async function getSeekerApplications() {
@@ -513,6 +588,7 @@ export async function getSeekerApplications() {
         })
     } catch (error) {
         if ([401, 403, 500, 503].includes(error.status)) {
+            console.error('[API] Failed to load applications:', error.message)
             return []
         }
 
@@ -568,6 +644,7 @@ export async function getSeekerSaved() {
             .filter((item) => item.id !== null && item.id !== undefined)
     } catch (error) {
         if ([401, 403, 500, 503].includes(error.status)) {
+            console.error('[API] Failed to load favorites:', error.message)
             return []
         }
 
@@ -594,34 +671,6 @@ export async function removeFromSaved(opportunityId) {
     }))
 
     return result
-}
-
-export async function getSeekerRecommendations() {
-    try {
-        const [incoming, outgoing] = await Promise.all([
-            getIncomingRecommendations(),
-            getOutgoingRecommendations(),
-        ])
-
-        return {
-            incoming: Array.isArray(incoming) ? incoming : [],
-            outgoing: Array.isArray(outgoing) ? outgoing : [],
-        }
-    } catch (error) {
-        if ([401, 403, 500, 503].includes(error.status)) {
-            return { incoming: [], outgoing: [] }
-        }
-
-        throw error
-    }
-}
-
-export async function sendSeekerRecommendation(data) {
-    return createRecommendation(data)
-}
-
-export async function removeSeekerRecommendation(recommendationId) {
-    return deleteRecommendation(recommendationId)
 }
 
 export async function getEmployerOpportunities(params = {}) {
@@ -683,29 +732,13 @@ export async function deleteOpportunity(opportunityId) {
     return { success: true }
 }
 
-export async function getEmployerApplications(params = {}) {
-    try {
-        const page = await getEmployerResponses({
-            limit: params.limit || 50,
-            offset: params.offset || 0,
-            sortBy: params.sortBy || 'CREATED_AT',
-            sortDirection: params.sortDirection || 'DESC',
-            opportunityId: params.opportunityId,
-            status: params.status,
-            search: params.search,
-        })
+export async function getEmployerApplications() {
+    const user = getSessionUser()
+    if (!user) return []
 
-        return {
-            ...page,
-            items: Array.isArray(page?.items) ? page.items : [],
-        }
-    } catch (error) {
-        if ([401, 403, 500, 503].includes(error.status)) {
-            return { items: [], total: 0, limit: params.limit || 50, offset: params.offset || 0 }
-        }
-
-        throw error
-    }
+    const key = `employer_applications_${user.email}`
+    const saved = localStorage.getItem(key)
+    return saved ? JSON.parse(saved) : []
 }
 
 export async function updateApplicationStatus(applicationId, status) {
@@ -715,9 +748,57 @@ export async function updateApplicationStatus(applicationId, status) {
     const key = `employer_applications_${user.email}`
     const saved = localStorage.getItem(key)
     const applications = saved ? JSON.parse(saved) : []
+
     const updated = applications.map(app =>
         app.id === applicationId ? { ...app, status } : app
     )
+
     localStorage.setItem(key, JSON.stringify(updated))
     return { success: true }
+}
+
+// ===== GUEST FAVORITES (localStorage) =====
+
+const GUEST_FAVORITES_KEY = 'guest_favorite_opportunities'
+
+function getGuestFavorites() {
+    try {
+        return JSON.parse(localStorage.getItem(GUEST_FAVORITES_KEY)) || []
+    } catch {
+        return []
+    }
+}
+
+function setGuestFavorites(list) {
+    localStorage.setItem(GUEST_FAVORITES_KEY, JSON.stringify(list))
+}
+
+export function addGuestFavoriteOpportunity(opportunityId) {
+    const list = getGuestFavorites()
+    if (!list.includes(opportunityId)) {
+        list.push(opportunityId)
+        setGuestFavorites(list)
+
+        window.dispatchEvent(new CustomEvent('favorites-updated', {
+            detail: { opportunityId, action: 'added' }
+        }))
+    }
+}
+
+export function removeGuestFavoriteOpportunity(opportunityId) {
+    const list = getGuestFavorites().filter(id => id !== opportunityId)
+    setGuestFavorites(list)
+
+    window.dispatchEvent(new CustomEvent('favorites-updated', {
+        detail: { opportunityId, action: 'removed' }
+    }))
+}
+
+export function isGuestFavoriteOpportunity(opportunityId) {
+    return getGuestFavorites().includes(opportunityId)
+}
+
+export async function migrateGuestFavoritesToAccount() {
+    // пока просто очищаем (можно потом отправку на сервер сделать)
+    setGuestFavorites([])
 }
