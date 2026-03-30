@@ -381,17 +381,17 @@ export default function OpportunityDetailPage() {
                             </div>
 
                             <div className="opportunity-detail-page__company-row">
-                                <img src={companyIcon} alt="" className="icon"/>
+                                <img src={companyIcon} alt="" className="icon" />
                                 <span>{item.companyName}</span>
                             </div>
 
                             <div className="opportunity-detail-page__location-row">
-                                <img src={locationIcon} alt="" className="icon"/>
+                                <img src={locationIcon} alt="" className="icon" />
                                 <span>{item.city?.name || item.location?.addressLine || 'Местоположение не указано'}</span>
                             </div>
 
                             <div className="opportunity-detail-page__salary-row">
-                                <img src={briefcaseIcon} alt="" className="icon"/>
+                                <img src={briefcaseIcon} alt="" className="icon" />
                                 <span>{formatMoney(item.salaryFrom, item.salaryTo, item.salaryCurrency)}</span>
                             </div>
 
@@ -411,7 +411,7 @@ export default function OpportunityDetailPage() {
 
                             <div className="opportunity-detail-page__info-grid">
                                 <div className="info-item">
-                                    <img src={calendarIcon} alt="" className="icon"/>
+                                    <img src={calendarIcon} alt="" className="icon" />
                                     <div>
                                         <strong>Опубликовано</strong>
                                         <p>{formatDate(item.publishedAt)}</p>
@@ -419,7 +419,7 @@ export default function OpportunityDetailPage() {
                                 </div>
 
                                 <div className="info-item">
-                                    <img src={calendarIcon} alt="" className="icon"/>
+                                    <img src={calendarIcon} alt="" className="icon" />
                                     <div>
                                         <strong>{item.type === 'EVENT' ? 'Дата проведения' : 'Действует до'}</strong>
                                         <p>{formatDate(item.eventDate || item.expiresAt)}</p>
@@ -428,7 +428,7 @@ export default function OpportunityDetailPage() {
 
                                 {item.employmentType && (
                                     <div className="info-item">
-                                        <img src={briefcaseIcon} alt="" className="icon"/>
+                                        <img src={briefcaseIcon} alt="" className="icon" />
                                         <div>
                                             <strong>Занятость</strong>
                                             <p>{OPPORTUNITY_LABELS.employmentType[item.employmentType] || item.employmentType}</p>
@@ -438,7 +438,7 @@ export default function OpportunityDetailPage() {
 
                                 {item.workFormat && (
                                     <div className="info-item">
-                                        <img src={locationIcon} alt="" className="icon"/>
+                                        <img src={locationIcon} alt="" className="icon" />
                                         <div>
                                             <strong>Формат</strong>
                                             <p>{OPPORTUNITY_LABELS.workFormat[item.workFormat] || item.workFormat}</p>
@@ -457,7 +457,7 @@ export default function OpportunityDetailPage() {
                                     <div className="contacts-list">
                                         {item.contactInfo?.email && (
                                             <a href={`mailto:${item.contactInfo.email}`} className="contact-link">
-                                                <img src={mailIcon} alt="" className="icon"/>
+                                                <img src={mailIcon} alt="" className="icon" />
                                                 <span>{item.contactInfo.email}</span>
                                             </a>
                                         )}
@@ -476,6 +476,9 @@ export default function OpportunityDetailPage() {
                                                 rel="noopener noreferrer"
                                                 className="contact-link"
                                             >
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                    <path d="M20.5 4.5L2.5 12L8.5 14.5L12.5 20.5L20.5 4.5Z" />
+                                                </svg>
                                                 <span>@{String(item.contactInfo.telegram).replace(/^@/, '')}</span>
                                             </a>
                                         )}
@@ -487,13 +490,17 @@ export default function OpportunityDetailPage() {
                                                 rel="noopener noreferrer"
                                                 className="contact-link"
                                             >
-                                                <img src={mailIcon} alt="" className="icon"/>
+                                                <img src={mailIcon} alt="" className="icon" />
                                                 <span>{item.contactInfo.websiteUrl}</span>
                                             </a>
                                         )}
 
                                         {item.contactInfo?.contactPerson && (
                                             <div className="contact-person">
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                    <circle cx="12" cy="8" r="4" />
+                                                    <path d="M5 20V19C5 15.1 8.1 12 12 12C15.9 12 19 15.1 19 19V20" />
+                                                </svg>
                                                 <span>{item.contactInfo.contactPerson}</span>
                                             </div>
                                         )}
@@ -513,7 +520,7 @@ export default function OpportunityDetailPage() {
                                                 rel="noopener noreferrer"
                                                 className="contact-link"
                                             >
-                                                <img src={mailIcon} alt="" className="icon"/>
+                                                <img src={mailIcon} alt="" className="icon" />
                                                 <span>{link.label || link.url}</span>
                                             </a>
                                         ))}
@@ -534,10 +541,25 @@ export default function OpportunityDetailPage() {
 
                             <div className="opportunity-detail-page__actions">
                                 {isApplicant && (
-                                    <Button className="button--primary button--full" onClick={handleApply}
-                                            disabled={isApplying}>
+                                    <Button
+                                        className="button--primary button--full"
+                                        onClick={handleApply}
+                                        disabled={isApplying}
+                                    >
                                         {isApplying ? 'Отправка...' : 'Откликнуться'}
                                     </Button>
+                                )}
+
+                                {role === 'EMPLOYER' && (
+                                    <Link href="/employer">
+                                        <Button className="button--outline button--full">В кабинет работодателя</Button>
+                                    </Link>
+                                )}
+
+                                {(role === 'CURATOR' || role === 'ADMIN') && (
+                                    <Link href="/curator">
+                                        <Button className="button--outline button--full">В кабинет куратора</Button>
+                                    </Link>
                                 )}
 
                                 {role === 'GUEST' && (

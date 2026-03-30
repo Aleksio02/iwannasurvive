@@ -97,6 +97,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/api/files': {
+          target: mediaTarget,
+          changeOrigin: true,
+          secure: false,
+        },
         '/media': {
           target: mediaTarget,
           changeOrigin: true,

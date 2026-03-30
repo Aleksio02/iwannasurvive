@@ -1,4 +1,5 @@
 import { httpJson, toQuery } from './http'
+import { getSessionUserId } from '../utils/sessionStore'
 
 const API_BASE = '/api'
 
@@ -37,70 +38,104 @@ export const OPPORTUNITY_LABELS = {
     },
 }
 
+function getRequiredUserId() {
+    const userId = getSessionUserId()
+    if (!userId) {
+        const error = new Error('Пользователь не авторизован')
+        error.status = 401
+        throw error
+    }
+    return userId
+}
+
 export async function listOpportunities(params = {}) {
     const query = toQuery(params)
-    console.log('[API] listOpportunities:', `${API_BASE}/opportunities${query ? `?${query}` : ''}`)
     return httpJson(`${API_BASE}/opportunities${query ? `?${query}` : ''}`)
 }
 
 export async function listOpportunityMap(params = {}) {
     const query = toQuery(params)
-    console.log('[API] listOpportunityMap:', `${API_BASE}/opportunities/map${query ? `?${query}` : ''}`)
     return httpJson(`${API_BASE}/opportunities/map${query ? `?${query}` : ''}`)
 }
 
 export async function getOpportunity(id) {
-    console.log('[API] getOpportunity:', `${API_BASE}/opportunities/${id}`)
     return httpJson(`${API_BASE}/opportunities/${id}`)
 }
 
 export async function listTags(category) {
     const query = toQuery({ category })
-    console.log('[API] listTags:', `${API_BASE}/tags${query ? `?${query}` : ''}`)
     return httpJson(`${API_BASE}/tags${query ? `?${query}` : ''}`)
 }
 
-// Employer endpoints
 export async function listEmployerOpportunities(params = {}) {
-    const query = toQuery(params)
-    return httpJson(`${API_BASE}/employer/opportunities${query ? `?${query}` : ''}`)
+    const currentUserId = getRequiredUserId()
+
+    const query = toQuery({
+        limit: params.limit ?? 50,
+        offset: params.offset ?? 0,
+        sortBy: params.sortBy || 'UPDATED_AT',
+        sortDirection: params.sortDirection || 'DESC',
+        status: params.status,
+        group: params.group,
+        type: params.type,
+        workFormat: params.workFormat,
+        search: params.search,
+        currentUserId,
+    })
+
+    return httpJson(`${API_BASE}/employer/opportunities?${query}`)
 }
 
 export async function getEmployerOpportunity(id) {
-    return httpJson(`${API_BASE}/employer/opportunities/${id}`)
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
+
+    return httpJson(`${API_BASE}/employer/opportunities/${id}?${query}`)
 }
 
 export async function createEmployerOpportunity(payload) {
-    return httpJson(`${API_BASE}/employer/opportunities`, {
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
+
+    return httpJson(`${API_BASE}/employer/opportunities?${query}`, {
         method: 'POST',
         body: JSON.stringify(payload),
     })
 }
 
 export async function updateEmployerOpportunity(id, payload) {
-    return httpJson(`${API_BASE}/employer/opportunities/${id}`, {
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
+
+    return httpJson(`${API_BASE}/employer/opportunities/${id}?${query}`, {
         method: 'PUT',
         body: JSON.stringify(payload),
     })
 }
 
 export async function closeEmployerOpportunity(id) {
-    return httpJson(`${API_BASE}/employer/opportunities/${id}/close`, { method: 'POST' })
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
+
+    return httpJson(`${API_BASE}/employer/opportunities/${id}/close?${query}`, {
+        method: 'POST',
+    })
 }
 
 export async function archiveEmployerOpportunity(id) {
-    return httpJson(`${API_BASE}/employer/opportunities/${id}/archive`, { method: 'POST' })
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
+
+    return httpJson(`${API_BASE}/employer/opportunities/${id}/archive?${query}`, {
+        method: 'POST',
+    })
 }
 
 export async function returnToDraftEmployerOpportunity(id) {
-    return httpJson(`${API_BASE}/employer/opportunities/${id}/return-to-draft`, { method: 'POST' })
-}
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
 
-// Отклик на вакансию
-export async function applyToOpportunity(opportunityId, message = '') {
-    console.log('[API] applyToOpportunity:', `${API_BASE}/opportunities/${opportunityId}/apply`)
-    return httpJson(`${API_BASE}/opportunities/${opportunityId}/apply`, {
+    return httpJson(`${API_BASE}/employer/opportunities/${id}/return-to-draft?${query}`, {
         method: 'POST',
-        body: JSON.stringify({ message }),
     })
 }
