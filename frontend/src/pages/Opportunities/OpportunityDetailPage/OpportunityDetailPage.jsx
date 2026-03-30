@@ -5,7 +5,16 @@ import Button from '../../../components/Button'
 import { useToast } from '../../../hooks/use-toast'
 import YandexOpportunityMap from '../../../components/Map/YandexOpportunityMap'
 import { getOpportunity, OPPORTUNITY_LABELS } from '../../../api/opportunities'
-import { applyToOpportunity } from '../../../api/profile'
+import {
+    applyToOpportunity,
+    addToSaved,
+    removeFromSaved,
+    addGuestFavoriteOpportunity,
+    removeGuestFavoriteOpportunity,
+    isGuestFavoriteOpportunity,
+    migrateGuestFavoritesToAccount,
+    getSeekerSaved,
+} from '../../../api/profile'
 import { getSessionUser, subscribeSessionChange } from '../../../utils/sessionStore'
 import './OpportunityDetailPage.scss'
 
@@ -72,14 +81,46 @@ export default function OpportunityDetailPage() {
     const [error, setError] = useState('')
     const [isApplying, setIsApplying] = useState(false)
     const [currentUser, setCurrentUser] = useState(getSessionUser())
+    const [isFavorite, setIsFavorite] = useState(false)
+    const [isFavoriteLoading, setIsFavoriteLoading] = useState(false)
 
     useEffect(() => {
-        const unsubscribe = subscribeSessionChange((nextUser) => {
+        const unsubscribe = subscribeSessionChange(async (nextUser) => {
             setCurrentUser(nextUser)
+
+            if (nextUser) {
+                await migrateGuestFavoritesToAccount()
+            }
+
+            if (params?.id) {
+                setIsFavorite(
+                    nextUser
+                        ? false
+                        : isGuestFavoriteOpportunity(Number(params.id))
+                )
+            }
         })
 
         return unsubscribe
-    }, [])
+    }, [params?.id])
+
+    useEffect(() => {
+        const handleFavoritesUpdated = (event) => {
+            const updatedId = Number(event.detail?.opportunityId)
+            if (!params?.id || Number(params.id) !== updatedId) return
+
+            if (event.detail?.action === 'added') {
+                setIsFavorite(true)
+            }
+
+            if (event.detail?.action === 'removed') {
+                setIsFavorite(false)
+            }
+        }
+
+        window.addEventListener('favorites-updated', handleFavoritesUpdated)
+        return () => window.removeEventListener('favorites-updated', handleFavoritesUpdated)
+    }, [params?.id])
 
     const role = currentUser?.role || 'GUEST'
     const isApplicant = role === 'APPLICANT'
@@ -87,14 +128,51 @@ export default function OpportunityDetailPage() {
     useEffect(() => {
         if (!params?.id) return
 
-        setIsLoading(true)
-        setError('')
+        let isMounted = true
 
-        getOpportunity(params.id)
-            .then((data) => setItem(data))
-            .catch((err) => setError(err?.message || 'Не удалось загрузить карточку'))
-            .finally(() => setIsLoading(false))
-    }, [params?.id])
+        async function loadOpportunityData() {
+            setIsLoading(true)
+            setError('')
+
+            try {
+                const data = await getOpportunity(params.id)
+                if (!isMounted) return
+                setItem(data)
+
+                if (!currentUser) {
+                    setIsFavorite(isGuestFavoriteOpportunity(Number(params.id)))
+                    return
+                }
+
+                try {
+                    const savedItems = await getSeekerSaved()
+                    if (!isMounted) return
+
+                    const existsInSaved = Array.isArray(savedItems)
+                        ? savedItems.some((saved) => Number(saved.id) === Number(params.id))
+                        : false
+
+                    setIsFavorite(existsInSaved)
+                } catch {
+                    if (!isMounted) return
+                    setIsFavorite(false)
+                }
+            } catch (err) {
+                if (!isMounted) return
+                setError(err?.message || 'Не удалось загрузить карточку')
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false)
+                }
+            }
+        }
+
+        loadOpportunityData()
+
+        return () => {
+            isMounted = false
+        }
+    }, [params?.id, currentUser])
 
     const resourceLinks = useMemo(() => normalizeResourceLinks(item?.resourceLinks), [item?.resourceLinks])
 
@@ -176,6 +254,57 @@ export default function OpportunityDetailPage() {
         }
     }
 
+    const handleToggleFavorite = async () => {
+        if (!item || isFavoriteLoading) return
+
+        const nextFavoriteState = !isFavorite
+        setIsFavorite(nextFavoriteState)
+        setIsFavoriteLoading(true)
+
+        try {
+            if (!currentUser) {
+                if (nextFavoriteState) {
+                    addGuestFavoriteOpportunity(item.id)
+                    toast({
+                        title: 'Добавлено в избранное',
+                        description: `«${item.title}» сохранено в браузере`,
+                    })
+                } else {
+                    removeGuestFavoriteOpportunity(item.id)
+                    toast({
+                        title: 'Удалено из избранного',
+                        description: `«${item.title}» удалено из избранного браузера`,
+                    })
+                }
+                return
+            }
+
+            if (nextFavoriteState) {
+                await addToSaved(item.id)
+                toast({
+                    title: 'Добавлено в избранное',
+                    description: `«${item.title}» добавлено в избранное`,
+                })
+            } else {
+                await removeFromSaved(item.id)
+                toast({
+                    title: 'Удалено из избранного',
+                    description: `«${item.title}» удалено из избранного`,
+                })
+            }
+        } catch (toggleError) {
+            setIsFavorite(!nextFavoriteState)
+
+            toast({
+                title: 'Ошибка',
+                description: toggleError.message || 'Не удалось изменить избранное',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsFavoriteLoading(false)
+        }
+    }
+
     return (
         <div className="opportunity-detail-page">
             <Navbar />
@@ -232,7 +361,24 @@ export default function OpportunityDetailPage() {
                                 )}
                             </div>
 
-                            <h1>{item.title}</h1>
+                            <div className="opportunity-detail-page__title-row">
+                                <div className="opportunity-detail-page__title-wrap">
+                                    <h1>{item.title}</h1>
+                                </div>
+
+                                <div className="opportunity-detail-page__title-actions">
+                                    <button
+                                        type="button"
+                                        className={`opportunity-detail-page__fav-star ${isFavorite ? 'is-favorite' : ''} ${isFavoriteLoading ? 'is-loading' : ''}`}
+                                        onClick={handleToggleFavorite}
+                                        disabled={isFavoriteLoading}
+                                        aria-label={isFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+                                        title={isFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+                                    >
+                                        ★
+                                    </button>
+                                </div>
+                            </div>
 
                             <div className="opportunity-detail-page__company-row">
                                 <img src={companyIcon} alt="" className="icon" />

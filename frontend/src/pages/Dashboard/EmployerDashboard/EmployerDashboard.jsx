@@ -358,7 +358,7 @@ function EmployerDashboard() {
             }
 
             const opportunityPage = await getEmployerOpportunities()
-            setOpportunities(opportunityPage.items || [])
+            setOpportunities(Array.isArray(opportunityPage?.items) ? opportunityPage.items : [])
 
             await loadEmployerResponsesData()
         } catch (error) {
@@ -783,7 +783,6 @@ function EmployerDashboard() {
                 <button
                     className={`dashboard-tabs__btn ${activeTab === 'create' ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('create')}
-                    disabled={!isVerified}
                 >
                     {opportunityMode === 'edit' ? 'Редактирование' : 'Создать'}
                 </button>

@@ -21,6 +21,10 @@ import {
     getFavorites,
     addToFavorites,
     removeFromFavorites,
+    createRecommendation,
+    getIncomingRecommendations,
+    getOutgoingRecommendations,
+    deleteRecommendation,
     getEmployerResponses,
     updateResponseStatus as updateInteractionResponseStatus,
 } from './interaction'
@@ -89,6 +93,8 @@ async function apiRequest(endpoint, options = {}) {
 
     return data
 }
+
+// ========== HELPERS ==========
 
 function normalizeProfileLinks(links) {
     if (!links) return []
@@ -192,6 +198,108 @@ function normalizeContactMethods(contacts) {
     return []
 }
 
+function getContactDirectionStorageKey() {
+    const user = getSessionUser()
+    return user?.id ? `tramplin_contact_directions_${user.id}` : 'tramplin_contact_directions_guest'
+}
+
+function readContactDirections() {
+    try {
+        const raw = localStorage.getItem(getContactDirectionStorageKey())
+        return raw ? JSON.parse(raw) : {}
+    } catch {
+        return {}
+    }
+}
+
+function writeContactDirections(value) {
+    localStorage.setItem(getContactDirectionStorageKey(), JSON.stringify(value))
+}
+
+function markContactDirection(contactUserId, direction) {
+    const map = readContactDirections()
+    map[String(contactUserId)] = direction
+    writeContactDirections(map)
+}
+
+function removeContactDirection(contactUserId) {
+    const map = readContactDirections()
+    delete map[String(contactUserId)]
+    writeContactDirections(map)
+}
+
+function getContactDirection(contactUserId) {
+    const map = readContactDirections()
+    return map[String(contactUserId)] || null
+}
+
+function getGuestFavoritesStorageKey() {
+    return 'tramplin_guest_favorite_opportunities'
+}
+
+function readGuestFavorites() {
+    try {
+        const raw = localStorage.getItem(getGuestFavoritesStorageKey())
+        return raw ? JSON.parse(raw) : []
+    } catch {
+        return []
+    }
+}
+
+function writeGuestFavorites(items) {
+    localStorage.setItem(getGuestFavoritesStorageKey(), JSON.stringify(items))
+}
+
+export function getGuestFavoriteOpportunityIds() {
+    return readGuestFavorites()
+}
+
+export function isGuestFavoriteOpportunity(opportunityId) {
+    return readGuestFavorites().includes(Number(opportunityId))
+}
+
+export function addGuestFavoriteOpportunity(opportunityId) {
+    const id = Number(opportunityId)
+    const current = readGuestFavorites()
+    if (!current.includes(id)) {
+        const next = [...current, id]
+        writeGuestFavorites(next)
+        window.dispatchEvent(new CustomEvent('favorites-updated', {
+            detail: { action: 'added', opportunityId: id, scope: 'guest' }
+        }))
+    }
+}
+
+export function removeGuestFavoriteOpportunity(opportunityId) {
+    const id = Number(opportunityId)
+    const next = readGuestFavorites().filter((item) => item !== id)
+    writeGuestFavorites(next)
+    window.dispatchEvent(new CustomEvent('favorites-updated', {
+        detail: { action: 'removed', opportunityId: id, scope: 'guest' }
+    }))
+}
+
+export async function migrateGuestFavoritesToAccount() {
+    const user = getSessionUser()
+    if (!user?.id) return
+
+    const guestIds = readGuestFavorites()
+    if (!guestIds.length) return
+
+    for (const opportunityId of guestIds) {
+        try {
+            await addToFavorites(opportunityId)
+        } catch {
+            // не прерываем миграцию
+        }
+    }
+
+    writeGuestFavorites([])
+    window.dispatchEvent(new CustomEvent('favorites-updated', {
+        detail: { action: 'migrated', opportunityIds: guestIds, scope: 'guest' }
+    }))
+}
+
 function normalizeOpportunity(item = {}) {
     return {
         ...item,
@@ -209,22 +317,55 @@ function normalizeOpportunity(item = {}) {
 }
 
 function buildOpportunityPayload(opportunity) {
+    const normalizedResourceLinks = Array.isArray(opportunity.resourceLinks)
+        ? opportunity.resourceLinks
+            .map((item, index) => {
+                if (!item) return null
+
+                const url = item.url?.trim?.() || item.value?.trim?.() || ''
+                if (!url) return null
+
+                return {
+                    label: item.label?.trim?.() || item.title?.trim?.() || `Ссылка ${index + 1}`,
+                    linkType: item.linkType || 'RESOURCE',
+                    url,
+                }
+            })
+            .filter(Boolean)
+        : []
+
+    const expiresAt = opportunity.expiresAt
+        ? new Date(`${opportunity.expiresAt}T23:59:59`).toISOString()
+        : null
+
     return {
         title: opportunity.title?.trim(),
         shortDescription: opportunity.shortDescription?.trim() || '',
-        fullDescription: opportunity.fullDescription?.trim() || opportunity.shortDescription?.trim() || '',
+        fullDescription:
+            opportunity.fullDescription?.trim() ||
+            opportunity.shortDescription?.trim() ||
+            '',
         requirements: opportunity.requirements?.trim() || null,
-        companyName: opportunity.companyName?.trim() || opportunity.profileCompanyName || 'Компания работодателя',
+        companyName:
+            opportunity.companyName?.trim() ||
+            opportunity.profileCompanyName ||
+            'Компания работодателя',
         type: opportunity.type || 'VACANCY',
         workFormat: opportunity.workFormat || opportunity.format || 'REMOTE',
         employmentType: opportunity.employmentType || 'FULL_TIME',
         grade: opportunity.grade || opportunity.experienceLevel || 'JUNIOR',
-        salaryFrom: opportunity.salaryFrom !== '' && opportunity.salaryFrom != null ? Number(opportunity.salaryFrom) : null,
-        salaryTo: opportunity.salaryTo !== '' && opportunity.salaryTo != null ? Number(opportunity.salaryTo) : null,
+        salaryFrom:
+            opportunity.salaryFrom !== '' && opportunity.salaryFrom != null
+                ? Number(opportunity.salaryFrom)
+                : null,
+        salaryTo:
+            opportunity.salaryTo !== '' && opportunity.salaryTo != null
+                ? Number(opportunity.salaryTo)
+                : null,
         salaryCurrency: opportunity.salaryCurrency || 'RUB',
-        expiresAt: opportunity.expiresAt || null,
+        expiresAt,
         eventDate: opportunity.eventDate || null,
-        cityId: opportunity.cityId ? Number(opportunity.cityId) : null,
+        cityId: opportunity.cityId ? Number(opportunity.cityId) : 1,
         locationId: opportunity.locationId ? Number(opportunity.locationId) : null,
         contactInfo: {
             email: opportunity.contactEmail || null,
@@ -232,23 +373,16 @@ function buildOpportunityPayload(opportunity) {
             telegram: opportunity.contactTelegram || null,
             contactPerson: opportunity.contactPerson || null,
         },
-        resourceLinks: normalizeProfileLinks(opportunity.resourceLinks),
+        resourceLinks: normalizedResourceLinks,
         tagIds: Array.isArray(opportunity.tagIds)
-            ? opportunity.tagIds.map(Number).filter((id) => Number.isFinite(id) && id > 0)
+            ? opportunity.tagIds
+                .map(Number)
+                .filter((id) => Number.isFinite(id) && id > 0)
             : [],
     }
 }
 
-function buildAuthenticatedUserParam() {
-    const user = getSessionUser()
-    if (!user?.id || !user?.email || !user?.role) return null
-
-    return JSON.stringify({
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-    })
-}
+// ========== ПОИСК ГОРОДОВ ==========
 
 export async function searchCities(query) {
     if (!query || query.length < 2) return []
@@ -260,6 +394,8 @@ export async function searchCities(query) {
 
     return filtered.slice(0, 10)
 }
+
+// ========== СОИСКАТЕЛЬ ==========
 
 export async function getApplicantProfile() {
     const userId = getSessionUserId()
@@ -321,6 +457,8 @@ export async function updateApplicantProfile(profile) {
         body: JSON.stringify(payload),
     })
 }
+
+// ========== РАБОТОДАТЕЛЬ ==========
 
 export async function getEmployerProfile() {
     const userId = getSessionUserId()
@@ -400,18 +538,31 @@ export async function submitVerification(payload) {
     })
 }
 
+// ========== INTERACTION API: СОИСКАТЕЛЬ ==========
+
 export async function getSeekerContacts() {
     try {
         const contacts = await getContacts()
-        if (!Array.isArray(contacts)) return []
 
-        return contacts.map((c) => ({
-            id: c.contactUserId,
-            firstName: c.contactName?.split(' ')[0] || '',
-            lastName: c.contactName?.split(' ').slice(1).join(' ') || '',
-            status: c.status,
-            createdAt: c.createdAt,
-        }))
+        if (!Array.isArray(contacts)) {
+            return []
+        }
+
+        return contacts.map((c) => {
+            const direction = getContactDirection(c.contactUserId)
+
+            return {
+                id: c.contactUserId,
+                firstName: c.contactName?.split(' ')[0] || '',
+                lastName: c.contactName?.split(' ').slice(1).join(' ') || '',
+                fullName: c.contactName || '',
+                status: c.status,
+                createdAt: c.createdAt,
+                direction: c.status === 'ACCEPTED'
+                    ? 'confirmed'
+                    : (direction || 'incoming'),
+            }
+        })
     } catch (error) {
         if ([401, 403, 500, 503].includes(error.status)) {
             return []
@@ -422,19 +573,27 @@ export async function getSeekerContacts() {
 }
 
 export async function addContact(contactUserId) {
-    return addContactApi(contactUserId)
+    const result = await addContactApi(contactUserId)
+    markContactDirection(contactUserId, 'outgoing')
+    return result
 }
 
 export async function acceptContact(contactUserId) {
-    return acceptContactRequest(contactUserId)
+    const result = await acceptContactRequest(contactUserId)
+    markContactDirection(contactUserId, 'confirmed')
+    return result
 }
 
 export async function declineContact(contactUserId) {
-    return declineContactRequest(contactUserId)
+    const result = await declineContactRequest(contactUserId)
+    removeContactDirection(contactUserId)
+    return result
 }
 
 export async function removeContact(contactUserId) {
-    return removeContactApi(contactUserId)
+    const result = await removeContactApi(contactUserId)
+    removeContactDirection(contactUserId)
+    return result
 }
 
 export async function getSeekerApplications() {
@@ -543,22 +702,65 @@ export async function removeFromSaved(opportunityId) {
     return result
 }
 
-export async function getEmployerOpportunities(params = {}) {
-    const page = await listEmployerOpportunities({
-        limit: params.limit || 50,
-        offset: params.offset || 0,
-        sortBy: params.sortBy || 'UPDATED_AT',
-        sortDirection: params.sortDirection || 'DESC',
-        status: params.status,
-        group: params.group,
-        type: params.type,
-        workFormat: params.workFormat,
-        search: params.search,
-    })
+export async function getSeekerRecommendations() {
+    try {
+        const [incoming, outgoing] = await Promise.all([
+            getIncomingRecommendations(),
+            getOutgoingRecommendations(),
+        ])
 
-    return {
-        ...page,
-        items: Array.isArray(page?.items) ? page.items.map(normalizeOpportunity) : [],
+        return {
+            incoming: Array.isArray(incoming) ? incoming : [],
+            outgoing: Array.isArray(outgoing) ? outgoing : [],
+        }
+    } catch (error) {
+        if ([401, 403, 500, 503].includes(error.status)) {
+            return { incoming: [], outgoing: [] }
+        }
+
+        throw error
+    }
+}
+
+export async function sendSeekerRecommendation(data) {
+    return createRecommendation(data)
+}
+
+export async function removeSeekerRecommendation(recommendationId) {
+    return deleteRecommendation(recommendationId)
+}
+
+// ========== EMPLOYER OPPORTUNITIES ==========
+
+export async function getEmployerOpportunities(params = {}) {
+    try {
+        const page = await listEmployerOpportunities({
+            limit: params.limit || 50,
+            offset: params.offset || 0,
+            sortBy: params.sortBy || 'UPDATED_AT',
+            sortDirection: params.sortDirection || 'DESC',
+            status: params.status,
+            group: params.group,
+            type: params.type,
+            workFormat: params.workFormat,
+            search: params.search,
+        })
+
+        return {
+            ...page,
+            items: Array.isArray(page?.items) ? page.items.map(normalizeOpportunity) : [],
+        }
+    } catch (error) {
+        if ([400, 401, 403, 404, 500, 503].includes(error?.status)) {
+            return {
+                items: [],
+                total: 0,
+                limit: params.limit || 50,
+                offset: params.offset || 0,
+            }
+        }
+
+        throw error
     }
 }
 
@@ -599,6 +801,8 @@ export async function deleteOpportunity(opportunityId) {
     await archiveEmployerOpportunity(opportunityId)
     return { success: true }
 }
+
+// ========== EMPLOYER RESPONSES ==========
 
 export async function getEmployerApplications(params = {}) {
     try {

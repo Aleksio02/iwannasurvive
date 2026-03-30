@@ -1,54 +1,98 @@
 import { httpJson, toQuery } from './http'
-import { getSessionUser } from '../utils/sessionStore'
+import { getSessionUser, getSessionUserId } from '../utils/sessionStore'
 
 const API_BASE = '/api/interaction'
 
-function getCurrentUserQueryValue() {
+function getCurrentUser() {
     const user = getSessionUser()
     if (!user?.id || !user?.email || !user?.role) return null
 
-    return JSON.stringify({
+    return {
         userId: user.id,
         email: user.email,
         role: user.role,
-    })
+    }
+}
+
+function getRequiredUserId() {
+    const userId = getSessionUserId()
+    if (!userId) {
+        const error = new Error('Пользователь не авторизован')
+        error.status = 401
+        throw error
+    }
+    return userId
+}
+
+function getCurrentUserQueryValue() {
+    const currentUser = getCurrentUser()
+    return currentUser ? JSON.stringify(currentUser) : null
+}
+
+function getRequiredCurrentUser() {
+    const currentUser = getCurrentUserQueryValue()
+    if (!currentUser) {
+        const error = new Error('Пользователь не авторизован')
+        error.status = 401
+        throw error
+    }
+    return currentUser
 }
 
 export async function getContacts() {
-    return httpJson(`${API_BASE}/contacts`)
+    const userId = getSessionUserId()
+    if (!userId) return []
+
+    const query = toQuery({ userId })
+    return httpJson(`${API_BASE}/contacts?${query}`)
 }
 
 export async function addContact(contactUserId) {
-    return httpJson(`${API_BASE}/contacts`, {
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
+
+    return httpJson(`${API_BASE}/contacts?${query}`, {
         method: 'POST',
         body: JSON.stringify({ contactUserId }),
     })
 }
 
 export async function acceptContactRequest(contactUserId) {
-    return httpJson(`${API_BASE}/contacts/${contactUserId}/accept`, {
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
+
+    return httpJson(`${API_BASE}/contacts/${contactUserId}/accept?${query}`, {
         method: 'PATCH',
     })
 }
 
 export async function declineContactRequest(contactUserId) {
-    return httpJson(`${API_BASE}/contacts/${contactUserId}/decline`, {
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
+
+    return httpJson(`${API_BASE}/contacts/${contactUserId}/decline?${query}`, {
         method: 'PATCH',
     })
 }
 
 export async function removeContact(contactUserId) {
-    return httpJson(`${API_BASE}/contacts/${contactUserId}`, {
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
+
+    return httpJson(`${API_BASE}/contacts/${contactUserId}?${query}`, {
         method: 'DELETE',
     })
 }
 
 export async function getMyResponses() {
-    return httpJson(`${API_BASE}/responses/my`)
+    const userId = getSessionUserId()
+    if (!userId) return []
+
+    return httpJson(`${API_BASE}/responses/my?${toQuery({ userId })}`)
 }
 
 export async function getEmployerResponses(params = {}) {
-    const currentUser = getCurrentUserQueryValue()
+    const currentUser = getRequiredCurrentUser()
 
     const query = toQuery({
         limit: params.limit ?? 20,
@@ -65,7 +109,10 @@ export async function getEmployerResponses(params = {}) {
 }
 
 export async function createResponse(opportunityId, applicantComment = '', coverLetter = '') {
-    return httpJson(`${API_BASE}/responses`, {
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
+
+    return httpJson(`${API_BASE}/responses?${query}`, {
         method: 'POST',
         body: JSON.stringify({
             opportunityId,
@@ -76,24 +123,69 @@ export async function createResponse(opportunityId, applicantComment = '', cover
 }
 
 export async function updateResponseStatus(responseId, status, employerComment = '') {
-    return httpJson(`${API_BASE}/responses/${responseId}/status`, {
+    const userId = getRequiredUserId()
+    const query = toQuery({ userId })
+
+    return httpJson(`${API_BASE}/responses/${responseId}/status?${query}`, {
         method: 'PATCH',
         body: JSON.stringify({ status, employerComment }),
     })
 }
 
 export async function getFavorites() {
-    return httpJson(`${API_BASE}/favorites`)
+    const userId = getSessionUserId()
+    if (!userId) return []
+
+    return httpJson(`${API_BASE}/favorites?${toQuery({ userId })}`)
 }
 
 export async function addToFavorites(opportunityId) {
-    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}`, {
+    const userId = getRequiredUserId()
+
+    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
         method: 'POST',
     })
 }
 
 export async function removeFromFavorites(opportunityId) {
-    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}`, {
+    const userId = getRequiredUserId()
+
+    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
+        method: 'DELETE',
+    })
+}
+
+export async function createRecommendation({ opportunityId, toApplicantUserId, message = '' }) {
+    const currentUser = getRequiredCurrentUser()
+
+    return httpJson(`${API_BASE}/recommendations?${toQuery({ currentUser })}`, {
+        method: 'POST',
+        body: JSON.stringify({
+            opportunityId,
+            toApplicantUserId,
+            message,
+        }),
+    })
+}
+
+export async function getIncomingRecommendations() {
+    const currentUser = getCurrentUserQueryValue()
+    if (!currentUser) return []
+
+    return httpJson(`${API_BASE}/recommendations/incoming?${toQuery({ currentUser })}`)
+}
+
+export async function getOutgoingRecommendations() {
+    const currentUser = getCurrentUserQueryValue()
+    if (!currentUser) return []
+
+    return httpJson(`${API_BASE}/recommendations/outgoing?${toQuery({ currentUser })}`)
+}
+
+export async function deleteRecommendation(recommendationId) {
+    const currentUser = getRequiredCurrentUser()
+
+    return httpJson(`${API_BASE}/recommendations/${recommendationId}?${toQuery({ currentUser })}`, {
         method: 'DELETE',
     })
 }
