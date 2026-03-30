@@ -91,6 +91,27 @@ export async function loginUser(payload) {
     return response
 }
 
+export async function requestPasswordReset(payload) {
+    return request(`${API_BASE}/password-reset/request`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
+}
+
+export async function verifyPasswordResetCode(payload) {
+    return request(`${API_BASE}/password-reset/verify`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
+}
+
+export async function confirmPasswordReset(payload) {
+    return request(`${API_BASE}/password-reset/confirm`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
+}
+
 export async function validateSession() {
     return request(`${API_BASE}/validateSession`, {
         method: 'GET',
