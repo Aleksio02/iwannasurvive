@@ -11,6 +11,4 @@ interface ChatParticipantStateDao : JpaRepository<ChatParticipantStateDto, ChatP
         dialogId: Long,
         userId: Long,
     ): ChatParticipantStateDto?
-
-    fun findByIdUserIdOrderByLastReadAtDesc(userId: Long): List<ChatParticipantStateDto>
 }
