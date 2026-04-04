@@ -18,7 +18,7 @@ class InternalEmployerOpportunityAccessController(
 
     @GetMapping("/{employerUserId}/opportunity-access")
     fun getEmployerOpportunityAccess(
-        @PathVariable @Positive employerUserId: Long,
+        @PathVariable @Positive(message = "Идентификатор работодателя должен быть положительным") employerUserId: Long,
     ): InternalEmployerOpportunityAccessResponse {
         return employerOpportunityAccessService.getEmployerOpportunityAccess(employerUserId)
     }

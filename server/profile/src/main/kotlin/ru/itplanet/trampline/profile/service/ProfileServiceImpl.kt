@@ -1,16 +1,13 @@
 package ru.itplanet.trampline.profile.service
 
-import jakarta.persistence.EntityNotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Primary
-import org.springframework.http.HttpStatus
-import org.springframework.security.access.AccessDeniedException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.dao.CityDao
 import ru.itplanet.trampline.commons.dao.LocationDao
+import ru.itplanet.trampline.commons.exception.ApiException
 import ru.itplanet.trampline.commons.model.Tag
 import ru.itplanet.trampline.commons.model.file.FileAssetKind
 import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
@@ -31,6 +28,10 @@ import ru.itplanet.trampline.profile.dao.EmployerProfileDao
 import ru.itplanet.trampline.profile.dao.dto.ApplicantProfileDto
 import ru.itplanet.trampline.profile.dao.dto.ApplicantTagDto
 import ru.itplanet.trampline.profile.dao.dto.EmployerProfileDto
+import ru.itplanet.trampline.profile.exception.ProfileBadRequestException
+import ru.itplanet.trampline.profile.exception.ProfileForbiddenException
+import ru.itplanet.trampline.profile.exception.ProfileIntegrationException
+import ru.itplanet.trampline.profile.exception.ProfileNotFoundException
 import ru.itplanet.trampline.profile.model.ApplicantApplicationSummary
 import ru.itplanet.trampline.profile.model.ApplicantContactSummary
 import ru.itplanet.trampline.profile.model.ApplicantProfile
@@ -75,9 +76,14 @@ class ProfileServiceImpl(
         request.studyProgram?.let { profile.studyProgram = it }
         request.course?.let { profile.course = it }
         request.graduationYear?.let { profile.graduationYear = it }
-        request.cityId?.let {
-            profile.city = cityDao.findById(it)
-                .orElseThrow { EntityNotFoundException("Unknown city") }
+        request.cityId?.let { cityId ->
+            profile.city = cityDao.findById(cityId)
+                .orElseThrow {
+                    ProfileNotFoundException(
+                        message = "Город с идентификатором $cityId не найден",
+                        code = "city_not_found",
+                    )
+                }
         }
         request.about?.let { profile.about = it }
         request.resumeText?.let { profile.resumeText = it }
@@ -139,7 +145,7 @@ class ProfileServiceImpl(
             attachmentRole = FileAttachmentRole.AVATAR,
             visibility = profile.profileVisibility.toFileVisibility(),
             previousAttachmentIds = getApplicantAttachmentIds(userId, FileAttachmentRole.AVATAR),
-            logSubject = "applicant avatar",
+            logSubject = "аватар соискателя",
         )
 
         return buildApplicantProfile(
@@ -162,7 +168,7 @@ class ProfileServiceImpl(
             attachmentRole = FileAttachmentRole.RESUME,
             visibility = profile.resumeVisibility.toFileVisibility(),
             previousAttachmentIds = getApplicantAttachmentIds(userId, FileAttachmentRole.RESUME),
-            logSubject = "applicant resume",
+            logSubject = "резюме соискателя",
         )
 
         return buildApplicantProfile(
@@ -178,21 +184,33 @@ class ProfileServiceImpl(
         val profile = loadApplicantProfileDto(userId)
         val visibility = profile.resumeVisibility.toFileVisibility()
 
-        val createdFile = mediaServiceClient.uploadFile(
-            file = file,
-            ownerUserId = userId,
-            kind = FileAssetKind.PORTFOLIO,
-            visibility = visibility,
-        )
+        val createdFile = runMediaAction(
+            logMessage = "Не удалось загрузить файл портфолио соискателя userId=$userId",
+            errorMessage = "Не удалось загрузить файл портфолио",
+            code = "applicant_portfolio_upload_failed",
+        ) {
+            mediaServiceClient.uploadFile(
+                file = file,
+                ownerUserId = userId,
+                kind = FileAssetKind.PORTFOLIO,
+                visibility = visibility,
+            )
+        }
 
-        mediaServiceClient.createAttachment(
-            InternalCreateFileAttachmentRequest(
-                fileId = createdFile.fileId,
-                entityType = FileAttachmentEntityType.APPLICANT_PROFILE,
-                entityId = userId,
-                attachmentRole = FileAttachmentRole.PORTFOLIO,
-            ),
-        )
+        runMediaAction(
+            logMessage = "Не удалось создать вложение портфолио соискателя userId=$userId",
+            errorMessage = "Не удалось привязать файл портфолио к профилю",
+            code = "applicant_portfolio_attachment_create_failed",
+        ) {
+            mediaServiceClient.createAttachment(
+                InternalCreateFileAttachmentRequest(
+                    fileId = createdFile.fileId,
+                    entityType = FileAttachmentEntityType.APPLICANT_PROFILE,
+                    entityId = userId,
+                    attachmentRole = FileAttachmentRole.PORTFOLIO,
+                ),
+            )
+        }
 
         return loadApplicantPortfolioAttachments(profile)
     }
@@ -203,14 +221,31 @@ class ProfileServiceImpl(
     ): ApplicantProfile {
         val profile = loadApplicantProfileDto(userId)
 
-        val attachment = mediaServiceClient.getAttachments(
-            entityType = FileAttachmentEntityType.APPLICANT_PROFILE,
-            entityId = userId,
-        ).firstOrNull { currentAttachment ->
-            currentAttachment.fileId == fileId && currentAttachment.attachmentRole in applicantDownloadRoles
-        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Applicant file not found")
+        val attachments = runMediaAction(
+            logMessage = "Не удалось получить список файлов соискателя userId=$userId",
+            errorMessage = "Не удалось получить файлы профиля соискателя",
+            code = "applicant_files_load_failed",
+        ) {
+            mediaServiceClient.getAttachments(
+                entityType = FileAttachmentEntityType.APPLICANT_PROFILE,
+                entityId = userId,
+            )
+        }
 
-        mediaServiceClient.deleteAttachment(attachment.attachmentId)
+        val attachment = attachments.firstOrNull { currentAttachment ->
+            currentAttachment.fileId == fileId && currentAttachment.attachmentRole in applicantDownloadRoles
+        } ?: throw ProfileNotFoundException(
+            message = "Файл соискателя не найден",
+            code = "applicant_file_not_found",
+        )
+
+        runMediaAction(
+            logMessage = "Не удалось удалить файл соискателя fileId=$fileId, userId=$userId",
+            errorMessage = "Не удалось удалить файл соискателя",
+            code = "applicant_file_delete_failed",
+        ) {
+            mediaServiceClient.deleteAttachment(attachment.attachmentId)
+        }
 
         return buildApplicantProfile(profileDto = profile)
     }
@@ -231,13 +266,23 @@ class ProfileServiceImpl(
         request.publicContacts?.let { profile.publicContacts = it }
         request.companySize?.let { profile.companySize = it }
         request.foundedYear?.let { profile.foundedYear = it }
-        request.cityId?.let {
-            profile.city = cityDao.findById(it)
-                .orElseThrow { EntityNotFoundException("Unknown city") }
+        request.cityId?.let { cityId ->
+            profile.city = cityDao.findById(cityId)
+                .orElseThrow {
+                    ProfileNotFoundException(
+                        message = "Город с идентификатором $cityId не найден",
+                        code = "city_not_found",
+                    )
+                }
         }
-        request.locationId?.let {
-            profile.location = locationDao.findById(it)
-                .orElseThrow { EntityNotFoundException("Unknown location") }
+        request.locationId?.let { locationId ->
+            profile.location = locationDao.findById(locationId)
+                .orElseThrow {
+                    ProfileNotFoundException(
+                        message = "Локация с идентификатором $locationId не найдена",
+                        code = "location_not_found",
+                    )
+                }
         }
 
         val savedProfile = employerProfileDao.save(profile)
@@ -258,7 +303,7 @@ class ProfileServiceImpl(
             attachmentRole = FileAttachmentRole.LOGO,
             visibility = FileAssetVisibility.PUBLIC,
             previousAttachmentIds = getEmployerAttachmentIds(userId, FileAttachmentRole.LOGO),
-            logSubject = "employer logo",
+            logSubject = "логотип работодателя",
         )
 
         return buildEmployerProfile(
@@ -273,14 +318,31 @@ class ProfileServiceImpl(
     ): EmployerProfile {
         val profile = loadEmployerProfileDto(userId)
 
-        val attachment = mediaServiceClient.getAttachments(
-            entityType = FileAttachmentEntityType.EMPLOYER_PROFILE,
-            entityId = userId,
-        ).firstOrNull { currentAttachment ->
-            currentAttachment.fileId == fileId && currentAttachment.attachmentRole in employerDownloadRoles
-        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Employer file not found")
+        val attachments = runMediaAction(
+            logMessage = "Не удалось получить список файлов работодателя userId=$userId",
+            errorMessage = "Не удалось получить файлы профиля работодателя",
+            code = "employer_files_load_failed",
+        ) {
+            mediaServiceClient.getAttachments(
+                entityType = FileAttachmentEntityType.EMPLOYER_PROFILE,
+                entityId = userId,
+            )
+        }
 
-        mediaServiceClient.deleteAttachment(attachment.attachmentId)
+        val attachment = attachments.firstOrNull { currentAttachment ->
+            currentAttachment.fileId == fileId && currentAttachment.attachmentRole in employerDownloadRoles
+        } ?: throw ProfileNotFoundException(
+            message = "Файл работодателя не найден",
+            code = "employer_file_not_found",
+        )
+
+        runMediaAction(
+            logMessage = "Не удалось удалить файл работодателя fileId=$fileId, userId=$userId",
+            errorMessage = "Не удалось удалить файл работодателя",
+            code = "employer_file_delete_failed",
+        ) {
+            mediaServiceClient.deleteAttachment(attachment.attachmentId)
+        }
 
         return buildEmployerProfile(profileDto = profile)
     }
@@ -385,7 +447,10 @@ class ProfileServiceImpl(
                 targetUserId = targetUserId,
             )
         ) {
-            throw AccessDeniedException("This contacts section is private")
+            throw ProfileForbiddenException(
+                message = "Раздел контактов этого профиля закрыт",
+                code = "applicant_contacts_access_denied",
+            )
         }
 
         return interactionPrivacyClient.getApplicantContacts(targetUserId)
@@ -404,7 +469,10 @@ class ProfileServiceImpl(
                 targetUserId = targetUserId,
             )
         ) {
-            throw AccessDeniedException("This applications section is private")
+            throw ProfileForbiddenException(
+                message = "Раздел откликов этого профиля закрыт",
+                code = "applicant_applications_access_denied",
+            )
         }
 
         return interactionPrivacyClient.getApplicantApplications(targetUserId)
@@ -424,20 +492,38 @@ class ProfileServiceImpl(
         fileId: Long,
     ): InternalFileDownloadUrlResponse {
         val profileDto = loadApplicantProfileDto(targetUserId)
-        val attachments = mediaServiceClient.getAttachments(
-            entityType = FileAttachmentEntityType.APPLICANT_PROFILE,
-            entityId = targetUserId,
-        )
+        val attachments = runMediaAction(
+            logMessage = "Не удалось получить вложения профиля соискателя userId=$targetUserId",
+            errorMessage = "Не удалось получить файл профиля соискателя",
+            code = "applicant_file_download_prepare_failed",
+        ) {
+            mediaServiceClient.getAttachments(
+                entityType = FileAttachmentEntityType.APPLICANT_PROFILE,
+                entityId = targetUserId,
+            )
+        }
 
         val requestedAttachment = attachments.firstOrNull { attachment ->
             attachment.fileId == fileId && attachment.attachmentRole in applicantDownloadRoles
-        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Applicant file not found")
+        } ?: throw ProfileNotFoundException(
+            message = "Файл соискателя не найден",
+            code = "applicant_file_not_found",
+        )
 
         if (!canAccessApplicantAttachment(currentUserId, targetUserId, profileDto, requestedAttachment)) {
-            throw AccessDeniedException("You do not have access to this file")
+            throw ProfileForbiddenException(
+                message = "У вас нет доступа к этому файлу",
+                code = "applicant_file_access_denied",
+            )
         }
 
-        return mediaServiceClient.getDownloadUrl(requestedAttachment.fileId)
+        return runMediaAction(
+            logMessage = "Не удалось получить ссылку на файл соискателя fileId=$fileId, targetUserId=$targetUserId",
+            errorMessage = "Не удалось получить ссылку на файл соискателя",
+            code = "applicant_file_download_url_failed",
+        ) {
+            mediaServiceClient.getDownloadUrl(requestedAttachment.fileId)
+        }
     }
 
     override fun getEmployerFileDownloadUrl(
@@ -447,26 +533,51 @@ class ProfileServiceImpl(
     ): InternalFileDownloadUrlResponse {
         loadEmployerProfileDto(targetUserId)
 
-        val attachments = mediaServiceClient.getAttachments(
-            entityType = FileAttachmentEntityType.EMPLOYER_PROFILE,
-            entityId = targetUserId,
-        )
+        val attachments = runMediaAction(
+            logMessage = "Не удалось получить вложения профиля работодателя userId=$targetUserId",
+            errorMessage = "Не удалось получить файл профиля работодателя",
+            code = "employer_file_download_prepare_failed",
+        ) {
+            mediaServiceClient.getAttachments(
+                entityType = FileAttachmentEntityType.EMPLOYER_PROFILE,
+                entityId = targetUserId,
+            )
+        }
 
         val requestedAttachment = attachments.firstOrNull { attachment ->
             attachment.fileId == fileId && attachment.attachmentRole in employerDownloadRoles
-        } ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Employer file not found")
+        } ?: throw ProfileNotFoundException(
+            message = "Файл работодателя не найден",
+            code = "employer_file_not_found",
+        )
 
-        return mediaServiceClient.getDownloadUrl(requestedAttachment.fileId)
+        return runMediaAction(
+            logMessage = "Не удалось получить ссылку на файл работодателя fileId=$fileId, targetUserId=$targetUserId",
+            errorMessage = "Не удалось получить ссылку на файл работодателя",
+            code = "employer_file_download_url_failed",
+        ) {
+            mediaServiceClient.getDownloadUrl(requestedAttachment.fileId)
+        }
     }
 
     private fun loadApplicantProfileDto(userId: Long): ApplicantProfileDto {
         return applicantProfileDao.findById(userId)
-            .orElseThrow { EntityNotFoundException("Applicant profile for user $userId not found") }
+            .orElseThrow {
+                ProfileNotFoundException(
+                    message = "Профиль соискателя с идентификатором пользователя $userId не найден",
+                    code = "applicant_profile_not_found",
+                )
+            }
     }
 
     private fun loadEmployerProfileDto(userId: Long): EmployerProfileDto {
         return employerProfileDao.findById(userId)
-            .orElseThrow { EntityNotFoundException("Employer profile for user $userId not found") }
+            .orElseThrow {
+                ProfileNotFoundException(
+                    message = "Профиль работодателя с идентификатором пользователя $userId не найден",
+                    code = "employer_profile_not_found",
+                )
+            }
     }
 
     private fun buildApplicantProfile(
@@ -475,13 +586,13 @@ class ProfileServiceImpl(
             userId = profileDto.userId,
             attachmentRole = FileAttachmentRole.AVATAR,
             visibility = profileDto.profileVisibility.toFileVisibility(),
-            logSubject = "applicant avatar",
+            logSubject = "аватар соискателя",
         ),
         resumeFile: InternalFileMetadataResponse? = loadApplicantSingleFileOrNull(
             userId = profileDto.userId,
             attachmentRole = FileAttachmentRole.RESUME,
             visibility = profileDto.resumeVisibility.toFileVisibility(),
-            logSubject = "applicant resume",
+            logSubject = "резюме соискателя",
         ),
         portfolioFiles: List<InternalFileMetadataResponse> = loadApplicantPortfolioFiles(profileDto),
         applicantTags: ApplicantTagsView = loadApplicantTags(profileDto.userId),
@@ -504,7 +615,7 @@ class ProfileServiceImpl(
             userId = profileDto.userId,
             attachmentRole = FileAttachmentRole.AVATAR,
             visibility = profileDto.profileVisibility.toFileVisibility(),
-            logSubject = "applicant avatar",
+            logSubject = "аватар соискателя",
         )
 
         val applicantTags = if (profileDto.resumeVisibility == ResumeVisibility.PRIVATE) {
@@ -539,7 +650,7 @@ class ProfileServiceImpl(
             userId = profileDto.userId,
             attachmentRole = FileAttachmentRole.LOGO,
             visibility = FileAssetVisibility.PUBLIC,
-            logSubject = "employer logo",
+            logSubject = "логотип работодателя",
         ),
     ): EmployerProfile {
         return employerProfileConverter.fromDto(profileDto).copy(
@@ -577,7 +688,7 @@ class ProfileServiceImpl(
                 interests = interests,
             )
         } catch (ex: Exception) {
-            logger.warn("Failed to load applicant tags for user {}", applicantUserId, ex)
+            logger.warn("Не удалось загрузить теги соискателя userId={}", applicantUserId, ex)
             ApplicantTagsView()
         }
     }
@@ -592,10 +703,10 @@ class ProfileServiceImpl(
         return try {
             opportunityTagClient.getActiveTagsByIds(tagIds.toList())
         } catch (ex: Exception) {
-            logger.warn("Failed to validate applicant tags: {}", tagIds, ex)
-            throw ResponseStatusException(
-                HttpStatus.BAD_GATEWAY,
-                "Failed to validate applicant tags",
+            logger.warn("Не удалось проверить теги соискателя tagIds={}", tagIds, ex)
+            throw ProfileIntegrationException(
+                message = "Не удалось проверить выбранные теги соискателя",
+                code = "applicant_tags_validation_failed",
             )
         }
     }
@@ -610,9 +721,14 @@ class ProfileServiceImpl(
 
         val invalidTagIds = normalizedTagIds.filterNot { activeTagsById.containsKey(it) }
         if (invalidTagIds.isNotEmpty()) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Unknown, inactive or unapproved ${relationType.name.lowercase()} tags: $invalidTagIds",
+            val relationLabel = when (relationType) {
+                ApplicantTagRelationType.SKILL -> "навыки"
+                ApplicantTagRelationType.INTEREST -> "интересы"
+            }
+
+            throw ProfileBadRequestException(
+                message = "Среди выбранных тегов для раздела \"$relationLabel\" есть несуществующие, неактивные или неодобренные: $invalidTagIds",
+                code = "applicant_tags_not_available",
             )
         }
 
@@ -643,7 +759,7 @@ class ProfileServiceImpl(
             userId = profileDto.userId,
             attachmentRole = FileAttachmentRole.PORTFOLIO,
             visibility = profileDto.resumeVisibility.toFileVisibility(),
-            logSubject = "applicant portfolio",
+            logSubject = "портфолио соискателя",
         ).map { it.file }
     }
 
@@ -654,7 +770,7 @@ class ProfileServiceImpl(
             userId = profileDto.userId,
             attachmentRole = FileAttachmentRole.PORTFOLIO,
             visibility = profileDto.resumeVisibility.toFileVisibility(),
-            logSubject = "applicant portfolio",
+            logSubject = "портфолио соискателя",
         )
     }
 
@@ -701,7 +817,7 @@ class ProfileServiceImpl(
             ).filter { it.attachmentRole == attachmentRole }
                 .map { it.withFileVisibility(visibility) }
         } catch (ex: Exception) {
-            logger.warn("Failed to load {} for user {}", logSubject, userId, ex)
+            logger.warn("Не удалось загрузить {} для userId={}", logSubject, userId, ex)
             emptyList()
         }
     }
@@ -719,7 +835,7 @@ class ProfileServiceImpl(
             ).filter { it.attachmentRole == attachmentRole }
                 .map { it.withFileVisibility(visibility) }
         } catch (ex: Exception) {
-            logger.warn("Failed to load {} for user {}", logSubject, userId, ex)
+            logger.warn("Не удалось загрузить {} для userId={}", logSubject, userId, ex)
             emptyList()
         }
     }
@@ -732,7 +848,7 @@ class ProfileServiceImpl(
             userId = userId,
             attachmentRole = attachmentRole,
             visibility = FileAssetVisibility.PRIVATE,
-            logSubject = "applicant attachment ids",
+            logSubject = "идентификаторы вложений соискателя",
         ).map { it.attachmentId }
     }
 
@@ -744,7 +860,7 @@ class ProfileServiceImpl(
             userId = userId,
             attachmentRole = attachmentRole,
             visibility = FileAssetVisibility.PUBLIC,
-            logSubject = "employer attachment ids",
+            logSubject = "идентификаторы вложений работодателя",
         ).map { it.attachmentId }
     }
 
@@ -758,21 +874,33 @@ class ProfileServiceImpl(
         previousAttachmentIds: List<Long>,
         logSubject: String,
     ): InternalFileMetadataResponse {
-        val createdFile = mediaServiceClient.uploadFile(
-            file = file,
-            ownerUserId = userId,
-            kind = kind,
-            visibility = visibility,
-        )
+        val createdFile = runMediaAction(
+            logMessage = "Не удалось загрузить $logSubject для userId=$userId",
+            errorMessage = "Не удалось загрузить файл профиля",
+            code = "profile_file_upload_failed",
+        ) {
+            mediaServiceClient.uploadFile(
+                file = file,
+                ownerUserId = userId,
+                kind = kind,
+                visibility = visibility,
+            )
+        }
 
-        val createdAttachment = mediaServiceClient.createAttachment(
-            InternalCreateFileAttachmentRequest(
-                fileId = createdFile.fileId,
-                entityType = entityType,
-                entityId = userId,
-                attachmentRole = attachmentRole,
-            ),
-        )
+        val createdAttachment = runMediaAction(
+            logMessage = "Не удалось создать вложение $logSubject для userId=$userId",
+            errorMessage = "Не удалось привязать файл к профилю",
+            code = "profile_file_attachment_create_failed",
+        ) {
+            mediaServiceClient.createAttachment(
+                InternalCreateFileAttachmentRequest(
+                    fileId = createdFile.fileId,
+                    entityType = entityType,
+                    entityId = userId,
+                    attachmentRole = attachmentRole,
+                ),
+            )
+        }
 
         deleteAttachments(
             attachmentIds = previousAttachmentIds,
@@ -793,7 +921,7 @@ class ProfileServiceImpl(
                 mediaServiceClient.deleteAttachment(attachmentId)
             } catch (ex: Exception) {
                 logger.warn(
-                    "Failed to delete previous {} attachment {} for user {}",
+                    "Не удалось удалить старое вложение {} attachmentId={} для userId={}",
                     logSubject,
                     attachmentId,
                     userId,
@@ -880,6 +1008,25 @@ class ProfileServiceImpl(
             ResumeVisibility.PUBLIC -> FileAssetVisibility.PUBLIC
             ResumeVisibility.AUTHENTICATED -> FileAssetVisibility.AUTHENTICATED
             ResumeVisibility.PRIVATE -> FileAssetVisibility.PRIVATE
+        }
+    }
+
+    private inline fun <T> runMediaAction(
+        logMessage: String,
+        errorMessage: String,
+        code: String,
+        block: () -> T,
+    ): T {
+        return try {
+            block()
+        } catch (ex: ApiException) {
+            throw ex
+        } catch (ex: Exception) {
+            logger.warn(logMessage, ex)
+            throw ProfileIntegrationException(
+                message = errorMessage,
+                code = code,
+            )
         }
     }
 

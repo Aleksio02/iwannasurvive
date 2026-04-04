@@ -1,15 +1,20 @@
 package ru.itplanet.trampline.profile.controller
 
 import jakarta.validation.constraints.Positive
-import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.validation.annotation.Validated
-import org.springframework.web.bind.annotation.*
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestPart
+import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
+import ru.itplanet.trampline.profile.exception.ProfileForbiddenException
 import ru.itplanet.trampline.profile.model.ApplicantProfile
 import ru.itplanet.trampline.profile.security.AuthenticatedUser
 import ru.itplanet.trampline.profile.service.ProfileService
@@ -53,7 +58,7 @@ class ApplicantProfileFileController(
 
     @DeleteMapping("/files/{fileId}")
     fun deleteApplicantFile(
-        @PathVariable @Positive fileId: Long,
+        @PathVariable @Positive(message = "Идентификатор файла должен быть положительным") fileId: Long,
         @CurrentUser currentUser: AuthenticatedUser,
     ): ApplicantProfile {
         ensureApplicant(currentUser)
@@ -62,9 +67,9 @@ class ApplicantProfileFileController(
 
     private fun ensureApplicant(currentUser: AuthenticatedUser) {
         if (currentUser.role != Role.APPLICANT) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only applicant can edit applicant profile",
+            throw ProfileForbiddenException(
+                message = "Только соискатель может изменять файлы профиля соискателя",
+                code = "applicant_role_required",
             )
         }
     }
