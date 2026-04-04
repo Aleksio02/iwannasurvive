@@ -1,7 +1,8 @@
 package ru.itplanet.trampline.interaction.controller
 
 import jakarta.validation.Valid
-import org.springframework.http.HttpStatus
+import jakarta.validation.constraints.Positive
+import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -10,10 +11,10 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.interaction.dao.dto.ContactStatus
+import ru.itplanet.trampline.interaction.exception.InteractionForbiddenException
 import ru.itplanet.trampline.interaction.model.request.ContactRequest
 import ru.itplanet.trampline.interaction.model.request.CreateContactRecommendationRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseRequest
@@ -25,6 +26,7 @@ import ru.itplanet.trampline.interaction.model.response.OpportunityResponseRespo
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 import ru.itplanet.trampline.interaction.service.InteractionService
 
+@Validated
 @RestController
 @RequestMapping("/api/interaction")
 class InteractionController(
@@ -40,8 +42,8 @@ class InteractionController(
     @PatchMapping("/responses/{id}/status")
     fun updateResponseStatus(
         @CurrentUser userId: Long,
-        @PathVariable id: Long,
-        @RequestBody request: OpportunityResponseStatusUpdateRequest,
+        @PathVariable @Positive(message = "Идентификатор отклика должен быть положительным") id: Long,
+        @Valid @RequestBody request: OpportunityResponseStatusUpdateRequest,
     ): OpportunityResponseResponse = interactionService.updateApplicationStatus(id, userId, request)
 
     @GetMapping("/responses/my")
@@ -52,25 +54,25 @@ class InteractionController(
     @PostMapping("/favorites/opportunities/{opportunityId}")
     fun addOpportunityToFavorites(
         @CurrentUser userId: Long,
-        @PathVariable opportunityId: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") opportunityId: Long,
     ): FavoriteResponse = interactionService.addOpportunityToFavorites(userId, opportunityId)
 
     @DeleteMapping("/favorites/opportunities/{opportunityId}")
     fun removeOpportunityFromFavorites(
         @CurrentUser userId: Long,
-        @PathVariable opportunityId: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") opportunityId: Long,
     ) = interactionService.removeOpportunityFromFavorites(userId, opportunityId)
 
     @PostMapping("/favorites/employers/{employerUserId}")
     fun addEmployerToFavorites(
         @CurrentUser userId: Long,
-        @PathVariable employerUserId: Long,
+        @PathVariable @Positive(message = "Идентификатор работодателя должен быть положительным") employerUserId: Long,
     ): FavoriteResponse = interactionService.addEmployerToFavorites(userId, employerUserId)
 
     @DeleteMapping("/favorites/employers/{employerUserId}")
     fun removeEmployerFromFavorites(
         @CurrentUser userId: Long,
-        @PathVariable employerUserId: Long,
+        @PathVariable @Positive(message = "Идентификатор работодателя должен быть положительным") employerUserId: Long,
     ) = interactionService.removeEmployerFromFavorites(userId, employerUserId)
 
     @GetMapping("/favorites")
@@ -81,25 +83,25 @@ class InteractionController(
     @PostMapping("/contacts")
     fun addContact(
         @CurrentUser userId: Long,
-        @RequestBody request: ContactRequest,
+        @Valid @RequestBody request: ContactRequest,
     ): ContactResponse = interactionService.addContact(userId, request)
 
     @PatchMapping("/contacts/{contactUserId}/accept")
     fun acceptContact(
         @CurrentUser userId: Long,
-        @PathVariable contactUserId: Long,
+        @PathVariable @Positive(message = "Идентификатор контакта должен быть положительным") contactUserId: Long,
     ): ContactResponse = interactionService.respondContact(userId, contactUserId, ContactStatus.ACCEPTED)
 
     @PatchMapping("/contacts/{contactUserId}/decline")
     fun declineContact(
         @CurrentUser userId: Long,
-        @PathVariable contactUserId: Long,
+        @PathVariable @Positive(message = "Идентификатор контакта должен быть положительным") contactUserId: Long,
     ): ContactResponse = interactionService.respondContact(userId, contactUserId, ContactStatus.DECLINED)
 
     @DeleteMapping("/contacts/{contactUserId}")
     fun removeContact(
         @CurrentUser userId: Long,
-        @PathVariable contactUserId: Long,
+        @PathVariable @Positive(message = "Идентификатор контакта должен быть положительным") contactUserId: Long,
     ) = interactionService.removeContact(userId, contactUserId)
 
     @GetMapping("/contacts")
@@ -135,7 +137,7 @@ class InteractionController(
     @DeleteMapping("/recommendations/{id}")
     fun deleteRecommendation(
         @CurrentUser currentUser: AuthenticatedUser,
-        @PathVariable id: Long,
+        @PathVariable @Positive(message = "Идентификатор рекомендации должен быть положительным") id: Long,
     ) {
         ensureApplicant(currentUser)
         interactionService.deleteRecommendation(currentUser.userId, id)
@@ -143,9 +145,9 @@ class InteractionController(
 
     private fun ensureApplicant(currentUser: AuthenticatedUser) {
         if (currentUser.role != Role.APPLICANT) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only applicant can manage recommendations",
+            throw InteractionForbiddenException(
+                message = "Только соискатель может управлять рекомендациями",
+                code = "applicant_role_required",
             )
         }
     }
