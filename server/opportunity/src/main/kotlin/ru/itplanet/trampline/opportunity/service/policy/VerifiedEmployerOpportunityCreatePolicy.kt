@@ -18,19 +18,19 @@ class VerifiedEmployerOpportunityCreatePolicy(
 
         when (access.verificationStatus.trim().uppercase()) {
             STATUS_NOT_FOUND -> throw EmployerOpportunityCreationNotAllowedException(
-                "Complete employer profile and pass verification before creating opportunities",
+                "Перед созданием возможностей заполните профиль работодателя и пройдите верификацию",
             )
 
             STATUS_PENDING -> throw EmployerOpportunityCreationNotAllowedException(
-                "Employer verification is still pending",
+                "Верификация работодателя ещё находится на рассмотрении",
             )
 
             STATUS_REJECTED -> throw EmployerOpportunityCreationNotAllowedException(
-                "Employer verification was rejected. Submit a new verification request",
+                "Верификация работодателя была отклонена. Отправьте новую заявку",
             )
 
             else -> throw EmployerOpportunityCreationNotAllowedException(
-                "Only verified employers can create opportunities",
+                "Создавать возможности могут только верифицированные работодатели",
             )
         }
     }

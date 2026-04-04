@@ -3,10 +3,8 @@ package ru.itplanet.trampline.opportunity.service
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.dao.CityDao
 import ru.itplanet.trampline.commons.dao.LocationDao
 import ru.itplanet.trampline.commons.model.OpportunityContactInfo
@@ -26,6 +24,8 @@ import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityResourceLinkDto
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityResourceLinkId
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
+import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
+import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundDomainException
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -45,7 +45,7 @@ class InternalOpportunityModerationService(
         request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         val opportunity = opportunityDao.findById(opportunityId).orElseThrow {
-            notFound("Opportunity with id=$opportunityId not found")
+            opportunityNotFound(opportunityId)
         }
 
         applyOpportunityPatch(opportunity, request.applyPatch)
@@ -71,7 +71,7 @@ class InternalOpportunityModerationService(
         request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         val opportunity = opportunityDao.findById(opportunityId).orElseThrow {
-            notFound("Opportunity with id=$opportunityId not found")
+            opportunityNotFound(opportunityId)
         }
 
         opportunity.status = OpportunityStatus.REJECTED
@@ -88,7 +88,7 @@ class InternalOpportunityModerationService(
         request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         val tag = tagDao.findById(tagId).orElseThrow {
-            notFound("Tag with id=$tagId not found")
+            tagNotFound(tagId)
         }
 
         applyTagPatch(tag, request.applyPatch)
@@ -115,7 +115,7 @@ class InternalOpportunityModerationService(
         request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         val tag = tagDao.findById(tagId).orElseThrow {
-            notFound("Tag with id=$tagId not found")
+            tagNotFound(tagId)
         }
 
         tag.moderationStatus = TagModerationStatus.REJECTED
@@ -177,7 +177,10 @@ class InternalOpportunityModerationService(
 
             opportunity.city = opportunity.cityId?.let { cityId ->
                 cityDao.findById(cityId).orElseThrow {
-                    notFound("City with id=$cityId not found")
+                    OpportunityNotFoundDomainException(
+                        message = "Город не найден",
+                        code = "city_not_found",
+                    )
                 }
             }
         }
@@ -189,7 +192,10 @@ class InternalOpportunityModerationService(
 
             opportunity.location = opportunity.locationId?.let { locationId ->
                 locationDao.findById(locationId).orElseThrow {
-                    notFound("Location with id=$locationId not found")
+                    OpportunityNotFoundDomainException(
+                        message = "Локация не найдена",
+                        code = "location_not_found",
+                    )
                 }
             }
         }
@@ -241,9 +247,9 @@ class InternalOpportunityModerationService(
         }
 
         if (duplicateApproved != null) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Tag with same name and category already exists",
+            throw OpportunityConflictException(
+                message = "Тег с таким названием и категорией уже существует",
+                code = "tag_already_exists",
             )
         }
     }
@@ -293,7 +299,10 @@ class InternalOpportunityModerationService(
         val tagsById = tagDao.findAllById(tagIds).associateBy { it.id!! }
         val missingIds = tagIds.filterNot(tagsById::containsKey)
         if (missingIds.isNotEmpty()) {
-            throw notFound("Tags not found: $missingIds")
+            throw OpportunityNotFoundDomainException(
+                message = "Не найдены теги: $missingIds",
+                code = "tags_not_found",
+            )
         }
 
         val orderedTags = linkedSetOf<TagDto>()
@@ -363,8 +372,18 @@ class InternalOpportunityModerationService(
             .replace(WHITESPACE_REGEX, " ")
     }
 
-    private fun notFound(message: String): ResponseStatusException {
-        return ResponseStatusException(HttpStatus.NOT_FOUND, message)
+    private fun opportunityNotFound(id: Long): OpportunityNotFoundDomainException {
+        return OpportunityNotFoundDomainException(
+            message = "Возможность с идентификатором $id не найдена",
+            code = "opportunity_not_found",
+        )
+    }
+
+    private fun tagNotFound(id: Long): OpportunityNotFoundDomainException {
+        return OpportunityNotFoundDomainException(
+            message = "Тег с идентификатором $id не найден",
+            code = "tag_not_found",
+        )
     }
 
     private data class ResourceLinkPatch(

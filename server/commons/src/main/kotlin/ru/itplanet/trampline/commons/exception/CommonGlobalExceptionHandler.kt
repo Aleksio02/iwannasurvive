@@ -27,16 +27,6 @@ class CommonGlobalExceptionHandler {
         )
     }
 
-    @ExceptionHandler(OpportunityValidationException::class)
-    fun handleOpportunityValidation(ex: OpportunityValidationException): ResponseEntity<ApiError> {
-        return buildResponse(
-            status = HttpStatus.BAD_REQUEST,
-            message = ex.message,
-            details = ex.details,
-            code = "validation_error",
-        )
-    }
-
     @ExceptionHandler(BindException::class)
     fun handleBindException(ex: BindException): ResponseEntity<ApiError> {
         val details = ex.bindingResult.fieldErrors.associate { error ->
@@ -160,7 +150,7 @@ class CommonGlobalExceptionHandler {
                     message = message,
                     details = details,
                     code = code,
-                )
+                ),
             )
     }
 

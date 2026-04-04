@@ -5,8 +5,8 @@ import jakarta.validation.constraints.Size
 import ru.itplanet.trampline.commons.model.enums.TagCategory
 
 data class CreateEmployerTagRequest(
-    @field:NotBlank
-    @field:Size(max = 100)
+    @field:NotBlank(message = "Название тега обязательно")
+    @field:Size(max = 100, message = "Название тега не должно превышать 100 символов")
     val name: String,
     val category: TagCategory,
 )

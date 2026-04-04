@@ -1,6 +1,7 @@
-package ru.itplanet.trampline.commons.exception
+package ru.itplanet.trampline.opportunity.exception
 
 import org.springframework.http.HttpStatus
+import ru.itplanet.trampline.commons.exception.ApiException
 
 class OpportunityNotFoundException(id: Long) : ApiException(
     status = HttpStatus.NOT_FOUND,

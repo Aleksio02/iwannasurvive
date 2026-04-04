@@ -5,7 +5,6 @@ import org.springframework.context.annotation.Primary
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import ru.itplanet.trampline.commons.exception.OpportunityNotFoundException
 import ru.itplanet.trampline.commons.model.OpportunityCard
 import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
 import ru.itplanet.trampline.commons.model.file.FileAttachmentRole
@@ -14,6 +13,7 @@ import ru.itplanet.trampline.opportunity.client.MediaServiceClient
 import ru.itplanet.trampline.opportunity.converter.OpportunityConverter
 import ru.itplanet.trampline.opportunity.dao.OpportunityDao
 import ru.itplanet.trampline.opportunity.dao.specification.OpportunitySpecification
+import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundException
 import ru.itplanet.trampline.opportunity.model.OpportunityListItem
 import ru.itplanet.trampline.opportunity.model.OpportunityMapPoint
 import ru.itplanet.trampline.opportunity.model.OpportunityPage

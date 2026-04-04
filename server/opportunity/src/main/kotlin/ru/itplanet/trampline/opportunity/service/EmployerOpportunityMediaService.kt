@@ -1,10 +1,8 @@
 package ru.itplanet.trampline.opportunity.service
 
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
 import ru.itplanet.trampline.commons.model.file.FileAssetKind
 import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
@@ -15,6 +13,8 @@ import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.opportunity.client.MediaServiceClient
 import ru.itplanet.trampline.opportunity.dao.OpportunityDao
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
+import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
+import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundDomainException
 
 @Service
 @Transactional
@@ -74,7 +74,10 @@ class EmployerOpportunityMediaService(
 
         val attachment = getMediaAttachments(opportunityId)
             .firstOrNull { it.attachmentId == attachmentId }
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Opportunity media not found")
+            ?: throw OpportunityNotFoundDomainException(
+                message = "Медиафайл возможности не найден",
+                code = "opportunity_media_not_found",
+            )
 
         mediaServiceClient.deleteAttachment(attachment.attachmentId)
 
@@ -98,7 +101,10 @@ class EmployerOpportunityMediaService(
     ): OpportunityDto {
         val opportunity = opportunityDao.findByIdAndEmployerUserId(opportunityId, currentUserId)
             .orElseThrow {
-                ResponseStatusException(HttpStatus.NOT_FOUND, "Opportunity not found")
+                OpportunityNotFoundDomainException(
+                    message = "Возможность не найдена",
+                    code = "opportunity_not_found",
+                )
             }
 
         validateMediaEditableStatus(opportunity)
@@ -107,9 +113,9 @@ class EmployerOpportunityMediaService(
 
     private fun validateMediaEditableStatus(opportunity: OpportunityDto) {
         if (opportunity.status !in mediaEditableStatuses) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Opportunity in status ${opportunity.status.name} cannot modify media",
+            throw OpportunityConflictException(
+                message = "Нельзя изменять медиа у возможности в статусе ${opportunity.status.name}",
+                code = "opportunity_media_edit_not_allowed",
             )
         }
     }

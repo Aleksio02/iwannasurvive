@@ -7,8 +7,10 @@ import ru.itplanet.trampline.commons.dao.CityDao
 import ru.itplanet.trampline.commons.dao.LocationDao
 import ru.itplanet.trampline.commons.dao.dto.CityDto
 import ru.itplanet.trampline.commons.dao.dto.LocationDto
-import ru.itplanet.trampline.commons.exception.OpportunityNotFoundException
-import ru.itplanet.trampline.commons.exception.OpportunityValidationException
+import ru.itplanet.trampline.commons.model.OpportunityContactInfo
+import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
+import ru.itplanet.trampline.commons.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.converter.EmployerOpportunityConverter
 import ru.itplanet.trampline.opportunity.dao.OpportunityDao
 import ru.itplanet.trampline.opportunity.dao.TagDao
@@ -17,15 +19,13 @@ import ru.itplanet.trampline.opportunity.dao.dto.OpportunityResourceLinkDto
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityResourceLinkId
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
 import ru.itplanet.trampline.opportunity.dao.specification.EmployerOpportunitySpecification
+import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundException
+import ru.itplanet.trampline.opportunity.exception.OpportunityValidationException
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityCard
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityEditPayload
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityListItem
-import ru.itplanet.trampline.commons.model.OpportunityContactInfo
 import ru.itplanet.trampline.opportunity.model.OpportunityPage
-import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
-import ru.itplanet.trampline.commons.model.enums.OpportunityType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
-import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityContactInfoRequest
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityRequest
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityResourceLinkRequest
@@ -43,13 +43,13 @@ class EmployerOpportunityServiceImpl(
     private val cityDao: CityDao,
     private val locationDao: LocationDao,
     private val employerOpportunityConverter: EmployerOpportunityConverter,
-    private val employerOpportunityCreatePolicy: EmployerOpportunityCreatePolicy
+    private val employerOpportunityCreatePolicy: EmployerOpportunityCreatePolicy,
 ) : EmployerOpportunityService {
 
     @Transactional
     override fun create(
         currentUserId: Long,
-        request: CreateEmployerOpportunityRequest
+        request: CreateEmployerOpportunityRequest,
     ): EmployerOpportunityCard {
         employerOpportunityCreatePolicy.checkCreateAllowed(currentUserId)
 
@@ -70,7 +70,7 @@ class EmployerOpportunityServiceImpl(
             opportunity = opportunity,
             request = request,
             resolvedTags = resolvedTags,
-            resolvedPlace = resolvedPlace
+            resolvedPlace = resolvedPlace,
         )
 
         val saved = opportunityDao.saveAndFlush(opportunity)
@@ -80,31 +80,31 @@ class EmployerOpportunityServiceImpl(
     @Transactional(readOnly = true)
     override fun getMyOpportunities(
         currentUserId: Long,
-        request: GetEmployerOpportunityListRequest
+        request: GetEmployerOpportunityListRequest,
     ): OpportunityPage<EmployerOpportunityListItem> {
         val pageable = OffsetBasedPageRequest(
             limit = request.limit,
             offset = request.offset,
-            sort = Sort.by(request.sortDirection.toSpring(), request.sortBy.property)
+            sort = Sort.by(request.sortDirection.toSpring(), request.sortBy.property),
         )
 
         val page = opportunityDao.findAll(
             EmployerOpportunitySpecification.build(currentUserId, request),
-            pageable
+            pageable,
         )
 
         return OpportunityPage(
             items = page.content.map(employerOpportunityConverter::toListItem),
             limit = request.limit,
             offset = request.offset,
-            total = page.totalElements
+            total = page.totalElements,
         )
     }
 
     @Transactional(readOnly = true)
     override fun getMyOpportunity(
         currentUserId: Long,
-        opportunityId: Long
+        opportunityId: Long,
     ): EmployerOpportunityEditPayload {
         val opportunity = getOwnedOpportunity(opportunityId, currentUserId)
         return employerOpportunityConverter.toEditPayload(opportunity)
@@ -114,7 +114,7 @@ class EmployerOpportunityServiceImpl(
     override fun update(
         currentUserId: Long,
         opportunityId: Long,
-        request: CreateEmployerOpportunityRequest
+        request: CreateEmployerOpportunityRequest,
     ): EmployerOpportunityEditPayload {
         val opportunity = getOwnedOpportunity(opportunityId, currentUserId)
 
@@ -129,7 +129,7 @@ class EmployerOpportunityServiceImpl(
             opportunity = opportunity,
             request = request,
             resolvedTags = resolvedTags,
-            resolvedPlace = resolvedPlace
+            resolvedPlace = resolvedPlace,
         )
 
         opportunity.status = OpportunityStatus.DRAFT
@@ -143,7 +143,7 @@ class EmployerOpportunityServiceImpl(
     @Transactional
     override fun returnToDraft(
         currentUserId: Long,
-        opportunityId: Long
+        opportunityId: Long,
     ): EmployerOpportunityEditPayload {
         val opportunity = getOwnedOpportunity(opportunityId, currentUserId)
 
@@ -160,7 +160,7 @@ class EmployerOpportunityServiceImpl(
     @Transactional
     override fun close(
         currentUserId: Long,
-        opportunityId: Long
+        opportunityId: Long,
     ): EmployerOpportunityEditPayload {
         val opportunity = getOwnedOpportunity(opportunityId, currentUserId)
 
@@ -175,7 +175,7 @@ class EmployerOpportunityServiceImpl(
     @Transactional
     override fun archive(
         currentUserId: Long,
-        opportunityId: Long
+        opportunityId: Long,
     ): EmployerOpportunityEditPayload {
         val opportunity = getOwnedOpportunity(opportunityId, currentUserId)
 
@@ -189,7 +189,7 @@ class EmployerOpportunityServiceImpl(
 
     private fun getOwnedOpportunity(
         opportunityId: Long,
-        currentUserId: Long
+        currentUserId: Long,
     ): OpportunityDto {
         return opportunityDao.findByIdAndEmployerUserId(opportunityId, currentUserId)
             .orElseThrow { OpportunityNotFoundException(opportunityId) }
@@ -201,11 +201,11 @@ class EmployerOpportunityServiceImpl(
         }
 
         throw OpportunityValidationException(
-            message = "Opportunity cannot be edited in current status",
+            message = "Возможность нельзя редактировать в текущем статусе",
             details = mapOf(
                 "status" to status.name,
-                "allowedStatuses" to "DRAFT,REJECTED"
-            )
+                "allowedStatuses" to "DRAFT,REJECTED",
+            ),
         )
     }
 
@@ -218,13 +218,13 @@ class EmployerOpportunityServiceImpl(
             OpportunityStatus.ARCHIVED -> return
 
             OpportunityStatus.DRAFT -> throw OpportunityValidationException(
-                message = "Opportunity is already in DRAFT status",
-                details = mapOf("status" to status.name)
+                message = "Возможность уже находится в статусе DRAFT",
+                details = mapOf("status" to status.name),
             )
 
             OpportunityStatus.PUBLISHED -> throw OpportunityValidationException(
-                message = "PUBLISHED opportunity cannot be returned to DRAFT by this action",
-                details = mapOf("status" to status.name)
+                message = "Опубликованную возможность нельзя вернуть в DRAFT этим действием",
+                details = mapOf("status" to status.name),
             )
         }
     }
@@ -234,21 +234,21 @@ class EmployerOpportunityServiceImpl(
             OpportunityStatus.PUBLISHED -> return
 
             OpportunityStatus.CLOSED -> throw OpportunityValidationException(
-                message = "Opportunity is already CLOSED",
-                details = mapOf("status" to status.name)
+                message = "Возможность уже находится в статусе CLOSED",
+                details = mapOf("status" to status.name),
             )
 
             OpportunityStatus.ARCHIVED -> throw OpportunityValidationException(
-                message = "ARCHIVED opportunity cannot be closed",
-                details = mapOf("status" to status.name)
+                message = "Архивированную возможность нельзя закрыть",
+                details = mapOf("status" to status.name),
             )
 
             else -> throw OpportunityValidationException(
-                message = "Opportunity cannot be closed in current status",
+                message = "Возможность нельзя закрыть в текущем статусе",
                 details = mapOf(
                     "status" to status.name,
-                    "allowedStatuses" to "PUBLISHED"
-                )
+                    "allowedStatuses" to "PUBLISHED",
+                ),
             )
         }
     }
@@ -259,21 +259,21 @@ class EmployerOpportunityServiceImpl(
             OpportunityStatus.REJECTED -> return
 
             OpportunityStatus.ARCHIVED -> throw OpportunityValidationException(
-                message = "Opportunity is already ARCHIVED",
-                details = mapOf("status" to status.name)
+                message = "Возможность уже находится в статусе ARCHIVED",
+                details = mapOf("status" to status.name),
             )
 
             OpportunityStatus.PUBLISHED -> throw OpportunityValidationException(
-                message = "PUBLISHED opportunity must be closed before archiving",
-                details = mapOf("status" to status.name)
+                message = "Опубликованную возможность нужно сначала закрыть перед архивированием",
+                details = mapOf("status" to status.name),
             )
 
             else -> throw OpportunityValidationException(
-                message = "Opportunity cannot be archived in current status",
+                message = "Возможность нельзя архивировать в текущем статусе",
                 details = mapOf(
                     "status" to status.name,
-                    "allowedStatuses" to "CLOSED,REJECTED"
-                )
+                    "allowedStatuses" to "CLOSED,REJECTED",
+                ),
             )
         }
     }
@@ -282,13 +282,13 @@ class EmployerOpportunityServiceImpl(
         opportunity: OpportunityDto,
         request: CreateEmployerOpportunityRequest,
         resolvedTags: List<TagDto>,
-        resolvedPlace: ResolvedPlace
+        resolvedPlace: ResolvedPlace,
     ) {
         applyBaseEditableFields(
             opportunity = opportunity,
             request = request,
             resolvedTags = resolvedTags,
-            resolvedPlace = resolvedPlace
+            resolvedPlace = resolvedPlace,
         )
 
         opportunity.resourceLinks = buildResourceLinks(opportunity, request)
@@ -298,13 +298,13 @@ class EmployerOpportunityServiceImpl(
         opportunity: OpportunityDto,
         request: CreateEmployerOpportunityRequest,
         resolvedTags: List<TagDto>,
-        resolvedPlace: ResolvedPlace
+        resolvedPlace: ResolvedPlace,
     ) {
         applyBaseEditableFields(
             opportunity = opportunity,
             request = request,
             resolvedTags = resolvedTags,
-            resolvedPlace = resolvedPlace
+            resolvedPlace = resolvedPlace,
         )
 
         syncResourceLinks(opportunity, request.resourceLinks)
@@ -314,7 +314,7 @@ class EmployerOpportunityServiceImpl(
         opportunity: OpportunityDto,
         request: CreateEmployerOpportunityRequest,
         resolvedTags: List<TagDto>,
-        resolvedPlace: ResolvedPlace
+        resolvedPlace: ResolvedPlace,
     ) {
         opportunity.title = request.title.trim()
         opportunity.shortDescription = request.shortDescription.trim()
@@ -342,7 +342,7 @@ class EmployerOpportunityServiceImpl(
 
     private fun syncResourceLinks(
         opportunity: OpportunityDto,
-        requestedLinks: List<CreateEmployerOpportunityResourceLinkRequest>
+        requestedLinks: List<CreateEmployerOpportunityResourceLinkRequest>,
     ) {
         val existingLinks = opportunity.resourceLinks
             .sortedBy { it.id.sortOrder }
@@ -363,7 +363,7 @@ class EmployerOpportunityServiceImpl(
                         label = requestLink.label.trim()
                         linkType = requestLink.linkType
                         url = requestLink.url.trim()
-                    }
+                    },
                 )
             }
         }
@@ -379,11 +379,11 @@ class EmployerOpportunityServiceImpl(
 
         if (salaryFrom != null && salaryTo != null && salaryFrom > salaryTo) {
             throw OpportunityValidationException(
-                message = "salaryFrom must be less than or equal to salaryTo",
+                message = "salaryFrom не может быть больше salaryTo",
                 details = mapOf(
                     "salaryFrom" to salaryFrom.toString(),
-                    "salaryTo" to salaryTo.toString()
-                )
+                    "salaryTo" to salaryTo.toString(),
+                ),
             )
         }
     }
@@ -395,36 +395,36 @@ class EmployerOpportunityServiceImpl(
         if (request.type == OpportunityType.EVENT) {
             if (request.eventDate == null) {
                 throw OpportunityValidationException(
-                    message = "EVENT requires eventDate",
-                    details = mapOf("eventDate" to "must not be null for EVENT")
+                    message = "Для EVENT необходимо указать eventDate",
+                    details = mapOf("eventDate" to "для EVENT поле обязательно"),
                 )
             }
 
             if (request.expiresAt != null) {
                 throw OpportunityValidationException(
-                    message = "EVENT must not contain expiresAt",
-                    details = mapOf("expiresAt" to "must be null for EVENT")
+                    message = "Для EVENT нельзя передавать expiresAt",
+                    details = mapOf("expiresAt" to "для EVENT поле должно быть null"),
                 )
             }
 
             if (request.eventDate.isBefore(today)) {
                 throw OpportunityValidationException(
-                    message = "eventDate must not be in the past",
-                    details = mapOf("eventDate" to request.eventDate.toString())
+                    message = "eventDate не может быть в прошлом",
+                    details = mapOf("eventDate" to request.eventDate.toString()),
                 )
             }
         } else {
             if (request.eventDate != null) {
                 throw OpportunityValidationException(
-                    message = "Only EVENT can contain eventDate",
-                    details = mapOf("eventDate" to "must be null for non-EVENT opportunity")
+                    message = "Только для EVENT можно передавать eventDate",
+                    details = mapOf("eventDate" to "для не-EVENT поле должно быть null"),
                 )
             }
 
             if (request.expiresAt != null && request.expiresAt.isBefore(now)) {
                 throw OpportunityValidationException(
-                    message = "expiresAt must not be in the past",
-                    details = mapOf("expiresAt" to request.expiresAt.toString())
+                    message = "expiresAt не может быть в прошлом",
+                    details = mapOf("expiresAt" to request.expiresAt.toString()),
                 )
             }
         }
@@ -441,8 +441,8 @@ class EmployerOpportunityServiceImpl(
         val missingIds = tagIds.filterNot(tagsById::containsKey)
         if (missingIds.isNotEmpty()) {
             throw OpportunityValidationException(
-                message = "Some tagIds do not exist",
-                details = mapOf("tagIds" to missingIds.joinToString(","))
+                message = "Некоторые tagIds не существуют",
+                details = mapOf("tagIds" to missingIds.joinToString(",")),
             )
         }
 
@@ -452,8 +452,8 @@ class EmployerOpportunityServiceImpl(
 
         if (invalidIds.isNotEmpty()) {
             throw OpportunityValidationException(
-                message = "Only active approved tags can be used",
-                details = mapOf("tagIds" to invalidIds.joinToString(","))
+                message = "Можно использовать только активные и одобренные теги",
+                details = mapOf("tagIds" to invalidIds.joinToString(",")),
             )
         }
 
@@ -472,15 +472,15 @@ class EmployerOpportunityServiceImpl(
     private fun resolveOfficeOrHybridPlace(request: CreateEmployerOpportunityRequest): ResolvedPlace {
         val locationId = request.locationId
             ?: throw OpportunityValidationException(
-                message = "${request.workFormat.name} requires locationId",
-                details = mapOf("locationId" to "must not be null for ${request.workFormat.name}")
+                message = "Для ${request.workFormat.name} необходимо указать locationId",
+                details = mapOf("locationId" to "для ${request.workFormat.name} поле обязательно"),
             )
 
         val location = locationDao.findByIdAndIsActiveTrue(locationId)
             .orElseThrow {
                 OpportunityValidationException(
-                    message = "locationId is invalid",
-                    details = mapOf("locationId" to locationId.toString())
+                    message = "Передан некорректный locationId",
+                    details = mapOf("locationId" to locationId.toString()),
                 )
             }
 
@@ -488,58 +488,58 @@ class EmployerOpportunityServiceImpl(
         val city = cityDao.findByIdAndIsActiveTrue(locationCityId)
             .orElseThrow {
                 OpportunityValidationException(
-                    message = "Location references inactive or missing city",
-                    details = mapOf("locationId" to locationId.toString())
+                    message = "Указанная локация ссылается на неактивный или отсутствующий город",
+                    details = mapOf("locationId" to locationId.toString()),
                 )
             }
 
         if (request.cityId != null && request.cityId != locationCityId) {
             throw OpportunityValidationException(
-                message = "cityId must match location city",
+                message = "cityId должен совпадать с городом локации",
                 details = mapOf(
                     "cityId" to request.cityId.toString(),
-                    "locationCityId" to locationCityId.toString()
-                )
+                    "locationCityId" to locationCityId.toString(),
+                ),
             )
         }
 
         return ResolvedPlace(
             city = city,
-            location = location
+            location = location,
         )
     }
 
     private fun resolveRemoteOrOnlinePlace(request: CreateEmployerOpportunityRequest): ResolvedPlace {
         if (request.locationId != null) {
             throw OpportunityValidationException(
-                message = "${request.workFormat.name} must not contain locationId",
-                details = mapOf("locationId" to "must be null for ${request.workFormat.name}")
+                message = "Для ${request.workFormat.name} нельзя передавать locationId",
+                details = mapOf("locationId" to "для ${request.workFormat.name} поле должно быть null"),
             )
         }
 
         val cityId = request.cityId
             ?: throw OpportunityValidationException(
-                message = "${request.workFormat.name} requires cityId",
-                details = mapOf("cityId" to "must not be null for ${request.workFormat.name}")
+                message = "Для ${request.workFormat.name} необходимо указать cityId",
+                details = mapOf("cityId" to "для ${request.workFormat.name} поле обязательно"),
             )
 
         val city = cityDao.findByIdAndIsActiveTrue(cityId)
             .orElseThrow {
                 OpportunityValidationException(
-                    message = "cityId is invalid",
-                    details = mapOf("cityId" to cityId.toString())
+                    message = "Передан некорректный cityId",
+                    details = mapOf("cityId" to cityId.toString()),
                 )
             }
 
         return ResolvedPlace(
             city = city,
-            location = null
+            location = null,
         )
     }
 
     private fun buildResourceLinks(
         opportunity: OpportunityDto,
-        request: CreateEmployerOpportunityRequest
+        request: CreateEmployerOpportunityRequest,
     ): MutableList<OpportunityResourceLinkDto> {
         return request.resourceLinks
             .mapIndexed { index, item ->
@@ -559,7 +559,7 @@ class EmployerOpportunityServiceImpl(
             email = email.normalizeNullableText()?.lowercase(Locale.ROOT),
             phone = phone.normalizeNullableText(),
             telegram = telegram.normalizeNullableText(),
-            contactPerson = contactPerson.normalizeNullableText()
+            contactPerson = contactPerson.normalizeNullableText(),
         )
     }
 
@@ -574,6 +574,6 @@ class EmployerOpportunityServiceImpl(
 
     private data class ResolvedPlace(
         val city: CityDto,
-        val location: LocationDto?
+        val location: LocationDto?,
     )
 }
