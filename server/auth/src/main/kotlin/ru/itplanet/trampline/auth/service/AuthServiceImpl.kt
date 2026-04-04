@@ -1,11 +1,9 @@
 package ru.itplanet.trampline.auth.service
 
 import org.springframework.dao.DataIntegrityViolationException
-import org.springframework.http.HttpStatus
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.auth.config.PasswordResetProperties
 import ru.itplanet.trampline.auth.converter.UserConverter
 import ru.itplanet.trampline.auth.exception.InvalidCredentialsException
@@ -16,6 +14,7 @@ import ru.itplanet.trampline.auth.exception.InvalidTwoFactorPendingTokenExceptio
 import ru.itplanet.trampline.auth.exception.RegistrationRoleNotAllowedException
 import ru.itplanet.trampline.auth.exception.TwoFactorAlreadyDisabledException
 import ru.itplanet.trampline.auth.exception.TwoFactorAlreadyEnabledException
+import ru.itplanet.trampline.auth.exception.UserAccountDeactivatedException
 import ru.itplanet.trampline.auth.exception.UserAlreadyExistsException
 import ru.itplanet.trampline.auth.exception.UserNotFoundException
 import ru.itplanet.trampline.auth.model.request.Authorization
@@ -381,10 +380,7 @@ class AuthServiceImpl(
 
     private fun ensureUserIsActive(user: UserDto) {
         if (!user.isActive) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "User account is deactivated"
-            )
+            throw UserAccountDeactivatedException()
         }
     }
 
