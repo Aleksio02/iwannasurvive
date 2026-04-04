@@ -4,22 +4,23 @@ import feign.FeignException
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
-import org.springframework.http.MediaType
+import org.springframework.http.HttpStatus
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import ru.itplanet.trampline.commons.exception.ApiErrorResponseWriter
 import ru.itplanet.trampline.opportunity.client.AuthServiceClient
-import java.nio.charset.StandardCharsets
-import java.time.Instant
 
 @Component
 class SessionAuthenticationFilter(
-    private val authServiceClient: AuthServiceClient
+    private val authServiceClient: AuthServiceClient,
+    private val apiErrorResponseWriter: ApiErrorResponseWriter,
 ) : OncePerRequestFilter() {
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {
@@ -48,7 +49,7 @@ class SessionAuthenticationFilter(
     override fun doFilterInternal(
         request: HttpServletRequest,
         response: HttpServletResponse,
-        filterChain: FilterChain
+        filterChain: FilterChain,
     ) {
         if (SecurityContextHolder.getContext().authentication != null) {
             filterChain.doFilter(request, response)
@@ -78,7 +79,7 @@ class SessionAuthenticationFilter(
             val authentication = UsernamePasswordAuthenticationToken(
                 principal,
                 null,
-                authorities
+                authorities,
             )
             authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
 
@@ -87,32 +88,32 @@ class SessionAuthenticationFilter(
         } catch (ex: FeignException) {
             SecurityContextHolder.clearContext()
 
-            if (ex.status() == HttpServletResponse.SC_UNAUTHORIZED || ex.status() == HttpServletResponse.SC_FORBIDDEN) {
+            if (ex.status() == HttpServletResponse.SC_UNAUTHORIZED ||
+                ex.status() == HttpServletResponse.SC_FORBIDDEN
+            ) {
                 filterChain.doFilter(request, response)
                 return
             }
 
-            println(ex)
+            logger.warn("Сервис авторизации недоступен при проверке сессии", ex)
             writeAuthServiceUnavailable(response)
         } catch (ex: Exception) {
-            println(ex)
             SecurityContextHolder.clearContext()
+            logger.warn("Не удалось обработать сессию пользователя", ex)
             writeAuthServiceUnavailable(response)
         }
     }
 
     private fun writeAuthServiceUnavailable(response: HttpServletResponse) {
-        response.status = HttpServletResponse.SC_SERVICE_UNAVAILABLE
-        response.characterEncoding = StandardCharsets.UTF_8.name()
-        response.contentType = MediaType.APPLICATION_JSON_VALUE
-        response.writer.write(
-            """
-            {
-              "code": "auth_service_unavailable",
-              "message": "Auth service is unavailable",
-              "timestamp": "${Instant.now()}"
-            }
-            """.trimIndent()
+        apiErrorResponseWriter.write(
+            response = response,
+            status = HttpStatus.SERVICE_UNAVAILABLE,
+            message = "Сервис авторизации временно недоступен",
+            code = "auth_service_unavailable",
         )
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(SessionAuthenticationFilter::class.java)
     }
 }

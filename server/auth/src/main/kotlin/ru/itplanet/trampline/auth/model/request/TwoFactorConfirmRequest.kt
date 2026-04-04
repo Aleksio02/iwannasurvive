@@ -4,10 +4,10 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
 
 data class TwoFactorConfirmRequest(
-    @field:NotBlank(message = "Pending token must not be empty")
+    @field:NotBlank(message = "Временный токен обязателен")
     val pendingToken: String,
 
-    @field:NotBlank(message = "Code must not be empty")
-    @field:Pattern(regexp = "^\\d{6}$", message = "Code must contain 6 digits")
-    val code: String
+    @field:NotBlank(message = "Код обязателен")
+    @field:Pattern(regexp = "^\\d{6}$", message = "Код должен содержать 6 цифр")
+    val code: String,
 )

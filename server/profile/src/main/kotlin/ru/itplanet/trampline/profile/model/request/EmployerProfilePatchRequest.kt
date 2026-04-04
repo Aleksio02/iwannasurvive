@@ -10,7 +10,7 @@ import ru.itplanet.trampline.profile.model.ProfileLink
 data class EmployerProfilePatchRequest(
     val companyName: String? = null,
     val legalName: String? = null,
-    @field:Size(min = 10, max = 12)
+    @field:Size(min = 10, max = 12, message = "ИНН должен содержать от 10 до 12 символов")
     val inn: String? = null,
     val description: String? = null,
     val industry: String? = null,

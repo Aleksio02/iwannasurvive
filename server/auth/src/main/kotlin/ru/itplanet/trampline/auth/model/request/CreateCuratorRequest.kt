@@ -5,15 +5,15 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
 data class CreateCuratorRequest(
-    @field:NotBlank(message = "Display name must not be empty")
-    @field:Size(max = 120, message = "Display name must not be longer than 120 characters")
+    @field:NotBlank(message = "Отображаемое имя обязательно")
+    @field:Size(max = 120, message = "Отображаемое имя не должно превышать 120 символов")
     val displayName: String,
 
-    @field:Email(message = "Email must be valid")
-    @field:NotBlank(message = "Email must not be empty")
+    @field:Email(message = "Укажите корректный адрес электронной почты")
+    @field:NotBlank(message = "Электронная почта обязательна")
     val email: String,
 
-    @field:Size(min = 8, max = 16, message = "Password should be between 8 and 16 characters")
-    @field:NotBlank(message = "Password must not be empty")
-    val password: String
+    @field:Size(min = 8, max = 16, message = "Пароль должен содержать от 8 до 16 символов")
+    @field:NotBlank(message = "Пароль обязателен")
+    val password: String,
 )

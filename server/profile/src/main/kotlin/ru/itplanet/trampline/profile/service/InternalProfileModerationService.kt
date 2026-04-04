@@ -3,12 +3,12 @@ package ru.itplanet.trampline.profile.service
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.dao.CityDao
 import ru.itplanet.trampline.commons.dao.LocationDao
+import ru.itplanet.trampline.profile.exception.ProfileBadRequestException
+import ru.itplanet.trampline.profile.exception.ProfileNotFoundException
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationActionResultResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationApproveRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationRejectRequest
@@ -38,7 +38,7 @@ class InternalProfileModerationService(
         request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         val profile = employerProfileDao.findById(userId).orElseThrow {
-            notFound("Employer profile with userId=$userId not found")
+            notFoundEmployerProfile(userId)
         }
 
         applyEmployerPatch(profile, request.applyPatch)
@@ -52,7 +52,7 @@ class InternalProfileModerationService(
         request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         employerProfileDao.findById(userId).orElseThrow {
-            notFound("Employer profile with userId=$userId not found")
+            notFoundEmployerProfile(userId)
         }
 
         return InternalModerationActionResultResponse(affectedUserId = userId)
@@ -64,7 +64,7 @@ class InternalProfileModerationService(
         request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         val verification = employerVerificationDao.findById(verificationId).orElseThrow {
-            notFound("Employer verification with id=$verificationId not found")
+            notFoundEmployerVerification(verificationId)
         }
 
         applyEmployerVerificationPatch(verification, request.applyPatch)
@@ -86,7 +86,7 @@ class InternalProfileModerationService(
         request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         val verification = employerVerificationDao.findById(verificationId).orElseThrow {
-            notFound("Employer verification with id=$verificationId not found")
+            notFoundEmployerVerification(verificationId)
         }
 
         verification.status = VerificationStatus.REJECTED
@@ -133,7 +133,10 @@ class InternalProfileModerationService(
                 ?.longValue()
                 ?.let { cityId ->
                     cityDao.findById(cityId).orElseThrow {
-                        notFound("City with id=$cityId not found")
+                        ProfileNotFoundException(
+                            message = "Город с идентификатором $cityId не найден",
+                            code = "city_not_found",
+                        )
                     }
                 }
         }
@@ -144,7 +147,10 @@ class InternalProfileModerationService(
                 ?.longValue()
                 ?.let { locationId ->
                     locationDao.findById(locationId).orElseThrow {
-                        notFound("Location with id=$locationId not found")
+                        ProfileNotFoundException(
+                            message = "Локация с идентификатором $locationId не найдена",
+                            code = "location_not_found",
+                        )
                     }
                 }
         }
@@ -177,7 +183,7 @@ class InternalProfileModerationService(
                 .takeUnless { it.isNull }
                 ?.asText()
                 ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() },
         )
     }
 
@@ -191,7 +197,7 @@ class InternalProfileModerationService(
             patch.get(fieldName)
                 .takeUnless { it.isNull }
                 ?.intValue()
-                ?.toShort()
+                ?.toShort(),
         )
     }
 
@@ -201,11 +207,29 @@ class InternalProfileModerationService(
         setter: (E) -> Unit,
     ) {
         if (!patch.hasNonNull(fieldName)) return
-        setter(enumValueOf(patch.get(fieldName).asText().trim().uppercase()))
+
+        val rawValue = patch.get(fieldName).asText().trim()
+
+        val enumValue = try {
+            enumValueOf<E>(rawValue.uppercase())
+        } catch (_: IllegalArgumentException) {
+            throw ProfileBadRequestException(
+                message = "Некорректное значение поля \"$fieldName\"",
+                code = "profile_moderation_patch_invalid",
+            )
+        }
+
+        setter(enumValue)
     }
 
     private fun listOfStrings(node: JsonNode): List<String> {
         if (node.isNull) return emptyList()
+        if (!node.isArray) {
+            throw ProfileBadRequestException(
+                message = "Поле \"professionalLinks\" должно содержать массив строк",
+                code = "profile_moderation_patch_invalid",
+            )
+        }
         return objectMapper.convertValue(node, object : TypeReference<List<String>>() {})
     }
 
@@ -326,7 +350,17 @@ class InternalProfileModerationService(
         }
     }
 
-    private fun notFound(message: String): ResponseStatusException {
-        return ResponseStatusException(HttpStatus.NOT_FOUND, message)
+    private fun notFoundEmployerProfile(userId: Long): ProfileNotFoundException {
+        return ProfileNotFoundException(
+            message = "Профиль работодателя с идентификатором пользователя $userId не найден",
+            code = "employer_profile_not_found",
+        )
+    }
+
+    private fun notFoundEmployerVerification(verificationId: Long): ProfileNotFoundException {
+        return ProfileNotFoundException(
+            message = "Запрос на верификацию с идентификатором $verificationId не найден",
+            code = "employer_verification_not_found",
+        )
     }
 }

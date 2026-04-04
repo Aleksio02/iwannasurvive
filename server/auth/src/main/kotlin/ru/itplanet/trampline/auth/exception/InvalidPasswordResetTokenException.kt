@@ -1,8 +1,10 @@
 package ru.itplanet.trampline.auth.exception
 
 import org.springframework.http.HttpStatus
-import org.springframework.web.bind.annotation.ResponseStatus
+import ru.itplanet.trampline.commons.exception.ApiException
 
-@ResponseStatus(HttpStatus.BAD_REQUEST)
-class InvalidPasswordResetTokenException :
-    RuntimeException("Password reset token is invalid or expired")
+class InvalidPasswordResetTokenException : ApiException(
+    status = HttpStatus.UNAUTHORIZED,
+    code = "invalid_password_reset_token",
+    message = "Токен сброса пароля недействителен или истёк",
+)

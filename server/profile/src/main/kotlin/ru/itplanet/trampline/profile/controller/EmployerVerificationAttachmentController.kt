@@ -11,10 +11,10 @@ import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
+import ru.itplanet.trampline.profile.exception.ProfileForbiddenException
 import ru.itplanet.trampline.profile.security.AuthenticatedUser
 import ru.itplanet.trampline.profile.service.EmployerVerificationService
 
@@ -31,14 +31,14 @@ class EmployerVerificationAttachmentController(
     )
     @ResponseStatus(HttpStatus.CREATED)
     fun addAttachment(
-        @PathVariable @Positive verificationId: Long,
+        @PathVariable @Positive(message = "Идентификатор запроса на верификацию должен быть положительным") verificationId: Long,
         @RequestPart("file") file: MultipartFile,
         @CurrentUser currentUser: AuthenticatedUser,
     ): List<InternalFileAttachmentResponse> {
         if (currentUser.role != Role.EMPLOYER) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only employer can upload verification attachments",
+            throw ProfileForbiddenException(
+                message = "Только работодатель может загружать вложения для верификации",
+                code = "employer_role_required",
             )
         }
 

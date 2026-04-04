@@ -19,26 +19,26 @@ import ru.itplanet.trampline.opportunity.service.OpportunityService
 @RestController
 @RequestMapping("/api/opportunities")
 class OpportunityController(
-    private val opportunityService: OpportunityService
+    private val opportunityService: OpportunityService,
 ) {
 
     @GetMapping
     fun getPublicCatalog(
-        @Valid @ModelAttribute request: GetOpportunityListRequest
+        @Valid @ModelAttribute request: GetOpportunityListRequest,
     ): OpportunityPage<OpportunityListItem> {
         return opportunityService.getPublicCatalog(request)
     }
 
     @GetMapping("/map")
     fun getPublicMap(
-        @Valid @ModelAttribute request: GetOpportunityListRequest
+        @Valid @ModelAttribute request: GetOpportunityListRequest,
     ): OpportunityPage<OpportunityMapPoint> {
         return opportunityService.getPublicMap(request)
     }
 
     @GetMapping("/{id}")
     fun getPublicOpportunity(
-        @PathVariable @Positive id: Long
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
     ): OpportunityCard {
         return opportunityService.getPublicOpportunity(id)
     }

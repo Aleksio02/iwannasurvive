@@ -2,10 +2,8 @@ package ru.itplanet.trampline.opportunity.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTaskRequest
@@ -17,6 +15,9 @@ import ru.itplanet.trampline.opportunity.client.ModerationServiceClient
 import ru.itplanet.trampline.opportunity.converter.EmployerOpportunityConverter
 import ru.itplanet.trampline.opportunity.dao.OpportunityDao
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
+import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
+import ru.itplanet.trampline.opportunity.exception.OpportunityForbiddenException
+import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundDomainException
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityCard
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityRequest
 
@@ -62,9 +63,9 @@ class EmployerOpportunityModerationService(
         val opportunity = getOwnedOpportunity(employerUserId, opportunityId)
 
         if (opportunity.status != OpportunityStatus.PUBLISHED) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Only published opportunity can be resubmitted after media change",
+            throw OpportunityConflictException(
+                message = "Повторно отправить на модерацию после изменения медиа можно только опубликованную возможность",
+                code = "opportunity_resubmit_not_allowed",
             )
         }
 
@@ -102,9 +103,9 @@ class EmployerOpportunityModerationService(
         val opportunity = getOwnedOpportunity(employerUserId, opportunityId)
 
         if (opportunity.status != OpportunityStatus.PENDING_MODERATION) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Only pending moderation opportunity can cancel moderation task",
+            throw OpportunityConflictException(
+                message = "Отменить задачу модерации можно только для возможности со статусом PENDING_MODERATION",
+                code = "opportunity_moderation_cancel_not_allowed",
             )
         }
 
@@ -121,7 +122,7 @@ class EmployerOpportunityModerationService(
 
         opportunity.status = OpportunityStatus.REJECTED
         opportunity.publishedAt = null
-        opportunity.moderationComment = "Cancelled by employer"
+        opportunity.moderationComment = "Модерация отменена работодателем"
     }
 
     private fun ensureModerationTask(
@@ -181,13 +182,16 @@ class EmployerOpportunityModerationService(
     ): OpportunityDto {
         val opportunity = opportunityDao.findById(opportunityId)
             .orElseThrow {
-                ResponseStatusException(HttpStatus.NOT_FOUND, "Opportunity not found")
+                OpportunityNotFoundDomainException(
+                    message = "Возможность не найдена",
+                    code = "opportunity_not_found",
+                )
             }
 
         if (opportunity.employerUserId != employerUserId) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only opportunity owner can manage moderation state",
+            throw OpportunityForbiddenException(
+                message = "Изменять состояние модерации может только владелец возможности",
+                code = "opportunity_owner_required",
             )
         }
 

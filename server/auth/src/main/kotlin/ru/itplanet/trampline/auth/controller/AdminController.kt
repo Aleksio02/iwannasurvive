@@ -28,7 +28,7 @@ import ru.itplanet.trampline.auth.service.AdminService
 @RestController
 @RequestMapping("/api/admin/curators")
 class AdminController(
-    private val adminService: AdminService
+    private val adminService: AdminService,
 ) {
 
     @GetMapping
@@ -42,7 +42,7 @@ class AdminController(
     @GetMapping("/{curatorId}")
     @PreAuthorize("hasRole('ADMIN')")
     fun getCuratorDetail(
-        @PathVariable @Positive curatorId: Long,
+        @PathVariable @Positive(message = "Идентификатор куратора должен быть положительным") curatorId: Long,
     ): CuratorDetailResponse {
         return adminService.getCuratorDetail(curatorId)
     }
@@ -51,7 +51,7 @@ class AdminController(
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('ADMIN')")
     fun createCurator(
-        @Valid @RequestBody request: CreateCuratorRequest
+        @Valid @RequestBody request: CreateCuratorRequest,
     ): User {
         return adminService.createCurator(request)
     }
@@ -59,7 +59,7 @@ class AdminController(
     @PatchMapping("/{curatorId}/access")
     @PreAuthorize("hasRole('ADMIN')")
     fun updateCuratorAccess(
-        @PathVariable @Positive curatorId: Long,
+        @PathVariable @Positive(message = "Идентификатор куратора должен быть положительным") curatorId: Long,
         @AuthenticationPrincipal principal: AuthenticatedUser,
         @Valid @RequestBody request: UpdateCuratorAccessRequest,
     ): CuratorDetailResponse {
