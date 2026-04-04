@@ -1,7 +1,6 @@
 package ru.itplanet.trampline.profile.security
 
 import org.springframework.core.MethodParameter
-import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.stereotype.Component
 import org.springframework.web.bind.support.WebDataBinderFactory
@@ -9,6 +8,7 @@ import org.springframework.web.context.request.NativeWebRequest
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.method.support.ModelAndViewContainer
 import ru.itplanet.trampline.commons.annotation.CurrentUser
+import ru.itplanet.trampline.profile.exception.ProfileForbiddenException
 
 @Component
 class CurrentUserArgumentResolver : HandlerMethodArgumentResolver {
@@ -35,7 +35,10 @@ class CurrentUserArgumentResolver : HandlerMethodArgumentResolver {
 
         if (principal == null) {
             if (parameter.parameterType == Long::class.javaPrimitiveType) {
-                throw AccessDeniedException("Current user is not authenticated")
+                throw ProfileForbiddenException(
+                    message = "Требуется авторизация",
+                    code = "unauthorized",
+                )
             }
             return null
         }
@@ -45,7 +48,7 @@ class CurrentUserArgumentResolver : HandlerMethodArgumentResolver {
             java.lang.Long::class.java,
             Long::class.javaPrimitiveType -> principal.userId
             else -> throw IllegalStateException(
-                "Unsupported @CurrentUser parameter type: ${parameter.parameterType.name}",
+                "Неподдерживаемый тип параметра для @CurrentUser: ${parameter.parameterType.name}",
             )
         }
     }

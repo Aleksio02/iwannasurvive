@@ -3,9 +3,8 @@ package ru.itplanet.trampline.interaction.service
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import feign.FeignException
-import jakarta.persistence.EntityNotFoundException
 import org.springframework.dao.DataIntegrityViolationException
-import org.springframework.security.access.AccessDeniedException
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.commons.model.OpportunityCard
@@ -31,7 +30,11 @@ import ru.itplanet.trampline.interaction.dao.dto.ContactStatus
 import ru.itplanet.trampline.interaction.dao.dto.FavoriteDto
 import ru.itplanet.trampline.interaction.dao.dto.FavoriteTargetType
 import ru.itplanet.trampline.interaction.dao.dto.OpportunityResponseDto
-import ru.itplanet.trampline.interaction.exception.InteractionException
+import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
+import ru.itplanet.trampline.interaction.exception.InteractionConflictException
+import ru.itplanet.trampline.interaction.exception.InteractionForbiddenException
+import ru.itplanet.trampline.interaction.exception.InteractionIntegrationException
+import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.model.request.ContactRequest
 import ru.itplanet.trampline.interaction.model.request.CreateContactRecommendationRequest
 import ru.itplanet.trampline.interaction.model.request.GetEmployerResponseListRequest
@@ -66,14 +69,20 @@ class InteractionServiceImpl(
         userId: Long,
         request: OpportunityResponseRequest,
     ): OpportunityResponseResponse {
-        val opportunity = opportunityServiceClient.getPublicOpportunity(request.opportunityId)
+        val opportunity = loadOpportunity(request.opportunityId)
 
         if (opportunityResponseDao.existsByApplicantUserIdAndOpportunityId(userId, request.opportunityId)) {
-            throw RuntimeException("You have already applied to this opportunity")
+            throw InteractionConflictException(
+                message = "Вы уже откликались на эту возможность",
+                code = "opportunity_already_applied",
+            )
         }
 
         if (opportunity.status != OpportunityStatus.PUBLISHED) {
-            throw InteractionException.BadRequest("This opportunity is not open for applications")
+            throw InteractionConflictException(
+                message = "Эта возможность недоступна для отклика",
+                code = "opportunity_not_open_for_applications",
+            )
         }
 
         val resumeFile = validateResumeFile(userId, request.resumeFileId)
@@ -97,12 +106,20 @@ class InteractionServiceImpl(
         request: OpportunityResponseStatusUpdateRequest,
     ): OpportunityResponseResponse {
         val opportunityResponseDto = opportunityResponseDao.findById(applicationId)
-            .orElseThrow { EntityNotFoundException("Response not found") }
+            .orElseThrow {
+                InteractionNotFoundException(
+                    message = "Отклик не найден",
+                    code = "opportunity_response_not_found",
+                )
+            }
 
-        val opportunity = opportunityServiceClient.getPublicOpportunity(opportunityResponseDto.opportunityId)
+        val opportunity = loadOpportunity(opportunityResponseDto.opportunityId)
 
         if (opportunity.employerUserId != currentUserId) {
-            throw AccessDeniedException("You are not the owner of this opportunity")
+            throw InteractionForbiddenException(
+                message = "Изменять статус отклика может только владелец возможности",
+                code = "opportunity_owner_required",
+            )
         }
 
         opportunityResponseDto.status = request.status
@@ -120,7 +137,7 @@ class InteractionServiceImpl(
                     .thenByDescending { it.id ?: Long.MIN_VALUE },
             )
             .map { app ->
-                val opportunity = opportunityServiceClient.getPublicOpportunity(app.opportunityId)
+                val opportunity = loadOpportunity(app.opportunityId)
                 toOpportunityResponseResponse(app, opportunity.title)
             }
     }
@@ -129,10 +146,13 @@ class InteractionServiceImpl(
         opportunityId: Long,
         currentUserId: Long,
     ): List<OpportunityResponseResponse> {
-        val opportunity = opportunityServiceClient.getPublicOpportunity(opportunityId)
+        val opportunity = loadOpportunity(opportunityId)
 
         if (opportunity.employerUserId != currentUserId) {
-            throw AccessDeniedException("You are not the owner of this opportunity")
+            throw InteractionForbiddenException(
+                message = "Просматривать отклики может только владелец возможности",
+                code = "opportunity_owner_required",
+            )
         }
 
         return opportunityResponseDao.findByOpportunityId(opportunityId).map { app ->
@@ -146,10 +166,16 @@ class InteractionServiceImpl(
     ): EmployerResponsePage<EmployerOpportunityResponseItem> {
         request.opportunityId?.let { opportunityId ->
             val ownerUserId = employerResponseQueryDao.findOpportunityEmployerUserId(opportunityId)
-                ?: throw EntityNotFoundException("Opportunity not found")
+                ?: throw InteractionNotFoundException(
+                    message = "Возможность не найдена",
+                    code = "opportunity_not_found",
+                )
 
             if (ownerUserId != currentUserId) {
-                throw AccessDeniedException("You are not the owner of this opportunity")
+                throw InteractionForbiddenException(
+                    message = "Просматривать отклики может только владелец возможности",
+                    code = "opportunity_owner_required",
+                )
             }
         }
 
@@ -165,7 +191,7 @@ class InteractionServiceImpl(
                     .thenByDescending { it.id ?: Long.MIN_VALUE },
             )
             .map { app ->
-                val opportunity = opportunityServiceClient.getPublicOpportunity(app.opportunityId)
+                val opportunity = loadOpportunity(app.opportunityId)
                 InternalApplicantApplicationResponse(
                     id = app.id!!,
                     opportunityId = app.opportunityId,
@@ -211,7 +237,7 @@ class InteractionServiceImpl(
         userId: Long,
         opportunityId: Long,
     ): FavoriteResponse {
-        val opportunity = opportunityServiceClient.getPublicOpportunity(opportunityId)
+        val opportunity = loadOpportunity(opportunityId)
 
         val favorite = favoriteDao.findByUserIdAndOpportunityId(userId, opportunityId)
             ?: favoriteDao.saveAndFlush(
@@ -236,7 +262,7 @@ class InteractionServiceImpl(
         userId: Long,
         employerUserId: Long,
     ): FavoriteResponse {
-        val employer = profileServiceClient.getEmployerProfile(employerUserId)
+        val employer = loadEmployerProfile(employerUserId)
 
         val favorite = favoriteDao.findByUserIdAndEmployerUserId(userId, employerUserId)
             ?: favoriteDao.saveAndFlush(
@@ -265,9 +291,9 @@ class InteractionServiceImpl(
             when (favorite.targetType) {
                 FavoriteTargetType.OPPORTUNITY -> {
                     val opportunityId = favorite.opportunityId
-                        ?: throw IllegalStateException("Opportunity favorite must contain opportunityId")
+                        ?: throw IllegalStateException("Избранное по возможности должно содержать opportunityId")
 
-                    val opportunity = opportunityServiceClient.getPublicOpportunity(opportunityId)
+                    val opportunity = loadOpportunity(opportunityId)
                     val employer = opportunity.employerUserId?.let { employerUserId ->
                         employerCache[employerUserId]
                             ?: loadEmployerProfileSummaryOrNull(employerUserId)?.also {
@@ -280,10 +306,10 @@ class InteractionServiceImpl(
 
                 FavoriteTargetType.EMPLOYER -> {
                     val employerUserId = favorite.employerUserId
-                        ?: throw IllegalStateException("Employer favorite must contain employerUserId")
+                        ?: throw IllegalStateException("Избранное по работодателю должно содержать employerUserId")
 
                     val employer = employerCache.getOrPut(employerUserId) {
-                        profileServiceClient.getEmployerProfile(employerUserId)
+                        loadEmployerProfile(employerUserId)
                     }
 
                     toEmployerFavoriteResponse(favorite, employer)
@@ -294,13 +320,19 @@ class InteractionServiceImpl(
 
     override fun addContact(userId: Long, request: ContactRequest): ContactResponse {
         if (userId == request.contactUserId) {
-            throw InteractionException.BadRequest("You cannot add yourself as a contact")
+            throw InteractionBadRequestException(
+                message = "Нельзя добавить самого себя в контакты",
+                code = "contact_self_add_forbidden",
+            )
         }
 
         val (low, high) = orderedPair(userId, request.contactUserId)
 
         if (contactRepository.existsByIdUserLowIdAndIdUserHighId(low, high)) {
-            throw RuntimeException("Contact already exists")
+            throw InteractionConflictException(
+                message = "Контакт уже существует",
+                code = "contact_already_exists",
+            )
         }
 
         val contactDtoId = ContactDtoId(low, high)
@@ -318,10 +350,16 @@ class InteractionServiceImpl(
         val (low, high) = orderedPair(userId, contactUserId)
 
         val contact = contactRepository.findByIdUserLowIdAndIdUserHighId(low, high)
-            ?: throw EntityNotFoundException("Contact request not found")
+            ?: throw InteractionNotFoundException(
+                message = "Запрос в контакты не найден",
+                code = "contact_request_not_found",
+            )
 
         if (contact.initiatedByUserId != contactUserId) {
-            throw AccessDeniedException("You are not the recipient of this request")
+            throw InteractionForbiddenException(
+                message = "Ответить на запрос может только получатель",
+                code = "contact_request_recipient_required",
+            )
         }
 
         contact.status = status
@@ -335,7 +373,10 @@ class InteractionServiceImpl(
         val (low, high) = orderedPair(userId, contactUserId)
 
         val contact = contactRepository.findByIdUserLowIdAndIdUserHighId(low, high)
-            ?: throw EntityNotFoundException("Contact not found")
+            ?: throw InteractionNotFoundException(
+                message = "Контакт не найден",
+                code = "contact_not_found",
+            )
 
         contactRepository.delete(contact)
     }
@@ -354,8 +395,9 @@ class InteractionServiceImpl(
         request: CreateContactRecommendationRequest,
     ): ContactRecommendationResponse {
         if (userId == request.toApplicantUserId) {
-            throw InteractionException.BadRequest(
-                "You cannot recommend an opportunity to yourself",
+            throw InteractionBadRequestException(
+                message = "Нельзя рекомендовать возможность самому себе",
+                code = "recommendation_self_forbidden",
             )
         }
 
@@ -364,10 +406,11 @@ class InteractionServiceImpl(
 
         ensureAcceptedContact(userId, request.toApplicantUserId)
 
-        val opportunity = opportunityServiceClient.getPublicOpportunity(request.opportunityId)
+        val opportunity = loadOpportunity(request.opportunityId)
         if (opportunity.status != OpportunityStatus.PUBLISHED) {
-            throw InteractionException.Conflict(
-                "Only published opportunity can be recommended",
+            throw InteractionConflictException(
+                message = "Рекомендовать можно только опубликованную возможность",
+                code = "recommendation_only_published_opportunity_allowed",
             )
         }
 
@@ -380,8 +423,9 @@ class InteractionServiceImpl(
                 toApplicantUserId = request.toApplicantUserId,
             )
         ) {
-            throw InteractionException.Conflict(
-                "You have already recommended this opportunity to this contact",
+            throw InteractionConflictException(
+                message = "Вы уже рекомендовали эту возможность этому контакту",
+                code = "recommendation_already_exists",
             )
         }
 
@@ -395,8 +439,9 @@ class InteractionServiceImpl(
                 ),
             )
         } catch (_: DataIntegrityViolationException) {
-            throw InteractionException.Conflict(
-                "You have already recommended this opportunity to this contact",
+            throw InteractionConflictException(
+                message = "Вы уже рекомендовали эту возможность этому контакту",
+                code = "recommendation_already_exists",
             )
         }
 
@@ -431,7 +476,10 @@ class InteractionServiceImpl(
         val recommendation = contactRecommendationDao.findByIdAndFromApplicantUserId(
             id = recommendationId,
             fromApplicantUserId = userId,
-        ) ?: throw EntityNotFoundException("Recommendation not found")
+        ) ?: throw InteractionNotFoundException(
+            message = "Рекомендация не найдена",
+            code = "recommendation_not_found",
+        )
 
         contactRecommendationDao.delete(recommendation)
     }
@@ -444,7 +492,7 @@ class InteractionServiceImpl(
 
         return recommendations.map { recommendation ->
             val opportunity = opportunityCache.getOrPut(recommendation.opportunityId) {
-                opportunityServiceClient.getPublicOpportunity(recommendation.opportunityId)
+                loadOpportunity(recommendation.opportunityId)
             }
 
             val fromApplicant = applicantCache.getOrPut(recommendation.fromApplicantUserId) {
@@ -474,20 +522,40 @@ class InteractionServiceImpl(
 
         val file = try {
             mediaServiceClient.getMetadata(resumeFileId)
-        } catch (ex: FeignException.NotFound) {
-            throw InteractionException.BadRequest("Resume file not found")
+        } catch (ex: FeignException) {
+            when (ex.status()) {
+                HttpStatus.NOT_FOUND.value() -> throw InteractionBadRequestException(
+                    message = "Файл резюме не найден",
+                    code = "resume_file_not_found",
+                )
+
+                else -> throw InteractionIntegrationException(
+                    message = "Сервис медиафайлов временно недоступен",
+                    code = "media_service_unavailable",
+                    status = HttpStatus.SERVICE_UNAVAILABLE,
+                )
+            }
         }
 
         if (file.ownerUserId != userId) {
-            throw AccessDeniedException("Resume file does not belong to current user")
+            throw InteractionForbiddenException(
+                message = "Файл резюме не принадлежит текущему пользователю",
+                code = "resume_file_owner_required",
+            )
         }
 
         if (file.kind != FileAssetKind.RESUME) {
-            throw InteractionException.BadRequest("Provided file is not a resume")
+            throw InteractionBadRequestException(
+                message = "Переданный файл не является резюме",
+                code = "resume_file_invalid_kind",
+            )
         }
 
         if (file.status != FileAssetStatus.READY) {
-            throw InteractionException.BadRequest("Resume file is not ready")
+            throw InteractionBadRequestException(
+                message = "Файл резюме ещё не готов",
+                code = "resume_file_not_ready",
+            )
         }
 
         return file
@@ -530,8 +598,9 @@ class InteractionServiceImpl(
         )
 
         if (!isAccepted) {
-            throw AccessDeniedException(
-                "You can recommend opportunities only to accepted contacts",
+            throw InteractionForbiddenException(
+                message = "Рекомендовать возможности можно только подтверждённым контактам",
+                code = "accepted_contact_required",
             )
         }
     }
@@ -540,7 +609,54 @@ class InteractionServiceImpl(
         userId: Long,
     ): ContactInfoApplicantProfileDto {
         return contactInfoApplicantProfileDao.findById(userId)
-            .orElseThrow { EntityNotFoundException("Applicant $userId not found") }
+            .orElseThrow {
+                InteractionNotFoundException(
+                    message = "Соискатель не найден",
+                    code = "applicant_not_found",
+                )
+            }
+    }
+
+    private fun loadOpportunity(
+        opportunityId: Long,
+    ): OpportunityCard {
+        return try {
+            opportunityServiceClient.getPublicOpportunity(opportunityId)
+        } catch (ex: FeignException) {
+            when (ex.status()) {
+                HttpStatus.NOT_FOUND.value() -> throw InteractionNotFoundException(
+                    message = "Возможность не найдена",
+                    code = "opportunity_not_found",
+                )
+
+                else -> throw InteractionIntegrationException(
+                    message = "Сервис возможностей временно недоступен",
+                    code = "opportunity_service_unavailable",
+                    status = HttpStatus.SERVICE_UNAVAILABLE,
+                )
+            }
+        }
+    }
+
+    private fun loadEmployerProfile(
+        employerUserId: Long,
+    ): EmployerProfileSummary {
+        return try {
+            profileServiceClient.getEmployerProfile(employerUserId)
+        } catch (ex: FeignException) {
+            when (ex.status()) {
+                HttpStatus.NOT_FOUND.value() -> throw InteractionNotFoundException(
+                    message = "Профиль работодателя не найден",
+                    code = "employer_profile_not_found",
+                )
+
+                else -> throw InteractionIntegrationException(
+                    message = "Сервис профилей временно недоступен",
+                    code = "profile_service_unavailable",
+                    status = HttpStatus.SERVICE_UNAVAILABLE,
+                )
+            }
+        }
     }
 
     private fun loadEmployerProfileSummaryOrNull(
@@ -645,7 +761,7 @@ class InteractionServiceImpl(
     ): String {
         return employer.companyName?.takeIf { it.isNotBlank() }
             ?: employer.legalName?.takeIf { it.isNotBlank() }
-            ?: "Employer #${employer.userId}"
+            ?: "Работодатель #${employer.userId}"
     }
 
     private fun buildEmployerSubtitle(
@@ -670,7 +786,12 @@ class InteractionServiceImpl(
         val contactUserId = resolveContactUserId(currentUserId, contact)
 
         val userDto = contactInfoApplicantProfileDao.findById(contactUserId)
-            .orElseThrow { EntityNotFoundException("User $contactUserId not found") }
+            .orElseThrow {
+                InteractionNotFoundException(
+                    message = "Соискатель не найден",
+                    code = "applicant_not_found",
+                )
+            }
 
         val contactName = fullApplicantName(userDto)
 
@@ -689,7 +810,10 @@ class InteractionServiceImpl(
         return when (currentUserId) {
             contact.id.userLowId -> contact.id.userHighId
             contact.id.userHighId -> contact.id.userLowId
-            else -> throw AccessDeniedException("Current user is not a participant of this contact")
+            else -> throw InteractionForbiddenException(
+                message = "Текущий пользователь не участвует в этом контакте",
+                code = "contact_participant_required",
+            )
         }
     }
 
@@ -700,7 +824,7 @@ class InteractionServiceImpl(
         toApplicant: ContactInfoApplicantProfileDto,
     ): ContactRecommendationResponse {
         return ContactRecommendationResponse(
-            id = recommendation.id ?: error("Recommendation id must not be null"),
+            id = recommendation.id ?: error("Идентификатор рекомендации не должен быть null"),
             opportunityId = recommendation.opportunityId,
             opportunityTitle = opportunity.title,
             opportunityType = opportunity.type,

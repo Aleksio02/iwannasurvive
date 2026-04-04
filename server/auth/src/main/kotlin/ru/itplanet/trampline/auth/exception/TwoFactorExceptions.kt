@@ -1,13 +1,28 @@
 package ru.itplanet.trampline.auth.exception
 
-class InvalidTwoFactorCodeException :
-    RuntimeException("Invalid two-factor code")
+import org.springframework.http.HttpStatus
+import ru.itplanet.trampline.commons.exception.ApiException
 
-class InvalidTwoFactorPendingTokenException :
-    RuntimeException("Invalid or expired two-factor challenge")
+class InvalidTwoFactorCodeException : ApiException(
+    status = HttpStatus.UNAUTHORIZED,
+    code = "invalid_two_factor_code",
+    message = "Неверный код двухфакторной аутентификации",
+)
 
-class TwoFactorAlreadyEnabledException :
-    RuntimeException("Two-factor authentication is already enabled")
+class InvalidTwoFactorPendingTokenException : ApiException(
+    status = HttpStatus.UNAUTHORIZED,
+    code = "invalid_two_factor_pending_token",
+    message = "Запрос на двухфакторную аутентификацию недействителен или истёк",
+)
 
-class TwoFactorAlreadyDisabledException :
-    RuntimeException("Two-factor authentication is already disabled")
+class TwoFactorAlreadyEnabledException : ApiException(
+    status = HttpStatus.CONFLICT,
+    code = "two_factor_already_enabled",
+    message = "Двухфакторная аутентификация уже включена",
+)
+
+class TwoFactorAlreadyDisabledException : ApiException(
+    status = HttpStatus.CONFLICT,
+    code = "two_factor_already_disabled",
+    message = "Двухфакторная аутентификация уже отключена",
+)

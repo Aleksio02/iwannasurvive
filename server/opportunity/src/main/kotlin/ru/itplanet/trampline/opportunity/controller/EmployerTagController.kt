@@ -12,10 +12,10 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
+import ru.itplanet.trampline.opportunity.exception.OpportunityForbiddenException
 import ru.itplanet.trampline.opportunity.model.EmployerTagResponse
 import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerTagRequest
@@ -47,7 +47,7 @@ class EmployerTagController(
     @GetMapping("/{id}/moderation-task")
     fun getModerationTask(
         @CurrentUser currentUser: AuthenticatedUser,
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор тега должен быть положительным") id: Long,
     ): InternalModerationTaskLookupResponse {
         ensureEmployer(currentUser)
 
@@ -61,7 +61,7 @@ class EmployerTagController(
     @PostMapping("/{id}/moderation-task/cancel")
     fun cancelModerationTask(
         @CurrentUser currentUser: AuthenticatedUser,
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор тега должен быть положительным") id: Long,
     ): ResponseEntity<Unit> {
         ensureEmployer(currentUser)
 
@@ -78,9 +78,9 @@ class EmployerTagController(
         currentUser: AuthenticatedUser,
     ) {
         if (currentUser.role != Role.EMPLOYER) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only employer can manage employer-created tags",
+            throw OpportunityForbiddenException(
+                message = "Только работодатель может управлять тегами работодателя",
+                code = "employer_role_required",
             )
         }
     }

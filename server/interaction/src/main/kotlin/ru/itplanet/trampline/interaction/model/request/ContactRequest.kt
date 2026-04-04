@@ -1,5 +1,8 @@
 package ru.itplanet.trampline.interaction.model.request
 
+import jakarta.validation.constraints.Positive
+
 data class ContactRequest(
-    val contactUserId: Long
+    @field:Positive(message = "Идентификатор контакта должен быть положительным")
+    val contactUserId: Long,
 )

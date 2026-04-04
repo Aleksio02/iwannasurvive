@@ -1,10 +1,8 @@
 package ru.itplanet.trampline.opportunity.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTaskRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
@@ -13,6 +11,9 @@ import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 import ru.itplanet.trampline.opportunity.client.ModerationServiceClient
 import ru.itplanet.trampline.opportunity.dao.TagDao
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
+import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
+import ru.itplanet.trampline.opportunity.exception.OpportunityForbiddenException
+import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundDomainException
 import ru.itplanet.trampline.opportunity.model.EmployerTagResponse
 import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
@@ -44,9 +45,9 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
             it.moderationStatus == TagModerationStatus.APPROVED && it.isActive
         }
         if (approvedTag != null) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Tag with same name and category already exists",
+            throw OpportunityConflictException(
+                message = "Тег с таким названием и категорией уже существует",
+                code = "tag_already_exists",
             )
         }
 
@@ -55,9 +56,9 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
                     (it.createdByType != createdByType || it.createdByUserId != currentUserId)
         }
         if (foreignPendingTag != null) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Tag with same name and category is already under review",
+            throw OpportunityConflictException(
+                message = "Тег с таким названием и категорией уже находится на модерации",
+                code = "tag_already_on_moderation",
             )
         }
 
@@ -81,9 +82,9 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
                 }
 
                 TagModerationStatus.APPROVED -> {
-                    throw ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Tag with same name and category already exists",
+                    throw OpportunityConflictException(
+                        message = "Тег с таким названием и категорией уже существует",
+                        code = "tag_already_exists",
                     )
                 }
             }
@@ -98,9 +99,9 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
         }
 
         if (sameTags.isNotEmpty()) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Tag with same name and category already exists",
+            throw OpportunityConflictException(
+                message = "Тег с таким названием и категорией уже существует",
+                code = "tag_already_exists",
             )
         }
 
@@ -156,9 +157,9 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
         )
 
         if (tag.moderationStatus != TagModerationStatus.PENDING) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Only pending tag can cancel moderation task",
+            throw OpportunityConflictException(
+                message = "Отменить задачу модерации можно только для тега со статусом PENDING",
+                code = "tag_moderation_cancel_not_allowed",
             )
         }
 
@@ -205,13 +206,16 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
 
         val tag = tagDao.findById(tagId)
             .orElseThrow {
-                ResponseStatusException(HttpStatus.NOT_FOUND, "Tag not found")
+                OpportunityNotFoundDomainException(
+                    message = "Тег не найден",
+                    code = "tag_not_found",
+                )
             }
 
         if (tag.createdByType != createdByType || tag.createdByUserId != currentUserId) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only tag owner can manage moderation state",
+            throw OpportunityForbiddenException(
+                message = "Изменять состояние модерации может только владелец тега",
+                code = "tag_owner_required",
             )
         }
 
@@ -247,9 +251,9 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
         createdByType: CreatedByType,
     ) {
         if (createdByType == CreatedByType.SYSTEM) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "System-created tags cannot be managed through public API",
+            throw OpportunityForbiddenException(
+                message = "Теги, созданные системой, нельзя изменять через публичный API",
+                code = "system_tag_management_forbidden",
             )
         }
     }

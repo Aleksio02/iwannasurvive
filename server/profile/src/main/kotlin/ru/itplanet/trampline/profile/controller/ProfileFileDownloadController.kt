@@ -22,8 +22,8 @@ class ProfileFileDownloadController(
 
     @GetMapping("/applicant/{userId}/files/{fileId}")
     fun openApplicantFile(
-        @PathVariable @Positive userId: Long,
-        @PathVariable @Positive fileId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
+        @PathVariable @Positive(message = "Идентификатор файла должен быть положительным") fileId: Long,
     ): ResponseEntity<Void> {
         val downloadUrl = profileService.getApplicantFileDownloadUrl(
             currentUserId = currentUserIdOrNull(),
@@ -38,8 +38,8 @@ class ProfileFileDownloadController(
 
     @GetMapping("/employer/{userId}/files/{fileId}")
     fun openEmployerFile(
-        @PathVariable @Positive userId: Long,
-        @PathVariable @Positive fileId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
+        @PathVariable @Positive(message = "Идентификатор файла должен быть положительным") fileId: Long,
     ): ResponseEntity<Void> {
         val downloadUrl = profileService.getEmployerFileDownloadUrl(
             currentUserId = currentUserIdOrNull(),

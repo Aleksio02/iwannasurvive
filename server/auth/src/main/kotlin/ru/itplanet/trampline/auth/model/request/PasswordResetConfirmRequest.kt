@@ -5,14 +5,14 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
 data class PasswordResetConfirmRequest(
-    @field:Email(message = "Email must be valid")
-    @field:NotBlank(message = "Email must not be empty")
+    @field:Email(message = "Укажите корректный адрес электронной почты")
+    @field:NotBlank(message = "Электронная почта обязательна")
     val email: String,
 
-    @field:NotBlank(message = "Reset token must not be empty")
+    @field:NotBlank(message = "Токен сброса пароля обязателен")
     val resetToken: String,
 
-    @field:Size(min = 8, max = 16, message = "Password should be between 8 and 16 characters")
-    @field:NotBlank(message = "Password must not be empty")
-    val newPassword: String
+    @field:Size(min = 8, max = 16, message = "Пароль должен содержать от 8 до 16 символов")
+    @field:NotBlank(message = "Новый пароль обязателен")
+    val newPassword: String,
 )

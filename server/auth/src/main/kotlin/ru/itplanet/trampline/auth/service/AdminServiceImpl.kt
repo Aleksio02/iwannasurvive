@@ -47,7 +47,7 @@ class AdminServiceImpl(
         val userToSave = userConverter.toCuratorUserDto(
             source = request,
             normalizedEmail = normalizedEmail,
-            passwordHash = passwordEncoder.encode(request.password)
+            passwordHash = passwordEncoder.encode(request.password),
         )
 
         val savedUser = try {
@@ -101,7 +101,7 @@ class AdminServiceImpl(
     ): CuratorDetailResponse {
         if (actorUserId == curatorId) {
             throw CuratorAccessChangeNotAllowedException(
-                "Administrator cannot change own access",
+                "Администратор не может изменять доступ самому себе",
             )
         }
 
@@ -110,7 +110,7 @@ class AdminServiceImpl(
 
         if (user.role != Role.CURATOR) {
             throw CuratorAccessChangeNotAllowedException(
-                "Only curator account access can be changed",
+                "Изменять доступ можно только для учетной записи куратора",
             )
         }
 
@@ -124,7 +124,7 @@ class AdminServiceImpl(
 
         if (!request.active && normalizedReason == null) {
             throw CuratorAccessChangeNotAllowedException(
-                "Reason is required when deactivating curator",
+                "При деактивации куратора необходимо указать причину",
             )
         }
 
@@ -222,7 +222,7 @@ class AdminServiceImpl(
         )
     }
 
-    private companion object {
+    companion object {
         private val logger = LoggerFactory.getLogger(AdminServiceImpl::class.java)
     }
 }

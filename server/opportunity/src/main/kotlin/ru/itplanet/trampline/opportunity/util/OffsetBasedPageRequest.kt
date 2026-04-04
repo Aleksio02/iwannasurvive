@@ -6,12 +6,12 @@ import org.springframework.data.domain.Sort
 class OffsetBasedPageRequest(
     private val limit: Int,
     private val offset: Long,
-    private val sort: Sort = Sort.unsorted()
+    private val sort: Sort = Sort.unsorted(),
 ) : Pageable {
 
     init {
-        require(limit > 0) { "Limit must be greater than zero" }
-        require(offset >= 0) { "Offset must not be negative" }
+        require(limit > 0) { "Лимит должен быть больше нуля" }
+        require(offset >= 0) { "Смещение не может быть отрицательным" }
     }
 
     override fun getPageNumber(): Int = (offset / limit).toInt()
@@ -30,7 +30,7 @@ class OffsetBasedPageRequest(
     override fun first(): Pageable = OffsetBasedPageRequest(limit, 0, sort)
 
     override fun withPage(pageNumber: Int): Pageable {
-        require(pageNumber >= 0) { "Page index must not be negative" }
+        require(pageNumber >= 0) { "Индекс страницы не может быть отрицательным" }
         return OffsetBasedPageRequest(limit, pageNumber.toLong() * limit, sort)
     }
 

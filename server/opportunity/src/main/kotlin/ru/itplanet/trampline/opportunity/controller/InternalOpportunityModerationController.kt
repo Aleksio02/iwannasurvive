@@ -22,7 +22,7 @@ class InternalOpportunityModerationController(
 
     @PostMapping("/opportunities/{opportunityId}/approve")
     fun approveOpportunity(
-        @PathVariable @Positive opportunityId: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") opportunityId: Long,
         @Valid @RequestBody request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         return internalOpportunityModerationService.approveOpportunity(opportunityId, request)
@@ -30,7 +30,7 @@ class InternalOpportunityModerationController(
 
     @PostMapping("/opportunities/{opportunityId}/reject")
     fun rejectOpportunity(
-        @PathVariable @Positive opportunityId: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") opportunityId: Long,
         @Valid @RequestBody request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         return internalOpportunityModerationService.rejectOpportunity(opportunityId, request)
@@ -38,7 +38,7 @@ class InternalOpportunityModerationController(
 
     @PostMapping("/tags/{tagId}/approve")
     fun approveTag(
-        @PathVariable @Positive tagId: Long,
+        @PathVariable @Positive(message = "Идентификатор тега должен быть положительным") tagId: Long,
         @Valid @RequestBody request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         return internalOpportunityModerationService.approveTag(tagId, request)
@@ -46,7 +46,7 @@ class InternalOpportunityModerationController(
 
     @PostMapping("/tags/{tagId}/reject")
     fun rejectTag(
-        @PathVariable @Positive tagId: Long,
+        @PathVariable @Positive(message = "Идентификатор тега должен быть положительным") tagId: Long,
         @Valid @RequestBody request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         return internalOpportunityModerationService.rejectTag(tagId, request)
