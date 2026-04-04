@@ -9,6 +9,7 @@ import org.springframework.security.access.AccessDeniedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.server.ResponseStatusException
 import java.time.Instant
 
 @RestControllerAdvice
@@ -56,6 +57,48 @@ class GlobalExceptionHandler {
             status = HttpStatus.NOT_FOUND,
             code = "user_not_found",
             message = ex.message ?: "User not found"
+        )
+    }
+
+    @ExceptionHandler(CuratorNotFoundException::class)
+    fun handleCuratorNotFound(ex: CuratorNotFoundException): ResponseEntity<ErrorResponse> {
+        return build(
+            status = HttpStatus.NOT_FOUND,
+            code = "curator_not_found",
+            message = ex.message ?: "Curator not found"
+        )
+    }
+
+    @ExceptionHandler(CuratorAccessChangeNotAllowedException::class)
+    fun handleCuratorAccessChangeNotAllowed(
+        ex: CuratorAccessChangeNotAllowedException,
+    ): ResponseEntity<ErrorResponse> {
+        return build(
+            status = HttpStatus.BAD_REQUEST,
+            code = "curator_access_change_not_allowed",
+            message = ex.message ?: "Curator access change is not allowed"
+        )
+    }
+
+    @ExceptionHandler(CuratorAlreadyDeactivatedException::class)
+    fun handleCuratorAlreadyDeactivated(
+        ex: CuratorAlreadyDeactivatedException,
+    ): ResponseEntity<ErrorResponse> {
+        return build(
+            status = HttpStatus.CONFLICT,
+            code = "curator_already_deactivated",
+            message = ex.message ?: "Curator is already deactivated"
+        )
+    }
+
+    @ExceptionHandler(UserAccountDeactivatedException::class)
+    fun handleUserAccountDeactivated(
+        ex: UserAccountDeactivatedException,
+    ): ResponseEntity<ErrorResponse> {
+        return build(
+            status = HttpStatus.FORBIDDEN,
+            code = "user_account_deactivated",
+            message = ex.message ?: "User account is deactivated"
         )
     }
 
@@ -156,6 +199,17 @@ class GlobalExceptionHandler {
             status = HttpStatus.FORBIDDEN,
             code = "access_denied",
             message = "Access denied"
+        )
+    }
+
+    @ExceptionHandler(ResponseStatusException::class)
+    fun handleResponseStatus(ex: ResponseStatusException): ResponseEntity<ErrorResponse> {
+        val status = HttpStatus.valueOf(ex.statusCode.value())
+
+        return build(
+            status = status,
+            code = "request_failed",
+            message = ex.reason ?: status.reasonPhrase
         )
     }
 

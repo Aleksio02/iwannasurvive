@@ -2,13 +2,14 @@ package ru.itplanet.trampline.auth.service
 
 import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
-import org.springframework.http.HttpStatus
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.auth.client.ModerationAdminClient
 import ru.itplanet.trampline.auth.converter.UserConverter
+import ru.itplanet.trampline.auth.exception.CuratorAccessChangeNotAllowedException
+import ru.itplanet.trampline.auth.exception.CuratorAlreadyDeactivatedException
+import ru.itplanet.trampline.auth.exception.CuratorNotFoundException
 import ru.itplanet.trampline.auth.exception.UserAlreadyExistsException
 import ru.itplanet.trampline.auth.model.User
 import ru.itplanet.trampline.auth.model.request.CreateCuratorRequest
@@ -99,27 +100,22 @@ class AdminServiceImpl(
         request: UpdateCuratorAccessRequest,
     ): CuratorDetailResponse {
         if (actorUserId == curatorId) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
+            throw CuratorAccessChangeNotAllowedException(
                 "Administrator cannot change own access",
             )
         }
 
         val user = userDao.findByIdForUpdate(curatorId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Curator not found")
+            ?: throw CuratorNotFoundException()
 
         if (user.role != Role.CURATOR) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
+            throw CuratorAccessChangeNotAllowedException(
                 "Only curator account access can be changed",
             )
         }
 
-        if (user.isActive == request.active) {
-            return toCuratorDetailResponse(
-                user = user,
-                stats = loadCuratorStats(user.id ?: error("User id must not be null")),
-            )
+        if (!request.active && !user.isActive) {
+            throw CuratorAlreadyDeactivatedException()
         }
 
         val normalizedReason = request.reason
@@ -127,8 +123,7 @@ class AdminServiceImpl(
             ?.takeIf { it.isNotEmpty() }
 
         if (!request.active && normalizedReason == null) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
+            throw CuratorAccessChangeNotAllowedException(
                 "Reason is required when deactivating curator",
             )
         }
@@ -163,12 +158,10 @@ class AdminServiceImpl(
         curatorId: Long,
     ): UserDto {
         val user = userDao.findById(curatorId)
-            .orElseThrow {
-                ResponseStatusException(HttpStatus.NOT_FOUND, "Curator not found")
-            }
+            .orElseThrow { CuratorNotFoundException() }
 
         if (user.role != Role.CURATOR && user.role != Role.ADMIN) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Curator not found")
+            throw CuratorNotFoundException()
         }
 
         return user
