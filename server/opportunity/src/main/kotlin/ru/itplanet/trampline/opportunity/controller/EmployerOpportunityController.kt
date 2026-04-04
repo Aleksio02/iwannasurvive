@@ -56,7 +56,7 @@ class EmployerOpportunityController(
 
     @GetMapping("/{id}")
     fun getMyOpportunity(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @CurrentUser currentUserId: Long,
     ): EmployerOpportunityEditPayload {
         return employerOpportunityService.getMyOpportunity(currentUserId, id)
@@ -64,7 +64,7 @@ class EmployerOpportunityController(
 
     @PutMapping("/{id}")
     fun update(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @Valid @RequestBody request: CreateEmployerOpportunityRequest,
         @CurrentUser currentUserId: Long,
     ): EmployerOpportunityEditPayload {
@@ -76,7 +76,7 @@ class EmployerOpportunityController(
         consumes = [MediaType.MULTIPART_FORM_DATA_VALUE],
     )
     fun uploadMedia(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @RequestPart("file") file: MultipartFile,
         @CurrentUser currentUserId: Long,
     ): List<InternalFileAttachmentResponse> {
@@ -85,8 +85,8 @@ class EmployerOpportunityController(
 
     @DeleteMapping("/{id}/media/{attachmentId}")
     fun deleteMedia(
-        @PathVariable @Positive id: Long,
-        @PathVariable @Positive attachmentId: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
+        @PathVariable @Positive(message = "Идентификатор вложения должен быть положительным") attachmentId: Long,
         @CurrentUser currentUserId: Long,
     ): List<InternalFileAttachmentResponse> {
         return employerOpportunityMediaService.deleteMedia(currentUserId, id, attachmentId)
@@ -94,7 +94,7 @@ class EmployerOpportunityController(
 
     @PostMapping("/{id}/return-to-draft")
     fun returnToDraft(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @CurrentUser currentUserId: Long,
     ): EmployerOpportunityEditPayload {
         return employerOpportunityService.returnToDraft(currentUserId, id)
@@ -102,7 +102,7 @@ class EmployerOpportunityController(
 
     @PostMapping("/{id}/close")
     fun close(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @CurrentUser currentUserId: Long,
     ): EmployerOpportunityEditPayload {
         return employerOpportunityService.close(currentUserId, id)
@@ -110,7 +110,7 @@ class EmployerOpportunityController(
 
     @PostMapping("/{id}/archive")
     fun archive(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @CurrentUser currentUserId: Long,
     ): EmployerOpportunityEditPayload {
         return employerOpportunityService.archive(currentUserId, id)
@@ -118,7 +118,7 @@ class EmployerOpportunityController(
 
     @GetMapping("/{id}/moderation-task")
     fun getModerationTask(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @CurrentUser currentUserId: Long,
     ): InternalModerationTaskLookupResponse {
         return employerOpportunityModerationService.getModerationTask(currentUserId, id)
@@ -126,7 +126,7 @@ class EmployerOpportunityController(
 
     @PostMapping("/{id}/moderation-task/cancel")
     fun cancelModerationTask(
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
         @CurrentUser currentUserId: Long,
     ): ResponseEntity<Unit> {
         employerOpportunityModerationService.cancelModerationTask(currentUserId, id)

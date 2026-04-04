@@ -12,10 +12,10 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
+import ru.itplanet.trampline.opportunity.exception.OpportunityForbiddenException
 import ru.itplanet.trampline.opportunity.model.EmployerTagResponse
 import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerTagRequest
@@ -47,7 +47,7 @@ class CuratorTagController(
     @GetMapping("/{id}/moderation-task")
     fun getModerationTask(
         @CurrentUser currentUser: AuthenticatedUser,
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор тега должен быть положительным") id: Long,
     ): InternalModerationTaskLookupResponse {
         val createdByType = resolveCuratorCreatedByType(currentUser)
 
@@ -61,7 +61,7 @@ class CuratorTagController(
     @PostMapping("/{id}/moderation-task/cancel")
     fun cancelModerationTask(
         @CurrentUser currentUser: AuthenticatedUser,
-        @PathVariable @Positive id: Long,
+        @PathVariable @Positive(message = "Идентификатор тега должен быть положительным") id: Long,
     ): ResponseEntity<Unit> {
         val createdByType = resolveCuratorCreatedByType(currentUser)
 
@@ -80,9 +80,9 @@ class CuratorTagController(
         return when (currentUser.role) {
             Role.CURATOR -> CreatedByType.CURATOR
             Role.ADMIN -> CreatedByType.ADMIN
-            else -> throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only curator or admin can manage curator-created tags",
+            else -> throw OpportunityForbiddenException(
+                message = "Только куратор или администратор может управлять кураторскими тегами",
+                code = "curator_role_required",
             )
         }
     }

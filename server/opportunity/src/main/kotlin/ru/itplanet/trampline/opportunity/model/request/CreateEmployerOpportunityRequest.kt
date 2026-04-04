@@ -14,20 +14,20 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 
 data class CreateEmployerOpportunityRequest(
-    @field:NotBlank
-    @field:Size(max = 200)
+    @field:NotBlank(message = "Название обязательно")
+    @field:Size(max = 200, message = "Название не должно превышать 200 символов")
     val title: String,
 
-    @field:NotBlank
-    @field:Size(max = 1000)
+    @field:NotBlank(message = "Краткое описание обязательно")
+    @field:Size(max = 1000, message = "Краткое описание не должно превышать 1000 символов")
     val shortDescription: String,
 
     val fullDescription: String? = null,
 
     val requirements: String? = null,
 
-    @field:NotBlank
-    @field:Size(max = 200)
+    @field:NotBlank(message = "Название компании обязательно")
+    @field:Size(max = 200, message = "Название компании не должно превышать 200 символов")
     val companyName: String,
 
     val type: OpportunityType,
@@ -35,23 +35,23 @@ data class CreateEmployerOpportunityRequest(
     val employmentType: EmploymentType? = null,
     val grade: Grade? = null,
 
-    @field:Min(0)
+    @field:Min(value = 0, message = "Зарплата от не может быть отрицательной")
     val salaryFrom: Int? = null,
 
-    @field:Min(0)
+    @field:Min(value = 0, message = "Зарплата до не может быть отрицательной")
     val salaryTo: Int? = null,
 
-    @field:NotBlank
-    @field:Pattern(regexp = "^[A-Za-z]{3}$")
+    @field:NotBlank(message = "Валюта зарплаты обязательна")
+    @field:Pattern(regexp = "^[A-Za-z]{3}$", message = "Код валюты должен состоять из 3 латинских букв")
     val salaryCurrency: String = "RUB",
 
     val expiresAt: OffsetDateTime? = null,
     val eventDate: LocalDate? = null,
 
-    @field:Positive
+    @field:Positive(message = "Идентификатор города должен быть положительным")
     val cityId: Long? = null,
 
-    @field:Positive
+    @field:Positive(message = "Идентификатор локации должен быть положительным")
     val locationId: Long? = null,
 
     @field:Valid
@@ -60,5 +60,5 @@ data class CreateEmployerOpportunityRequest(
     @field:Valid
     val resourceLinks: List<CreateEmployerOpportunityResourceLinkRequest> = emptyList(),
 
-    val tagIds: List<@Positive Long> = emptyList()
+    val tagIds: List<@Positive(message = "Идентификатор тега должен быть положительным") Long> = emptyList(),
 )
