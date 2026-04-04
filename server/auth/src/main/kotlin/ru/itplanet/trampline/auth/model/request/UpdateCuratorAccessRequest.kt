@@ -7,6 +7,6 @@ import jakarta.validation.constraints.Size
 data class UpdateCuratorAccessRequest(
     val active: Boolean,
 
-    @field:Size(max = 1000, message = "Reason must not be longer than 1000 characters")
+    @field:Size(max = 1000, message = "Причина не должна превышать 1000 символов")
     val reason: String? = null,
 )
