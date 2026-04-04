@@ -7,6 +7,6 @@ import org.springframework.validation.annotation.Validated
 @Validated
 @ConfigurationProperties(prefix = "media.service")
 data class MediaServiceProperties(
-    @field:NotBlank(message = "Media service url must not be blank")
+    @field:NotBlank(message = "URL media-сервиса обязателен")
     var url: String = "",
 )

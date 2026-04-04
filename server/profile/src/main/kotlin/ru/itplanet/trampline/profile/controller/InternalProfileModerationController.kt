@@ -22,7 +22,7 @@ class InternalProfileModerationController(
 
     @PostMapping("/employer-profiles/{userId}/approve")
     fun approveEmployerProfile(
-        @PathVariable @Positive userId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
         @Valid @RequestBody request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         return internalProfileModerationService.approveEmployerProfile(userId, request)
@@ -30,7 +30,7 @@ class InternalProfileModerationController(
 
     @PostMapping("/employer-profiles/{userId}/reject")
     fun rejectEmployerProfile(
-        @PathVariable @Positive userId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
         @Valid @RequestBody request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         return internalProfileModerationService.rejectEmployerProfile(userId, request)
@@ -38,7 +38,7 @@ class InternalProfileModerationController(
 
     @PostMapping("/employer-verifications/{verificationId}/approve")
     fun approveEmployerVerification(
-        @PathVariable @Positive verificationId: Long,
+        @PathVariable @Positive(message = "Идентификатор запроса на верификацию должен быть положительным") verificationId: Long,
         @Valid @RequestBody request: InternalModerationApproveRequest,
     ): InternalModerationActionResultResponse {
         return internalProfileModerationService.approveEmployerVerification(verificationId, request)
@@ -46,7 +46,7 @@ class InternalProfileModerationController(
 
     @PostMapping("/employer-verifications/{verificationId}/reject")
     fun rejectEmployerVerification(
-        @PathVariable @Positive verificationId: Long,
+        @PathVariable @Positive(message = "Идентификатор запроса на верификацию должен быть положительным") verificationId: Long,
         @Valid @RequestBody request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
         return internalProfileModerationService.rejectEmployerVerification(verificationId, request)

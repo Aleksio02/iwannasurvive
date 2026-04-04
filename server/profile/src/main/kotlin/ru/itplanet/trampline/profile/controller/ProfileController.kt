@@ -1,7 +1,7 @@
 package ru.itplanet.trampline.profile.controller
 
 import jakarta.validation.Valid
-import org.springframework.http.HttpStatus
+import jakarta.validation.constraints.Positive
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.ModelAttribute
@@ -10,9 +10,9 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.Role
+import ru.itplanet.trampline.profile.exception.ProfileForbiddenException
 import ru.itplanet.trampline.profile.model.ApplicantApplicationSummary
 import ru.itplanet.trampline.profile.model.ApplicantContactSummary
 import ru.itplanet.trampline.profile.model.ApplicantProfile
@@ -37,11 +37,12 @@ class ProfileController(
         @CurrentUser currentUser: AuthenticatedUser,
     ): ApplicantProfile {
         if (currentUser.role != Role.APPLICANT) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only applicant can edit applicant profile",
+            throw ProfileForbiddenException(
+                message = "Только соискатель может редактировать профиль соискателя",
+                code = "applicant_role_required",
             )
         }
+
         return profileService.patchApplicantProfile(currentUser.userId, request)
     }
 
@@ -51,11 +52,12 @@ class ProfileController(
         @CurrentUser currentUser: AuthenticatedUser,
     ): EmployerProfile {
         if (currentUser.role != Role.EMPLOYER) {
-            throw ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "Only employer can edit employer profile",
+            throw ProfileForbiddenException(
+                message = "Только работодатель может редактировать профиль работодателя",
+                code = "employer_role_required",
             )
         }
+
         return profileService.patchEmployerProfile(currentUser.userId, request)
     }
 
@@ -70,7 +72,7 @@ class ProfileController(
     @GetMapping("/applicant/{userId}")
     fun getApplicantProfile(
         @CurrentUser currentUserId: Long?,
-        @PathVariable userId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
     ): ApplicantProfile {
         return profileService.getApplicantProfile(currentUserId, userId)
     }
@@ -78,7 +80,7 @@ class ProfileController(
     @GetMapping("/applicant/{userId}/contacts")
     fun getApplicantContacts(
         @CurrentUser currentUserId: Long?,
-        @PathVariable userId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
     ): List<ApplicantContactSummary> {
         return profileService.getApplicantContacts(currentUserId, userId)
     }
@@ -86,7 +88,7 @@ class ProfileController(
     @GetMapping("/applicant/{userId}/applications")
     fun getApplicantApplications(
         @CurrentUser currentUserId: Long?,
-        @PathVariable userId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
     ): List<ApplicantApplicationSummary> {
         return profileService.getApplicantApplications(currentUserId, userId)
     }
@@ -94,7 +96,7 @@ class ProfileController(
     @GetMapping("/employer/{userId}")
     fun getEmployerProfile(
         @CurrentUser currentUserId: Long?,
-        @PathVariable userId: Long,
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
     ): EmployerProfile {
         return profileService.getEmployerProfile(currentUserId, userId)
     }

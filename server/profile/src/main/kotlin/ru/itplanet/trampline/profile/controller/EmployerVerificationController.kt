@@ -37,7 +37,7 @@ class EmployerVerificationController(
     @GetMapping("/{verificationId}/moderation-task")
     fun getModerationTask(
         @CurrentUser employerUserId: Long,
-        @PathVariable @Positive verificationId: Long,
+        @PathVariable @Positive(message = "Идентификатор запроса на верификацию должен быть положительным") verificationId: Long,
     ): InternalModerationTaskLookupResponse {
         return verificationService.getModerationTask(employerUserId, verificationId)
     }
@@ -45,8 +45,8 @@ class EmployerVerificationController(
     @PostMapping("/{verificationId}/moderation-task/cancel")
     fun cancelModerationTask(
         @CurrentUser employerUserId: Long,
-        @PathVariable @Positive verificationId: Long,
-    ): ResponseEntity<Unit> {
+        @PathVariable @Positive(message = "Идентификатор запроса на верификацию должен быть положительным") verificationId: Long,
+    ): ResponseEntity<Void> {
         verificationService.cancelModerationTask(employerUserId, verificationId)
         return ResponseEntity.noContent().build()
     }
