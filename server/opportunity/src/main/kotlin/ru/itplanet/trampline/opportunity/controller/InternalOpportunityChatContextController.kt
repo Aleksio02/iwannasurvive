@@ -18,7 +18,7 @@ class InternalOpportunityChatContextController(
 
     @GetMapping("/{opportunityId}/chat-context")
     fun getChatContext(
-        @PathVariable @Positive opportunityId: Long,
+        @PathVariable @Positive(message = "Идентификатор возможности должен быть положительным") opportunityId: Long,
     ): InternalOpportunityChatContextResponse {
         return internalOpportunityChatContextService.getChatContext(opportunityId)
     }

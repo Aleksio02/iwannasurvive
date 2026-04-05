@@ -1,8 +1,8 @@
 package ru.itplanet.trampline.interaction.chat.service
 
-import jakarta.persistence.EntityNotFoundException
+import feign.FeignException
 import org.springframework.dao.DataIntegrityViolationException
-import org.springframework.security.access.AccessDeniedException
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogDao
@@ -16,7 +16,10 @@ import ru.itplanet.trampline.interaction.chat.model.ChatDialog
 import ru.itplanet.trampline.interaction.client.InternalOpportunityServiceClient
 import ru.itplanet.trampline.interaction.dao.ContactInfoApplicantProfileDao
 import ru.itplanet.trampline.interaction.dao.OpportunityResponseDao
-import ru.itplanet.trampline.interaction.exception.InteractionException
+import ru.itplanet.trampline.interaction.exception.InteractionConflictException
+import ru.itplanet.trampline.interaction.exception.InteractionForbiddenException
+import ru.itplanet.trampline.interaction.exception.InteractionIntegrationException
+import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 
 @Service
@@ -38,26 +41,56 @@ class ChatLifecycleServiceImpl(
     ): ChatDialog {
         chatDialogDao.findByOpportunityResponseId(responseId)?.let { existingDialog ->
             val dialogId = existingDialog.id
-                ?: throw IllegalStateException("Chat dialog id must not be null")
+                ?: throw IllegalStateException("Идентификатор диалога чата не должен быть null")
 
             chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
 
             return chatDialogQueryDao.findDialog(dialogId, currentUser.userId)
-                ?: throw IllegalStateException("Chat dialog $dialogId must be queryable")
+                ?: throw IllegalStateException("Диалог чата $dialogId должен быть доступен для чтения")
         }
 
         val response = opportunityResponseDao.findById(responseId)
-            .orElseThrow { EntityNotFoundException("Response not found") }
+            .orElseThrow {
+                InteractionNotFoundException(
+                    message = "Отклик не найден",
+                    code = "opportunity_response_not_found",
+                )
+            }
 
         if (response.status in ChatPolicy.TERMINAL_RESPONSE_STATUSES) {
-            throw InteractionException.Conflict("Chat cannot be created for a closed response")
+            throw InteractionConflictException(
+                message = "Чат нельзя создать для закрытого отклика",
+                code = "chat_create_not_allowed_for_closed_response",
+            )
         }
 
-        val opportunityContext = internalOpportunityServiceClient.getChatContext(response.opportunityId)
+        val opportunityContext = try {
+            internalOpportunityServiceClient.getChatContext(response.opportunityId)
+        } catch (ex: FeignException) {
+            when (ex.status()) {
+                HttpStatus.NOT_FOUND.value() -> throw InteractionNotFoundException(
+                    message = "Возможность не найдена",
+                    code = "opportunity_not_found",
+                )
+
+                HttpStatus.CONFLICT.value() -> throw InteractionConflictException(
+                    message = "Чат для этой возможности сейчас недоступен",
+                    code = "opportunity_chat_context_unavailable",
+                )
+
+                else -> throw InteractionIntegrationException(
+                    message = "Сервис возможностей временно недоступен",
+                    code = "opportunity_service_unavailable",
+                    status = HttpStatus.SERVICE_UNAVAILABLE,
+                )
+            }
+        }
 
         if (opportunityContext.opportunityId != response.opportunityId) {
-            throw IllegalStateException(
-                "Opportunity response ${response.id} references unexpected opportunity context",
+            throw InteractionIntegrationException(
+                message = "Сервис возможностей вернул некорректный чат-контекст",
+                code = "opportunity_chat_context_invalid",
+                status = HttpStatus.SERVICE_UNAVAILABLE,
             )
         }
 
@@ -65,11 +98,19 @@ class ChatLifecycleServiceImpl(
         val isEmployer = currentUser.userId == opportunityContext.employerUserId
 
         if (!isApplicant && !isEmployer) {
-            throw AccessDeniedException("You are not a participant of this response")
+            throw InteractionForbiddenException(
+                message = "Доступ к отклику и чату разрешён только его участникам",
+                code = "opportunity_response_participant_required",
+            )
         }
 
         val applicant = contactInfoApplicantProfileDao.findById(response.applicantUserId)
-            .orElseThrow { EntityNotFoundException("Applicant not found") }
+            .orElseThrow {
+                InteractionNotFoundException(
+                    message = "Соискатель не найден",
+                    code = "applicant_not_found",
+                )
+            }
 
         val dialogToSave = ChatDialogDto(
             opportunityResponseId = responseId,
@@ -88,29 +129,29 @@ class ChatLifecycleServiceImpl(
                 ?: throw ex
 
             val dialogId = existingDialog.id
-                ?: throw IllegalStateException("Chat dialog id must not be null")
+                ?: throw IllegalStateException("Идентификатор диалога чата не должен быть null")
 
             chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
             ensureParticipantStates(existingDialog)
 
             return chatDialogQueryDao.findDialog(dialogId, currentUser.userId)
-                ?: throw IllegalStateException("Chat dialog $dialogId must be queryable")
+                ?: throw IllegalStateException("Диалог чата $dialogId должен быть доступен для чтения")
         }
 
         ensureParticipantStates(savedDialog)
 
         val dialogId = savedDialog.id
-            ?: throw IllegalStateException("Saved chat dialog id must not be null")
+            ?: throw IllegalStateException("Идентификатор сохранённого диалога чата не должен быть null")
 
         return chatDialogQueryDao.findDialog(dialogId, currentUser.userId)
-            ?: throw IllegalStateException("Chat dialog $dialogId must be queryable")
+            ?: throw IllegalStateException("Диалог чата $dialogId должен быть доступен для чтения")
     }
 
     private fun ensureParticipantStates(
         dialog: ChatDialogDto,
     ) {
         val dialogId = dialog.id
-            ?: throw IllegalStateException("Chat dialog id must not be null")
+            ?: throw IllegalStateException("Идентификатор диалога чата не должен быть null")
 
         val applicantStateId = ChatParticipantStateDtoId(
             dialogId = dialogId,
