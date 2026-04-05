@@ -7,10 +7,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogQueryDao
-import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatDialogDto
-import ru.itplanet.trampline.interaction.chat.dao.dto.ChatParticipantStateDto
-import ru.itplanet.trampline.interaction.chat.dao.dto.ChatParticipantStateDtoId
 import ru.itplanet.trampline.interaction.chat.mapper.ChatDomainMapper
 import ru.itplanet.trampline.interaction.chat.model.ChatDialog
 import ru.itplanet.trampline.interaction.client.InternalOpportunityServiceClient
@@ -27,11 +24,11 @@ import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 class ChatLifecycleServiceImpl(
     private val chatDialogDao: ChatDialogDao,
     private val chatDialogQueryDao: ChatDialogQueryDao,
-    private val chatParticipantStateDao: ChatParticipantStateDao,
     private val opportunityResponseDao: OpportunityResponseDao,
     private val contactInfoApplicantProfileDao: ContactInfoApplicantProfileDao,
     private val internalOpportunityServiceClient: InternalOpportunityServiceClient,
     private val chatAccessService: ChatAccessService,
+    private val chatParticipantStateService: ChatParticipantStateService,
     private val chatDomainMapper: ChatDomainMapper,
 ) : ChatLifecycleService {
 
@@ -44,7 +41,7 @@ class ChatLifecycleServiceImpl(
             val dialogId = requireDialogId(existingDialog)
 
             chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
-            ensureParticipantStates(existingDialog)
+            chatParticipantStateService.ensureParticipantStates(existingDialog)
 
             return requireReadableDialog(
                 dialogId = dialogId,
@@ -134,7 +131,7 @@ class ChatLifecycleServiceImpl(
             val dialogId = requireDialogId(existingDialog)
 
             chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
-            ensureParticipantStates(existingDialog)
+            chatParticipantStateService.ensureParticipantStates(existingDialog)
 
             return requireReadableDialog(
                 dialogId = dialogId,
@@ -142,7 +139,7 @@ class ChatLifecycleServiceImpl(
             )
         }
 
-        ensureParticipantStates(savedDialog)
+        chatParticipantStateService.ensureParticipantStates(savedDialog)
 
         val dialogId = requireDialogId(savedDialog)
 
@@ -150,28 +147,6 @@ class ChatLifecycleServiceImpl(
             dialogId = dialogId,
             currentUserId = currentUser.userId,
         )
-    }
-
-    private fun ensureParticipantStates(
-        dialog: ChatDialogDto,
-    ) {
-        val dialogId = requireDialogId(dialog)
-
-        val applicantStateId = ChatParticipantStateDtoId(
-            dialogId = dialogId,
-            userId = dialog.applicantUserId,
-        )
-        if (!chatParticipantStateDao.existsById(applicantStateId)) {
-            chatParticipantStateDao.save(ChatParticipantStateDto(applicantStateId))
-        }
-
-        val employerStateId = ChatParticipantStateDtoId(
-            dialogId = dialogId,
-            userId = dialog.employerUserId,
-        )
-        if (!chatParticipantStateDao.existsById(employerStateId)) {
-            chatParticipantStateDao.save(ChatParticipantStateDto(employerStateId))
-        }
     }
 
     private fun requireDialogId(

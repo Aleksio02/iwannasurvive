@@ -3,7 +3,7 @@ package ru.itplanet.trampline.interaction.chat.service
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageDao
-import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
+import ru.itplanet.trampline.interaction.exception.InteractionInternalException
 import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 import java.time.OffsetDateTime
@@ -12,7 +12,7 @@ import java.time.OffsetDateTime
 class ChatReadServiceImpl(
     private val chatAccessService: ChatAccessService,
     private val chatMessageDao: ChatMessageDao,
-    private val chatParticipantStateDao: ChatParticipantStateDao,
+    private val chatParticipantStateService: ChatParticipantStateService,
 ) : ChatReadService {
 
     @Transactional
@@ -33,7 +33,10 @@ class ChatReadServiceImpl(
             }
 
         val messageId = message.id
-            ?: throw IllegalStateException("Идентификатор сообщения чата не должен быть null")
+            ?: throw InteractionInternalException(
+                message = "Не найден идентификатор сообщения чата",
+                code = "chat_message_id_missing",
+            )
 
         if (message.dialogId != dialogId) {
             throw InteractionNotFoundException(
@@ -42,11 +45,9 @@ class ChatReadServiceImpl(
             )
         }
 
-        val participantState = chatParticipantStateDao.findByIdDialogIdAndIdUserId(
-            dialogId = dialogId,
+        val participantState = chatParticipantStateService.getOrCreateParticipantState(
+            dialog = dialog,
             userId = currentUser.userId,
-        ) ?: throw IllegalStateException(
-            "Состояние участника чата не найдено для диалога $dialogId и пользователя ${currentUser.userId}",
         )
 
         val currentLastReadMessageId = participantState.lastReadMessageId
@@ -56,6 +57,5 @@ class ChatReadServiceImpl(
 
         participantState.lastReadMessageId = messageId
         participantState.lastReadAt = OffsetDateTime.now()
-        chatParticipantStateDao.save(participantState)
     }
 }
