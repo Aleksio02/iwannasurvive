@@ -1,4 +1,4 @@
-ackage ru.itplanet.trampline.interaction.chat.ws
+package ru.itplanet.trampline.interaction.chat.ws
 
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
