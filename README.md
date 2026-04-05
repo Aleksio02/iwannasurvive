@@ -149,11 +149,11 @@
 
 ### Профиль соискателя
 
-<img src="https://i.imgur.com/nwwuhLD.png" alt="Cтраница профиля соискателя" width="700" />
+<img src="https://i.imgur.com/nwwuhLD.png" alt="Cтраница профиля соискателя" width="800" />
 
 ### Редактирование профиля соискателя
 
-<img src="https://i.imgur.com/UjH1L8s.png" alt="Редактирование профиля соискателя" width="700" />
+<img src="https://i.imgur.com/UjH1L8s.png" alt="Редактирование профиля соискателя" width="800" />
 
 ### Отклики соискателя
 
