@@ -5,11 +5,11 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageDao
-import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageDto
 import ru.itplanet.trampline.interaction.chat.mapper.ChatDomainMapper
 import ru.itplanet.trampline.interaction.chat.model.ChatMessage
 import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
+import ru.itplanet.trampline.interaction.exception.InteractionInternalException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 import java.time.OffsetDateTime
 
@@ -18,7 +18,7 @@ class ChatMessageCommandServiceImpl(
     private val chatAccessService: ChatAccessService,
     private val chatDialogDao: ChatDialogDao,
     private val chatMessageDao: ChatMessageDao,
-    private val chatParticipantStateDao: ChatParticipantStateDao,
+    private val chatParticipantStateService: ChatParticipantStateService,
     private val chatDomainMapper: ChatDomainMapper,
 ) : ChatMessageCommandService {
 
@@ -64,7 +64,10 @@ class ChatMessageCommandServiceImpl(
         }
 
         val savedMessageId = savedMessage.id
-            ?: throw IllegalStateException("Идентификатор сохранённого сообщения чата не должен быть null")
+            ?: throw InteractionInternalException(
+                message = "Не найден идентификатор сохранённого сообщения чата",
+                code = "chat_message_id_missing",
+            )
 
         val timestamp = savedMessage.createdAt ?: OffsetDateTime.now()
 
@@ -73,16 +76,12 @@ class ChatMessageCommandServiceImpl(
         dialog.lastMessageAt = timestamp
         chatDialogDao.save(dialog)
 
-        val participantState = chatParticipantStateDao.findByIdDialogIdAndIdUserId(
-            dialogId = dialogId,
-            userId = currentUser.userId,
-        ) ?: throw IllegalStateException(
-            "Состояние участника чата не найдено для диалога $dialogId и пользователя ${currentUser.userId}",
+        chatParticipantStateService.onMessageSent(
+            dialog = dialog,
+            senderUserId = currentUser.userId,
+            messageId = savedMessageId,
+            timestamp = timestamp,
         )
-
-        participantState.lastReadMessageId = savedMessageId
-        participantState.lastReadAt = timestamp
-        chatParticipantStateDao.save(participantState)
 
         return chatDomainMapper.toChatMessage(savedMessage)
     }
