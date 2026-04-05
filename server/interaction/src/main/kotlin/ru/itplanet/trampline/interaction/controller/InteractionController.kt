@@ -24,6 +24,7 @@ import ru.itplanet.trampline.interaction.model.response.ContactResponse
 import ru.itplanet.trampline.interaction.model.response.FavoriteResponse
 import ru.itplanet.trampline.interaction.model.response.OpportunityResponseResponse
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
+import ru.itplanet.trampline.interaction.service.InteractionChatSummaryService
 import ru.itplanet.trampline.interaction.service.InteractionService
 
 @Validated
@@ -31,6 +32,7 @@ import ru.itplanet.trampline.interaction.service.InteractionService
 @RequestMapping("/api/interaction")
 class InteractionController(
     private val interactionService: InteractionService,
+    private val interactionChatSummaryService: InteractionChatSummaryService,
 ) {
 
     @PostMapping("/responses")
@@ -49,7 +51,14 @@ class InteractionController(
     @GetMapping("/responses/my")
     fun getMyResponses(
         @CurrentUser userId: Long,
-    ): List<OpportunityResponseResponse> = interactionService.getUserApplications(userId)
+    ): List<OpportunityResponseResponse> {
+        val responses = interactionService.getUserApplications(userId)
+
+        return interactionChatSummaryService.enrichApplicantResponses(
+            currentUserId = userId,
+            responses = responses,
+        )
+    }
 
     @PostMapping("/favorites/opportunities/{opportunityId}")
     fun addOpportunityToFavorites(
