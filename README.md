@@ -1,239 +1,209 @@
-# Tramplin
-
-Интерактивная платформа для старта карьеры в IT. Помогает студентам и начинающим специалистам находить стажировки, а работодателям — подбирать кандидатов с подтвержденными навыками.
-
-Репозиторий: [https://github.com/Aleksio02/iwannasurvive](https://github.com/Aleksio02/iwannasurvive)
-
----
-
-## Оглавление
-
-- [О проекте](#о-проекте)
-- [Проблематика](#проблематика)
-- [Целевая аудитория](#целевая-аудитория)
-- [Функциональные возможности](#функциональные-возможности)
-- [Технологический стек](#технологический-стек)
-- [Скриншоты](#скриншоты)
-- [Запуск проекта](#запуск-проекта)
-- [Команда](#команда)
-
----
-
-## О проекте
-
-Трамплин — это платформа, которая решает проблему входа в IT-индустрию для начинающих специалистов. Пользователи получают персонализированные рекомендации стажировок на основе своих навыков, могут взаимодействовать с работодателями и другими соискателями. Для компаний платформа предоставляет инструменты для публикации вакансий и поиска мотивированных джуниоров.
-
----
-
-## Проблематика
-
-- Студенты не знают, с чего начать карьеру в IT
-- Отсутствует удобный способ поиска стажировок с фильтрацией по навыкам
-- Существующие платформы не учитывают реальный стек технологий кандидата
-- Нет эффективных инструментов для нетворкинга между новичками и компаниями
-
----
-
-## Целевая аудитория
-
-| Роль | Описание |
-|------|----------|
-| Соискатель | Ищет работу, откликается на вакансии, ведет профиль |
-| Работодатель | Публикует вакансии, просматривает отклики, управляет компанией |
-| Куратор | Осуществляет модерацию и верификацию компаний и пользователей |
-
----
-
-## Функциональные возможности
-
-### Для соискателя
-
-- Регистрация и авторизация с 2FA
-- Восстановление пароля
-- Заполнение профиля с указанием навыков и стека технологий
-- Фильтрация вакансий по навыкам и формату работы (офлайн / удаленно)
-- Двойной режим отображения вакансий: список и карта
-- Мгновенные отклики на вакансии
-- Добавление вакансий в избранное
-- Получение рекомендаций от других пользователей
-
-### Для работодателя
-
-- Управление профилем компании
-- Публикация вакансий, стажировок и менторских программ
-- Просмотр откликов кандидатов
-- Редактирование информации о компании
-
-### Для куратора
-
-- Панель модерации
-- Верификация компаний (защита от фейковых объявлений)
-- Управление списком задач на модерацию
-
-### Системные функции
-
-- Двухфакторная аутентификация по электронной почте
-- Верификация компании перед доступом к публикации вакансий
-- Модерация контента перед публикацией
-
----
-
-## Технологический стек
-
-### Frontend
-
-| Технология | Назначение |
-|------------|------------|
-| JavaScript / Node.js | Язык и среда выполнения |
-| React 19 | Библиотека для интерфейсов |
-| Vite | Сборка проекта |
-| React Router / Wouter | Маршрутизация |
-| Yandex Map API | Отображение вакансий на карте |
-| SCSS | Стилизация |
-| ESLint 9 | Линтинг кода |
-
-### Backend
-
-| Технология | Назначение |
-|------------|------------|
-| Kotlin | Язык программирования |
-| Spring Boot 3.5.11 | Основной фреймворк |
-| Hibernate / Spring Data JPA | ORM и работа с базой данных |
-| PostgreSQL + PostGIS | Реляционная база данных с геопространственными расширениями |
-| Spring Security | Аутентификация и авторизация |
-| Spring Cloud OpenFeign | HTTP-клиент для взаимодействия с сервисами |
-| Flyway | Миграции базы данных |
-| Amazon S3 | Хранение файлов (аватары, документы) |
-
----
-
 ## Скриншоты
 
 ### Авторизация и регистрация
 
+<div align="center">
   <img src="https://i.postimg.cc/8CHgqmsv/auth.png" alt="Страница авторизации" width="500"/>
+</div>
+<div align="center">
   <img src="https://i.postimg.cc/Z5tBw416/reg2.png" alt="Страница регистрации соискателя" width="500" />
+</div>
+<div align="center">
   <img src="https://i.postimg.cc/63ynDzz7/reg1.png" alt="Страница регистрации работодателя" width="500" />
+</div>
 
 ### Восстановление пароля
 
+<div align="center">
   <img src="https://i.imgur.com/p98e8pX.png" alt="Форма восстановления пароля" width="700" />
+</div>
+<div align="center">
   <img src="https://i.imgur.com/PcdeNox.png" alt="Форма восстановления пароля" width="700" />
+</div>
+<div align="center">
   <img src="https://i.imgur.com/WuSInpv.png" alt="Форма восстановления пароля" width="700" />
+</div>
 
 ### 2FA аутентификация
 
-<div style="display: flex; gap: 10px; justify-content: flex-start;  margin-bottom: 20px;">
+<div align="center">
   <img src="https://i.imgur.com/4LThdvp.png" alt="2FA аутентификация" width="700" />
+</div>
+<div align="center">
   <img src="https://i.imgur.com/lwwiJuP.png" alt="2FA аутентификация" width="700" />
 </div>
-
-<div style="display: flex; gap: 10px; justify-content: flex-start;">
+<div align="center">
   <img src="https://i.imgur.com/AToAQtu.png" alt="2FA аутентификация" width="700" />
+</div>
+<div align="center">
   <img src="https://i.imgur.com/ghT9Z2j.png" alt="2FA аутентификация" width="700" />
 </div>
 
 ### Основная страница с фильтрацией
 
-<img src="https://i.imgur.com/eZta0yZ.png" alt="Основная страница" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/eZta0yZ.png" alt="Основная страница" width="800" />
+</div>
 
 #### Отображение на карте
-<img src="https://i.imgur.com/Vy1qg1l.png" alt="Отображение на карте" width="800" />
+
+<div align="center">
+  <img src="https://i.imgur.com/Vy1qg1l.png" alt="Отображение на карте" width="800" />
+</div>
 
 #### Отображение списком
-<img src="https://i.imgur.com/T8y63Fn.png" alt="Отображение списком" width="800" />
+
+<div align="center">
+  <img src="https://i.imgur.com/T8y63Fn.png" alt="Отображение списком" width="800" />
+</div>
 
 ### Детальная страница вакансии
 
-<img src="https://i.imgur.com/JiwSUUU.png" alt="Детальная страница вакансии" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/JiwSUUU.png" alt="Детальная страница вакансии" width="800" />
+</div>
 
 ### Профиль соискателя
 
-<img src="https://i.imgur.com/nwwuhLD.png" alt="Cтраница профиля соискателя" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/nwwuhLD.png" alt="Cтраница профиля соискателя" width="800" />
+</div>
 
 ### Редактирование профиля соискателя
 
-<img src="https://i.imgur.com/UjH1L8s.png" alt="Редактирование профиля соискателя" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/UjH1L8s.png" alt="Редактирование профиля соискателя" width="800" />
+</div>
 
 ### Отклики соискателя
 
-<img src="https://i.imgur.com/zTpBqJv.png" alt="Список откликов соискателя" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/zTpBqJv.png" alt="Список откликов соискателя" width="800" />
+</div>
 
 ### Избранное соискателя
 
-<img src="https://i.imgur.com/TQj1ucQ.png" alt="Список избранных вакансий" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/TQj1ucQ.png" alt="Список избранных вакансий" width="800" />
+</div>
 
 ### Контакты соискателя
 
-<img src="https://i.imgur.com/n37NbFW.png" alt="Контакты" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/n37NbFW.png" alt="Контакты" width="800" />
+</div>
 
 ### Взаимодействие пользователей
 
-  #### Профиль другого соискателя
+#### Профиль другого соискателя
+
+<div align="center">
   <img src="https://i.imgur.com/QedRUgF.png" alt="Профиль другого соискателя" width="800" />
+</div>
 
-  #### Добавление другого соискателя в контакты
+#### Добавление другого соискателя в контакты
+
+<div align="center">
   <img src="https://i.imgur.com/4kaydas.png" alt="Добавление другого соискателя в контакты" width="800" />
+</div>
 
-  #### Страница рекомендаций
+#### Страница рекомендаций
+
+<div align="center">
   <img src="https://i.imgur.com/ZOs6cvo.png" alt="Страница рекомендаций" width="800" />
-  
-  #### Создание новой рекомендации
+</div>
+
+#### Создание новой рекомендации
+
+<div align="center">
   <img src="https://i.imgur.com/Dje9sHK.png" alt="Создание новой рекомендации" width="400" />
+</div>
 
 ### Профиль работодателя - Управление компанией
 
-<img src="https://i.imgur.com/pZQMOlz.png" alt="Панель управления компанией" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/pZQMOlz.png" alt="Панель управления компанией" width="800" />
+</div>
 
 ### Редактирование профиля работодателя
 
-<img src="https://i.imgur.com/Spjb55Z.png" alt="Редактирование профиля работодателя" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/Spjb55Z.png" alt="Редактирование профиля работодателя" width="800" />
+</div>
 
 ### Верификация компании
 
-  #### Этап 1 - Заполнение обязательных и доп. полей
-  <img src="https://i.imgur.com/mjYPmTe.png" alt="Процесс верификации компании" width="700" />
-  <img src="https://i.imgur.com/UAfAQMv.png" alt="Процесс верификации компании" width="700" />
+#### Этап 1 - Заполнение обязательных и доп. полей
 
-  #### Этап 2 - Отправка заявки на верификацию по 1/3 возможных вариантов (Почта/ИНН/Проф.ссылки)
+<div align="center">
+  <img src="https://i.imgur.com/mjYPmTe.png" alt="Процесс верификации компании" width="700" />
+</div>
+<div align="center">
+  <img src="https://i.imgur.com/UAfAQMv.png" alt="Процесс верификации компании" width="700" />
+</div>
+
+#### Этап 2 - Отправка заявки на верификацию по 1/3 возможных вариантов (Почта/ИНН/Проф.ссылки)
+
+<div align="center">
   <img src="https://i.imgur.com/JXcjHZW.png" alt="Процесс верификации компании" width="700" />
+</div>
 
 ### Панель создания вакансии
 
-<img src="https://i.imgur.com/6pOQI54.png" alt="Панель создания вакансии" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/6pOQI54.png" alt="Панель создания вакансии" width="800" />
+</div>
 
 ### Вакансии работодателя
 
-<img src="https://i.imgur.com/b7ms76M.png" alt="Список вакансий работодателя" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/b7ms76M.png" alt="Список вакансий работодателя" width="800" />
+</div>
 
 ### Отклики работодателя
 
-<img src="https://i.imgur.com/ga7Ycwv.png" alt="Список откликов работодателя" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/ga7Ycwv.png" alt="Список откликов работодателя" width="800" />
+</div>
 
 ### Панель модерации (Администратор)
 
-<img src="https://i.imgur.com/it1fPk5.png" alt="Панель модерации со списком задач" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/it1fPk5.png" alt="Панель модерации со списком задач" width="800" />
+</div>
 
 ### Детальная информация задачи
 
-<img src="https://i.imgur.com/Wba0jY5.png" alt="Детальная информация задачи" width="700" />
-<img src="https://i.imgur.com/ETMBXqm.png" alt="Детальная информация задачи" width="700" />
+<div align="center">
+  <img src="https://i.imgur.com/Wba0jY5.png" alt="Детальная информация задачи" width="700" />
+</div>
+<div align="center">
+  <img src="https://i.imgur.com/ETMBXqm.png" alt="Детальная информация задачи" width="700" />
+</div>
 
 ### Редактор задачи
 
-<img src="https://i.imgur.com/b5Xci8s.png" alt="Редактор задачи" width="700" />
+<div align="center">
+  <img src="https://i.imgur.com/b5Xci8s.png" alt="Редактор задачи" width="700" />
+</div>
 
 ### Одобрение задачи
 
-<img src="https://i.imgur.com/TmhZ9DL.png" alt="Одобрение задачи" width="700" />
+<div align="center">
+  <img src="https://i.imgur.com/TmhZ9DL.png" alt="Одобрение задачи" width="700" />
+</div>
 
 ### История всех действий по задачам
 
-<img src="https://i.imgur.com/1ESYnx3.png" alt="История всех действий по задачам" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/1ESYnx3.png" alt="История всех действий по задачам" width="800" />
+</div>
 
 ### Создание куратора
 
-<img src="https://i.imgur.com/jGsZWHz.png" alt="Форма создания куратора" width="800" />
+<div align="center">
+  <img src="https://i.imgur.com/jGsZWHz.png" alt="Форма создания куратора" width="800" />
+</div>
 
 ---
 
