@@ -14,4 +14,5 @@ data class EmployerOpportunityResponseItem(
     val coverLetter: String?,
     val resumeFileId: Long?,
     val createdAt: OffsetDateTime,
+    val chatSummary: ChatSummaryResponse = ChatSummaryResponse.noChat(),
 )
