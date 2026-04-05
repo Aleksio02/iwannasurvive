@@ -19,6 +19,7 @@ import ru.itplanet.trampline.interaction.dao.OpportunityResponseDao
 import ru.itplanet.trampline.interaction.exception.InteractionConflictException
 import ru.itplanet.trampline.interaction.exception.InteractionForbiddenException
 import ru.itplanet.trampline.interaction.exception.InteractionIntegrationException
+import ru.itplanet.trampline.interaction.exception.InteractionInternalException
 import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 
@@ -40,13 +41,15 @@ class ChatLifecycleServiceImpl(
         currentUser: AuthenticatedUser,
     ): ChatDialog {
         chatDialogDao.findByOpportunityResponseId(responseId)?.let { existingDialog ->
-            val dialogId = existingDialog.id
-                ?: throw IllegalStateException("Идентификатор диалога чата не должен быть null")
+            val dialogId = requireDialogId(existingDialog)
 
             chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
+            ensureParticipantStates(existingDialog)
 
-            return chatDialogQueryDao.findDialog(dialogId, currentUser.userId)
-                ?: throw IllegalStateException("Диалог чата $dialogId должен быть доступен для чтения")
+            return requireReadableDialog(
+                dialogId = dialogId,
+                currentUserId = currentUser.userId,
+            )
         }
 
         val response = opportunityResponseDao.findById(responseId)
@@ -128,30 +131,31 @@ class ChatLifecycleServiceImpl(
             val existingDialog = chatDialogDao.findByOpportunityResponseId(responseId)
                 ?: throw ex
 
-            val dialogId = existingDialog.id
-                ?: throw IllegalStateException("Идентификатор диалога чата не должен быть null")
+            val dialogId = requireDialogId(existingDialog)
 
             chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
             ensureParticipantStates(existingDialog)
 
-            return chatDialogQueryDao.findDialog(dialogId, currentUser.userId)
-                ?: throw IllegalStateException("Диалог чата $dialogId должен быть доступен для чтения")
+            return requireReadableDialog(
+                dialogId = dialogId,
+                currentUserId = currentUser.userId,
+            )
         }
 
         ensureParticipantStates(savedDialog)
 
-        val dialogId = savedDialog.id
-            ?: throw IllegalStateException("Идентификатор сохранённого диалога чата не должен быть null")
+        val dialogId = requireDialogId(savedDialog)
 
-        return chatDialogQueryDao.findDialog(dialogId, currentUser.userId)
-            ?: throw IllegalStateException("Диалог чата $dialogId должен быть доступен для чтения")
+        return requireReadableDialog(
+            dialogId = dialogId,
+            currentUserId = currentUser.userId,
+        )
     }
 
     private fun ensureParticipantStates(
         dialog: ChatDialogDto,
     ) {
-        val dialogId = dialog.id
-            ?: throw IllegalStateException("Идентификатор диалога чата не должен быть null")
+        val dialogId = requireDialogId(dialog)
 
         val applicantStateId = ChatParticipantStateDtoId(
             dialogId = dialogId,
@@ -168,5 +172,25 @@ class ChatLifecycleServiceImpl(
         if (!chatParticipantStateDao.existsById(employerStateId)) {
             chatParticipantStateDao.save(ChatParticipantStateDto(employerStateId))
         }
+    }
+
+    private fun requireDialogId(
+        dialog: ChatDialogDto,
+    ): Long {
+        return dialog.id ?: throw InteractionInternalException(
+            message = "Не найден идентификатор диалога чата",
+            code = "chat_dialog_id_missing",
+        )
+    }
+
+    private fun requireReadableDialog(
+        dialogId: Long,
+        currentUserId: Long,
+    ): ChatDialog {
+        return chatDialogQueryDao.findDialog(dialogId, currentUserId)
+            ?: throw InteractionInternalException(
+                message = "Не удалось загрузить доступный для чтения диалог чата $dialogId",
+                code = "chat_dialog_read_model_missing",
+            )
     }
 }
