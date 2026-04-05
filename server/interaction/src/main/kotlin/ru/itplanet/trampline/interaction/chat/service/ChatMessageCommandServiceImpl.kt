@@ -9,7 +9,7 @@ import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageDto
 import ru.itplanet.trampline.interaction.chat.mapper.ChatDomainMapper
 import ru.itplanet.trampline.interaction.chat.model.ChatMessage
-import ru.itplanet.trampline.interaction.exception.InteractionException
+import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 import java.time.OffsetDateTime
 
@@ -63,9 +63,12 @@ class ChatMessageCommandServiceImpl(
             throw ex
         }
 
+        val savedMessageId = savedMessage.id
+            ?: throw IllegalStateException("Идентификатор сохранённого сообщения чата не должен быть null")
+
         val timestamp = savedMessage.createdAt ?: OffsetDateTime.now()
 
-        dialog.lastMessageId = savedMessage.id
+        dialog.lastMessageId = savedMessageId
         dialog.lastMessagePreview = chatDomainMapper.buildPreview(normalizedBody)
         dialog.lastMessageAt = timestamp
         chatDialogDao.save(dialog)
@@ -74,10 +77,10 @@ class ChatMessageCommandServiceImpl(
             dialogId = dialogId,
             userId = currentUser.userId,
         ) ?: throw IllegalStateException(
-            "Chat participant state not found for dialog $dialogId and user ${currentUser.userId}",
+            "Состояние участника чата не найдено для диалога $dialogId и пользователя ${currentUser.userId}",
         )
 
-        participantState.lastReadMessageId = savedMessage.id
+        participantState.lastReadMessageId = savedMessageId
         participantState.lastReadAt = timestamp
         chatParticipantStateDao.save(participantState)
 
@@ -90,11 +93,17 @@ class ChatMessageCommandServiceImpl(
         val normalized = value.trim()
 
         if (normalized.isBlank()) {
-            throw InteractionException.BadRequest("clientMessageId must not be blank")
+            throw InteractionBadRequestException(
+                message = "clientMessageId обязателен",
+                code = "chat_client_message_id_blank",
+            )
         }
 
         if (normalized.length > 100) {
-            throw InteractionException.BadRequest("clientMessageId must not exceed 100 characters")
+            throw InteractionBadRequestException(
+                message = "clientMessageId не должен превышать 100 символов",
+                code = "chat_client_message_id_too_long",
+            )
         }
 
         return normalized
@@ -106,11 +115,17 @@ class ChatMessageCommandServiceImpl(
         val normalized = value.trim()
 
         if (normalized.isBlank()) {
-            throw InteractionException.BadRequest("Message body must not be blank")
+            throw InteractionBadRequestException(
+                message = "Текст сообщения не должен быть пустым",
+                code = "chat_message_body_blank",
+            )
         }
 
         if (normalized.length > 4000) {
-            throw InteractionException.BadRequest("Message body must not exceed 4000 characters")
+            throw InteractionBadRequestException(
+                message = "Текст сообщения не должен превышать 4000 символов",
+                code = "chat_message_body_too_long",
+            )
         }
 
         return normalized

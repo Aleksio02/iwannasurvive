@@ -164,7 +164,7 @@ class ChatDialogQueryDaoImpl(
         )
 
         val sortAt = readOffsetDateTime(rs, "sort_at")
-            ?: throw IllegalStateException("sort_at must not be null")
+            ?: throw IllegalStateException("Поле sort_at не должно быть null")
 
         return ChatDialogListRow(
             item = item,

@@ -1,10 +1,10 @@
 package ru.itplanet.trampline.interaction.chat.service
 
-import jakarta.persistence.EntityNotFoundException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
+import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 import java.time.OffsetDateTime
 
@@ -25,20 +25,28 @@ class ChatReadServiceImpl(
         chatAccessService.assertCanRead(dialog, currentUser)
 
         val message = chatMessageDao.findById(lastReadMessageId)
-            .orElseThrow { EntityNotFoundException("Chat message not found") }
+            .orElseThrow {
+                InteractionNotFoundException(
+                    message = "Сообщение чата не найдено",
+                    code = "chat_message_not_found",
+                )
+            }
 
         val messageId = message.id
-            ?: throw IllegalStateException("Chat message id must not be null")
+            ?: throw IllegalStateException("Идентификатор сообщения чата не должен быть null")
 
         if (message.dialogId != dialogId) {
-            throw EntityNotFoundException("Chat message does not belong to dialog")
+            throw InteractionNotFoundException(
+                message = "Сообщение чата не найдено",
+                code = "chat_message_not_found",
+            )
         }
 
         val participantState = chatParticipantStateDao.findByIdDialogIdAndIdUserId(
             dialogId = dialogId,
             userId = currentUser.userId,
         ) ?: throw IllegalStateException(
-            "Chat participant state not found for dialog $dialogId and user ${currentUser.userId}",
+            "Состояние участника чата не найдено для диалога $dialogId и пользователя ${currentUser.userId}",
         )
 
         val currentLastReadMessageId = participantState.lastReadMessageId

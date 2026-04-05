@@ -1,5 +1,7 @@
 package ru.itplanet.trampline.interaction.chat.model
 
+import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
+
 data class ChatDialogListQuery(
     val opportunityId: Long? = null,
     val unreadOnly: Boolean = false,
@@ -8,6 +10,20 @@ data class ChatDialogListQuery(
     val cursor: ChatDialogCursor? = null,
 ) {
     init {
-        require(limit in 1..100) { "limit must be between 1 and 100" }
+        opportunityId?.let {
+            if (it <= 0) {
+                throw InteractionBadRequestException(
+                    message = "Идентификатор возможности должен быть положительным",
+                    code = "chat_opportunity_id_invalid",
+                )
+            }
+        }
+
+        if (limit !in 1..100) {
+            throw InteractionBadRequestException(
+                message = "Параметр limit должен быть от 1 до 100",
+                code = "chat_dialog_limit_invalid",
+            )
+        }
     }
 }

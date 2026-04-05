@@ -15,6 +15,6 @@ interface InternalOpportunityServiceClient {
 
     @GetMapping("/internal/opportunities/{id}/chat-context")
     fun getChatContext(
-        @PathVariable("id") @Positive id: Long,
+        @PathVariable("id") @Positive(message = "Идентификатор возможности должен быть положительным") id: Long,
     ): InternalOpportunityChatContextResponse
 }
