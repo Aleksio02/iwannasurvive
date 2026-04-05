@@ -100,14 +100,14 @@ class ChatController(
         @Valid @RequestBody request: SendChatMessageRequest,
         @CurrentUser currentUser: AuthenticatedUser,
     ): ChatMessageResponse {
-        val message = chatMessageCommandService.sendMessage(
+        val result = chatMessageCommandService.sendMessage(
             dialogId = dialogId,
             currentUser = currentUser,
             clientMessageId = request.clientMessageId,
             body = request.body,
         )
 
-        return chatRestMapper.toChatMessageResponse(message)
+        return chatRestMapper.toChatMessageResponse(result.message)
     }
 
     @ResponseStatus(HttpStatus.NO_CONTENT)

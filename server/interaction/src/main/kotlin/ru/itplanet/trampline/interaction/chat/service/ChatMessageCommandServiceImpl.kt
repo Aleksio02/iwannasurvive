@@ -5,11 +5,11 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageDao
+import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageDto
 import ru.itplanet.trampline.interaction.chat.mapper.ChatDomainMapper
-import ru.itplanet.trampline.interaction.chat.model.ChatMessage
+import ru.itplanet.trampline.interaction.chat.model.ChatMessageCommandResult
 import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
-import ru.itplanet.trampline.interaction.exception.InteractionInternalException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 import java.time.OffsetDateTime
 
@@ -18,7 +18,7 @@ class ChatMessageCommandServiceImpl(
     private val chatAccessService: ChatAccessService,
     private val chatDialogDao: ChatDialogDao,
     private val chatMessageDao: ChatMessageDao,
-    private val chatParticipantStateService: ChatParticipantStateService,
+    private val chatParticipantStateDao: ChatParticipantStateDao,
     private val chatDomainMapper: ChatDomainMapper,
 ) : ChatMessageCommandService {
 
@@ -28,7 +28,7 @@ class ChatMessageCommandServiceImpl(
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String,
-    ): ChatMessage {
+    ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanWrite(dialog, currentUser)
 
@@ -38,7 +38,12 @@ class ChatMessageCommandServiceImpl(
             dialogId = dialogId,
             senderUserId = currentUser.userId,
             clientMessageId = normalizedClientMessageId,
-        )?.let(chatDomainMapper::toChatMessage)?.let { return it }
+        )?.let(chatDomainMapper::toChatMessage)?.let {
+            return ChatMessageCommandResult(
+                message = it,
+                created = false,
+            )
+        }
 
         val normalizedBody = normalizeBody(body)
         val senderRole = chatDomainMapper.toSenderRole(currentUser.role)
@@ -58,16 +63,18 @@ class ChatMessageCommandServiceImpl(
                 dialogId = dialogId,
                 senderUserId = currentUser.userId,
                 clientMessageId = normalizedClientMessageId,
-            )?.let(chatDomainMapper::toChatMessage)?.let { return it }
+            )?.let(chatDomainMapper::toChatMessage)?.let {
+                return ChatMessageCommandResult(
+                    message = it,
+                    created = false,
+                )
+            }
 
             throw ex
         }
 
         val savedMessageId = savedMessage.id
-            ?: throw InteractionInternalException(
-                message = "Не найден идентификатор сохранённого сообщения чата",
-                code = "chat_message_id_missing",
-            )
+            ?: throw IllegalStateException("Идентификатор сохранённого сообщения чата не должен быть null")
 
         val timestamp = savedMessage.createdAt ?: OffsetDateTime.now()
 
@@ -76,14 +83,21 @@ class ChatMessageCommandServiceImpl(
         dialog.lastMessageAt = timestamp
         chatDialogDao.save(dialog)
 
-        chatParticipantStateService.onMessageSent(
-            dialog = dialog,
-            senderUserId = currentUser.userId,
-            messageId = savedMessageId,
-            timestamp = timestamp,
+        val participantState = chatParticipantStateDao.findByIdDialogIdAndIdUserId(
+            dialogId = dialogId,
+            userId = currentUser.userId,
+        ) ?: throw IllegalStateException(
+            "Состояние участника чата не найдено для диалога $dialogId и пользователя ${currentUser.userId}",
         )
 
-        return chatDomainMapper.toChatMessage(savedMessage)
+        participantState.lastReadMessageId = savedMessageId
+        participantState.lastReadAt = timestamp
+        chatParticipantStateDao.save(participantState)
+
+        return ChatMessageCommandResult(
+            message = chatDomainMapper.toChatMessage(savedMessage),
+            created = true,
+        )
     }
 
     private fun normalizeClientMessageId(

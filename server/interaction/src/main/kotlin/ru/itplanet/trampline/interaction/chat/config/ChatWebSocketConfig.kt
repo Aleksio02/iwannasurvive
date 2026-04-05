@@ -1,5 +1,6 @@
 package ru.itplanet.trampline.interaction.chat.config
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration
 import org.springframework.messaging.simp.config.ChannelRegistration
 import org.springframework.messaging.simp.config.MessageBrokerRegistry
@@ -11,14 +12,17 @@ import ru.itplanet.trampline.interaction.chat.ws.ChatInboundChannelInterceptor
 
 @Configuration
 @EnableWebSocketMessageBroker
+@EnableConfigurationProperties(ChatWebSocketProperties::class)
 class ChatWebSocketConfig(
     private val chatHandshakeInterceptor: ChatHandshakeInterceptor,
     private val chatInboundChannelInterceptor: ChatInboundChannelInterceptor,
+    private val chatWebSocketProperties: ChatWebSocketProperties,
 ) : WebSocketMessageBrokerConfigurer {
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
         registry
             .addEndpoint("/ws")
+            .setAllowedOriginPatterns(*chatWebSocketProperties.allowedOriginPatterns.toTypedArray())
             .addInterceptors(chatHandshakeInterceptor)
     }
 

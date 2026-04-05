@@ -89,7 +89,7 @@ class ChatParticipantStateServiceImpl(
             }
 
         if (missingStates.isNotEmpty()) {
-            chatParticipantStateDao.saveAll(missingStates).forEach { saved ->
+            chatParticipantStateDao.saveAllAndFlush(missingStates).forEach { saved ->
                 existingByUserId[saved.id.userId] = saved
             }
         }
