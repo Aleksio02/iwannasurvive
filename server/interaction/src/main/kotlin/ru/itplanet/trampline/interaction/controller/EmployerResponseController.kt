@@ -13,6 +13,7 @@ import ru.itplanet.trampline.interaction.model.request.GetEmployerResponseListRe
 import ru.itplanet.trampline.interaction.model.response.EmployerOpportunityResponseItem
 import ru.itplanet.trampline.interaction.model.response.EmployerResponsePage
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
+import ru.itplanet.trampline.interaction.service.InteractionChatSummaryService
 import ru.itplanet.trampline.interaction.service.InteractionService
 
 @Validated
@@ -20,6 +21,7 @@ import ru.itplanet.trampline.interaction.service.InteractionService
 @RequestMapping("/api/employer/responses")
 class EmployerResponseController(
     private val interactionService: InteractionService,
+    private val interactionChatSummaryService: InteractionChatSummaryService,
 ) {
 
     @GetMapping
@@ -28,7 +30,13 @@ class EmployerResponseController(
         @CurrentUser currentUser: AuthenticatedUser,
     ): EmployerResponsePage<EmployerOpportunityResponseItem> {
         ensureEmployer(currentUser)
-        return interactionService.getEmployerResponses(currentUser.userId, request)
+
+        val page = interactionService.getEmployerResponses(currentUser.userId, request)
+
+        return interactionChatSummaryService.enrichEmployerResponses(
+            currentUserId = currentUser.userId,
+            page = page,
+        )
     }
 
     private fun ensureEmployer(currentUser: AuthenticatedUser) {
