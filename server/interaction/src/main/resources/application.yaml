@@ -59,3 +59,12 @@ springdoc:
     display-request-duration: true
     try-it-out-enabled: true
     filter: true
+
+# TODO: доработать при развертывании
+chat:
+  websocket:
+    allowed-origin-patterns:
+      - "http://localhost:*"
+      - "https://localhost:*"
+      - "http://127.0.0.1:*"
+      - "https://127.0.0.1:*"
