@@ -1,4 +1,4 @@
-package ru.itplanet.trampline.interaction.chat.ws
+ackage ru.itplanet.trampline.interaction.chat.ws
 
 import org.springframework.messaging.Message
 import org.springframework.messaging.MessageChannel
@@ -27,7 +27,7 @@ class ChatInboundChannelInterceptor : ChannelInterceptor {
 
         val principal = accessor.sessionAttributes
             ?.get(ChatHandshakeInterceptor.CHAT_PRINCIPAL_SESSION_ATTRIBUTE) as? ChatPrincipal
-            ?: throw AccessDeniedException("WebSocket session is not authenticated")
+            ?: throw AccessDeniedException("WebSocket-сессия не аутентифицирована")
 
         accessor.user = principal
         return message
