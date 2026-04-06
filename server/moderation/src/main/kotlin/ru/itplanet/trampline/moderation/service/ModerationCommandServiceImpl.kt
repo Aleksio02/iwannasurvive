@@ -26,6 +26,7 @@ import ru.itplanet.trampline.commons.model.moderation.InternalModerationRequestC
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationFieldIssue
+import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 import ru.itplanet.trampline.moderation.client.MediaServiceClient
 import ru.itplanet.trampline.moderation.client.OpportunityModerationOwnerClient
 import ru.itplanet.trampline.moderation.client.ProfileModerationOwnerClient
@@ -650,7 +651,18 @@ class ModerationCommandServiceImpl(
                     profileModerationOwnerClient.approveApplicantProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_PROFILE ->
-                    profileModerationOwnerClient.approveEmployerProfile(task.entityId, request)
+                    when (task.taskType) {
+                        ModerationTaskType.PROFILE_REVIEW ->
+                            profileModerationOwnerClient.approveEmployerProfile(task.entityId, request)
+
+                        ModerationTaskType.COMPANY_REVIEW ->
+                            profileModerationOwnerClient.approveEmployerCompany(task.entityId, request)
+
+                        else -> throw ModerationBadRequestException(
+                            message = "Неподдерживаемый тип задачи для EMPLOYER_PROFILE: ${task.taskType}",
+                            code = "unsupported_employer_profile_task_type",
+                        )
+                    }
 
                 ModerationEntityType.EMPLOYER_VERIFICATION ->
                     profileModerationOwnerClient.approveEmployerVerification(task.entityId, request)
@@ -676,7 +688,18 @@ class ModerationCommandServiceImpl(
                     profileModerationOwnerClient.requestChangesApplicantProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_PROFILE ->
-                    profileModerationOwnerClient.requestChangesEmployerProfile(task.entityId, request)
+                    when (task.taskType) {
+                        ModerationTaskType.PROFILE_REVIEW ->
+                            profileModerationOwnerClient.requestChangesEmployerProfile(task.entityId, request)
+
+                        ModerationTaskType.COMPANY_REVIEW ->
+                            profileModerationOwnerClient.requestChangesEmployerCompany(task.entityId, request)
+
+                        else -> throw ModerationBadRequestException(
+                            message = "Неподдерживаемый тип задачи для EMPLOYER_PROFILE: ${task.taskType}",
+                            code = "unsupported_employer_profile_task_type",
+                        )
+                    }
 
                 ModerationEntityType.EMPLOYER_VERIFICATION ->
                     profileModerationOwnerClient.requestChangesEmployerVerification(task.entityId, request)
@@ -702,7 +725,18 @@ class ModerationCommandServiceImpl(
                     profileModerationOwnerClient.rejectApplicantProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_PROFILE ->
-                    profileModerationOwnerClient.rejectEmployerProfile(task.entityId, request)
+                    when (task.taskType) {
+                        ModerationTaskType.PROFILE_REVIEW ->
+                            profileModerationOwnerClient.rejectEmployerProfile(task.entityId, request)
+
+                        ModerationTaskType.COMPANY_REVIEW ->
+                            profileModerationOwnerClient.rejectEmployerCompany(task.entityId, request)
+
+                        else -> throw ModerationBadRequestException(
+                            message = "Неподдерживаемый тип задачи для EMPLOYER_PROFILE: ${task.taskType}",
+                            code = "unsupported_employer_profile_task_type",
+                        )
+                    }
 
                 ModerationEntityType.EMPLOYER_VERIFICATION ->
                     profileModerationOwnerClient.rejectEmployerVerification(task.entityId, request)
