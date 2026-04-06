@@ -9,6 +9,7 @@ import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskPriority
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 import ru.itplanet.trampline.opportunity.client.ModerationServiceClient
+import ru.itplanet.trampline.opportunity.client.ProfileServiceClient
 import ru.itplanet.trampline.opportunity.dao.TagDao
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
 import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
@@ -18,14 +19,13 @@ import ru.itplanet.trampline.opportunity.model.EmployerTagResponse
 import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerTagRequest
-import ru.itplanet.trampline.opportunity.service.policy.EmployerOpportunityCreatePolicy
 
 @Service
-class EmployerAndCuratorAndCuratorTagServiceImpl(
+class EmployerAndCuratorTagServiceImpl(
     private val tagDao: TagDao,
     private val moderationServiceClient: ModerationServiceClient,
     private val objectMapper: ObjectMapper,
-    private val employerOpportunityCreatePolicy: EmployerOpportunityCreatePolicy,
+    private val profileServiceClient: ProfileServiceClient,
 ) : EmployerAndCuratorTagService {
 
     @Transactional
@@ -36,9 +36,10 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
     ): EmployerTagResponse {
         ensureSupportedCreatedByType(createdByType)
 
-        if (createdByType == CreatedByType.EMPLOYER) {
-            employerOpportunityCreatePolicy.checkCreateAllowed(currentUserId)
-        }
+        ensureTagCreateAllowed(
+            currentUserId = currentUserId,
+            createdByType = createdByType,
+        )
 
         val normalizedName = normalizeName(request.name)
 
@@ -200,6 +201,25 @@ class EmployerAndCuratorAndCuratorTagServiceImpl(
                 sourceService = "opportunity",
                 sourceAction = sourceAction(createdByType),
             ),
+        )
+    }
+
+    private fun ensureTagCreateAllowed(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+    ) {
+        if (createdByType != CreatedByType.EMPLOYER) {
+            return
+        }
+
+        val access = profileServiceClient.getEmployerOpportunityAccess(currentUserId)
+        if (access.canCreateOpportunities) {
+            return
+        }
+
+        throw OpportunityForbiddenException(
+            message = "Создавать теги могут только верифицированные работодатели",
+            code = "employer_verification_required_for_tag_creation",
         )
     }
 

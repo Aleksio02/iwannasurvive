@@ -9,26 +9,29 @@ import ru.itplanet.trampline.profile.model.EmployerProfile
 @Component
 class EmployerProfileConverter(
     private val cityConverter: CityConverter,
-    private val locationConverter: LocationConverter
+    private val locationConverter: LocationConverter,
 ) {
 
     fun toDto(source: EmployerProfile): EmployerProfileDto {
         return EmployerProfileDto(
             userId = source.userId,
-            companyName = source.companyName,
-            legalName = source.legalName,
-            inn = source.inn,
-            description = source.description,
-            industry = source.industry,
-            websiteUrl = source.websiteUrl,
-            socialLinks = source.socialLinks,
-            publicContacts = source.publicContacts,
-            companySize = source.companySize,
-            foundedYear = source.foundedYear,
-            city = source.city?.let { cityConverter.toDto(it) },
-            location = source.location?.let { locationConverter.toDto(it) },
-            verificationStatus = source.verificationStatus,
-        )
+        ).apply {
+            companyName = source.companyName
+            legalName = source.legalName
+            inn = source.inn
+            description = source.description
+            industry = source.industry
+            websiteUrl = source.websiteUrl
+            socialLinks = source.socialLinks
+            publicContacts = source.publicContacts
+            companySize = source.companySize
+            foundedYear = source.foundedYear
+            city = source.city?.let { cityConverter.toDto(it) }
+            location = source.location?.let { locationConverter.toDto(it) }
+            verificationStatus = source.verificationStatus
+            moderationStatus = source.moderationStatus
+            companyModerationStatus = source.companyModerationStatus
+        }
     }
 
     fun fromDto(source: EmployerProfileDto): EmployerProfile {
@@ -47,6 +50,8 @@ class EmployerProfileConverter(
             city = source.city?.let { cityConverter.fromDto(it) },
             location = source.location?.let { locationConverter.fromDto(it) },
             verificationStatus = source.verificationStatus,
+            moderationStatus = source.moderationStatus,
+            companyModerationStatus = source.companyModerationStatus,
         )
     }
 }

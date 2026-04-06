@@ -1,5 +1,7 @@
 package ru.itplanet.trampline.profile.dao.dto
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.FetchType
@@ -13,6 +15,7 @@ import org.hibernate.annotations.UpdateTimestamp
 import org.hibernate.type.SqlTypes
 import ru.itplanet.trampline.commons.dao.dto.CityDto
 import ru.itplanet.trampline.commons.dao.dto.LocationDto
+import ru.itplanet.trampline.commons.model.profile.EmployerProfileModerationStatus
 import ru.itplanet.trampline.profile.model.ContactMethod
 import ru.itplanet.trampline.profile.model.ProfileLink
 import ru.itplanet.trampline.profile.model.enums.VerificationStatus
@@ -70,6 +73,22 @@ open class EmployerProfileDto {
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     open var verificationStatus: VerificationStatus = VerificationStatus.PENDING
 
+    @Column(name = "moderation_status", length = 32, nullable = false)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    open var moderationStatus: EmployerProfileModerationStatus = EmployerProfileModerationStatus.DRAFT
+
+    @Column(name = "approved_public_snapshot", columnDefinition = "jsonb", nullable = false)
+    @JdbcTypeCode(SqlTypes.JSON)
+    open var approvedPublicSnapshot: JsonNode = JsonNodeFactory.instance.objectNode()
+
+    @Column(name = "company_moderation_status", length = 32, nullable = false)
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    open var companyModerationStatus: EmployerProfileModerationStatus = EmployerProfileModerationStatus.DRAFT
+
+    @Column(name = "approved_company_snapshot", columnDefinition = "jsonb", nullable = false)
+    @JdbcTypeCode(SqlTypes.JSON)
+    open var approvedCompanySnapshot: JsonNode = JsonNodeFactory.instance.objectNode()
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     open var createdAt: OffsetDateTime? = null
@@ -82,41 +101,5 @@ open class EmployerProfileDto {
 
     constructor(userId: Long) {
         this.userId = userId
-    }
-
-    constructor(
-        userId: Long,
-        companyName: String?,
-        legalName: String? = null,
-        inn: String?,
-        description: String? = null,
-        industry: String? = null,
-        websiteUrl: String? = null,
-        socialLinks: List<ProfileLink> = emptyList(),
-        publicContacts: List<ContactMethod> = emptyList(),
-        companySize: String? = null,
-        foundedYear: Short? = null,
-        city: CityDto? = null,
-        location: LocationDto? = null,
-        verificationStatus: VerificationStatus = VerificationStatus.PENDING,
-        createdAt: OffsetDateTime? = null,
-        updatedAt: OffsetDateTime? = null,
-    ) {
-        this.userId = userId
-        this.companyName = companyName
-        this.legalName = legalName
-        this.inn = inn
-        this.description = description
-        this.industry = industry
-        this.websiteUrl = websiteUrl
-        this.socialLinks = socialLinks
-        this.publicContacts = publicContacts
-        this.companySize = companySize
-        this.foundedYear = foundedYear
-        this.city = city
-        this.location = location
-        this.verificationStatus = verificationStatus
-        this.createdAt = createdAt
-        this.updatedAt = updatedAt
     }
 }

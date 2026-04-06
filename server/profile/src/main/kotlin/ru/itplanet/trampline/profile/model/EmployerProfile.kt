@@ -3,6 +3,7 @@ package ru.itplanet.trampline.profile.model
 import ru.itplanet.trampline.commons.model.City
 import ru.itplanet.trampline.commons.model.Location
 import ru.itplanet.trampline.commons.model.file.InternalFileMetadataResponse
+import ru.itplanet.trampline.commons.model.profile.EmployerProfileModerationStatus
 import ru.itplanet.trampline.profile.model.enums.VerificationStatus
 
 data class EmployerProfile(
@@ -20,5 +21,7 @@ data class EmployerProfile(
     val socialLinks: List<ProfileLink>,
     val publicContacts: List<ContactMethod>,
     val verificationStatus: VerificationStatus,
+    val moderationStatus: EmployerProfileModerationStatus = EmployerProfileModerationStatus.DRAFT,
+    val companyModerationStatus: EmployerProfileModerationStatus = EmployerProfileModerationStatus.DRAFT,
     val logo: InternalFileMetadataResponse? = null,
 )
