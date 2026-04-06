@@ -76,6 +76,20 @@ class ProfileController(
         return profileService.patchEmployerProfile(currentUser.userId, request)
     }
 
+    @PostMapping("/employer/moderation/submit")
+    fun submitEmployerProfileForModeration(
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): EmployerProfile {
+        if (currentUser.role != Role.EMPLOYER) {
+            throw ProfileForbiddenException(
+                message = "Только работодатель может отправить профиль на модерацию",
+                code = "employer_role_required",
+            )
+        }
+
+        return profileService.submitEmployerProfileForModeration(currentUser.userId)
+    }
+
     @GetMapping("/applicants")
     fun searchApplicants(
         @Valid @ModelAttribute request: GetApplicantProfileListRequest,

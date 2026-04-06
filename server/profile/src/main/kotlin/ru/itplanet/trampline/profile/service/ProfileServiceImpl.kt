@@ -14,6 +14,7 @@ import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskPriority
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 import ru.itplanet.trampline.commons.model.profile.ApplicantProfileModerationStatus
+import ru.itplanet.trampline.commons.model.profile.EmployerProfileModerationStatus
 import ru.itplanet.trampline.profile.client.InteractionPrivacyClient
 import ru.itplanet.trampline.profile.client.MediaServiceClient
 import ru.itplanet.trampline.profile.client.ModerationServiceClient
@@ -50,7 +51,7 @@ class ProfileServiceImpl(
     private val applicantProfileVisibilityService: ApplicantProfileVisibilityService,
     private val objectMapper: ObjectMapper,
     private val employerProfilePatchService: EmployerProfileDomainPatchService,
-    private val applicantProfileDomainPatchService: ApplicantProfileDomainPatchService
+    private val applicantProfileDomainPatchService: ApplicantProfileDomainPatchService,
 ) : ProfileService {
 
     @Transactional
@@ -58,7 +59,6 @@ class ProfileServiceImpl(
         userId: Long,
         request: ApplicantProfilePatchRequest,
     ): ApplicantProfile {
-
         return applicantProfileDomainPatchService.applyPatch(userId, request)
     }
 
@@ -254,6 +254,69 @@ class ProfileServiceImpl(
         request: EmployerProfilePatchRequest,
     ): EmployerProfile {
         return employerProfilePatchService.applyPatch(userId, request)
+    }
+
+    @Transactional
+    override fun submitEmployerProfileForModeration(
+        userId: Long,
+    ): EmployerProfile {
+        val profile = loadEmployerProfileDto(userId)
+
+        if (hasApprovedEmployerSnapshot(profile)) {
+            throw ProfileConflictException(
+                message = "После первого одобрения новые изменения профиля компании отправляются на модерацию автоматически при сохранении",
+                code = "employer_profile_auto_moderation_enabled",
+            )
+        }
+
+        when (profile.moderationStatus) {
+            EmployerProfileModerationStatus.PENDING_MODERATION -> {
+                throw ProfileConflictException(
+                    message = "Профиль компании уже находится на модерации",
+                    code = "employer_profile_already_on_moderation",
+                )
+            }
+
+            EmployerProfileModerationStatus.APPROVED -> {
+                throw ProfileConflictException(
+                    message = "Профиль компании уже одобрен",
+                    code = "employer_profile_already_approved",
+                )
+            }
+
+            EmployerProfileModerationStatus.DRAFT,
+            EmployerProfileModerationStatus.NEEDS_REVISION -> Unit
+        }
+
+        val profileView = buildEmployerProfile(profile)
+        validateEmployerProfileCanBeSubmitted(profileView)
+
+        runModerationAction(
+            logMessage = "Не удалось создать задачу модерации профиля работодателя userId=$userId",
+            errorMessage = "Не удалось отправить профиль компании на модерацию",
+            code = "employer_profile_task_create_failed",
+        ) {
+            moderationServiceClient.createTask(
+                CreateInternalModerationTaskRequest(
+                    entityType = ModerationEntityType.EMPLOYER_PROFILE,
+                    entityId = userId,
+                    taskType = ModerationTaskType.PROFILE_REVIEW,
+                    priority = ModerationTaskPriority.MEDIUM,
+                    createdByUserId = userId,
+                    snapshot = objectMapper.valueToTree(
+                        profileView.copy(
+                            moderationStatus = EmployerProfileModerationStatus.PENDING_MODERATION,
+                        ),
+                    ),
+                    sourceService = "profile",
+                    sourceAction = "submitEmployerProfileForModeration",
+                ),
+            )
+        }
+
+        profile.moderationStatus = EmployerProfileModerationStatus.PENDING_MODERATION
+        val saved = employerProfileDao.save(profile)
+        return buildEmployerProfile(saved)
     }
 
     override fun putEmployerLogo(
@@ -482,7 +545,12 @@ class ProfileServiceImpl(
         targetUserId: Long,
     ): EmployerProfile {
         val profileDto = loadEmployerProfileDto(targetUserId)
-        return buildEmployerProfile(profileDto)
+
+        if (currentUserId == targetUserId) {
+            return buildEmployerProfile(profileDto)
+        }
+
+        return buildPublicEmployerProfile(profileDto)
     }
 
     override fun getApplicantFileDownloadUrl(
@@ -675,6 +743,69 @@ class ProfileServiceImpl(
         )
     }
 
+    private fun buildPublicEmployerProfile(
+        profileDto: EmployerProfileDto,
+    ): EmployerProfile {
+        val logo = loadEmployerSingleFileOrNull(
+            userId = profileDto.userId,
+            attachmentRole = FileAttachmentRole.LOGO,
+            visibility = FileAssetVisibility.PUBLIC,
+            logSubject = "логотип работодателя",
+        )
+
+        val snapshot = profileDto.approvedPublicSnapshot
+        if (snapshot.isObject && snapshot.size() > 0) {
+            return try {
+                objectMapper.treeToValue(snapshot, EmployerProfile::class.java).copy(
+                    verificationStatus = profileDto.verificationStatus,
+                    moderationStatus = EmployerProfileModerationStatus.APPROVED,
+                    logo = logo,
+                )
+            } catch (ex: Exception) {
+                logger.warn(
+                    "Не удалось прочитать approved snapshot профиля работодателя userId={}",
+                    profileDto.userId,
+                    ex,
+                )
+                buildPublicEmployerProfileFallback(profileDto, logo)
+            }
+        }
+
+        return buildPublicEmployerProfileFallback(profileDto, logo)
+    }
+
+    private fun buildPublicEmployerProfileFallback(
+        profileDto: EmployerProfileDto,
+        logo: InternalFileMetadataResponse?,
+    ): EmployerProfile {
+        if (profileDto.moderationStatus == EmployerProfileModerationStatus.APPROVED) {
+            return employerProfileConverter.fromDto(profileDto).copy(
+                legalName = null,
+                inn = null,
+                logo = logo,
+            )
+        }
+
+        return EmployerProfile(
+            userId = profileDto.userId,
+            companyName = profileDto.companyName,
+            legalName = null,
+            inn = null,
+            description = null,
+            industry = null,
+            websiteUrl = null,
+            city = null,
+            location = null,
+            companySize = null,
+            foundedYear = null,
+            socialLinks = emptyList(),
+            publicContacts = emptyList(),
+            verificationStatus = profileDto.verificationStatus,
+            moderationStatus = profileDto.moderationStatus,
+            logo = logo,
+        )
+    }
+
     private fun loadApplicantTags(
         applicantUserId: Long,
     ): ApplicantTagsView {
@@ -806,6 +937,41 @@ class ProfileServiceImpl(
         }
     }
 
+    private fun validateEmployerProfileCanBeSubmitted(
+        profile: EmployerProfile,
+    ) {
+        val issues = mutableListOf<String>()
+
+        if (profile.companyName.isNullOrBlank()) {
+            issues += "укажите название компании"
+        }
+        if (profile.description.isNullOrBlank()) {
+            issues += "добавьте описание компании"
+        }
+        if (profile.industry.isNullOrBlank()) {
+            issues += "укажите сферу деятельности"
+        }
+        if (profile.city == null && profile.location == null) {
+            issues += "укажите город или локацию компании"
+        }
+
+        val hasPublicChannel =
+            !profile.websiteUrl.isNullOrBlank() ||
+                    profile.socialLinks.isNotEmpty() ||
+                    profile.publicContacts.isNotEmpty()
+
+        if (!hasPublicChannel) {
+            issues += "добавьте хотя бы один публичный канал связи: websiteUrl, socialLinks или publicContacts"
+        }
+
+        if (issues.isNotEmpty()) {
+            throw ProfileBadRequestException(
+                message = "Профиль компании пока нельзя отправить на модерацию: ${issues.joinToString("; ")}",
+                code = "employer_profile_moderation_submit_invalid",
+            )
+        }
+    }
+
     private fun handleApplicantProfileContentChanged(
         profile: ApplicantProfileDto,
     ) {
@@ -838,6 +1004,12 @@ class ProfileServiceImpl(
             ApplicantProfileModerationStatus.DRAFT,
             ApplicantProfileModerationStatus.NEEDS_REVISION -> Unit
         }
+    }
+
+    private fun hasApprovedEmployerSnapshot(
+        profile: EmployerProfileDto,
+    ): Boolean {
+        return profile.approvedPublicSnapshot.isObject && profile.approvedPublicSnapshot.size() > 0
     }
 
     private fun hasEmployerAccessToApplicantProfile(

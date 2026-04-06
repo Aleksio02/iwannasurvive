@@ -170,10 +170,12 @@ class ModerationReadModelJdbcDao(
                 'industry', ep.industry,
                 'websiteUrl', ep.website_url,
                 'socialLinks', coalesce(ep.social_links, '[]'::jsonb),
-                'publicContacts', coalesce(ep.public_contacts, '{}'::jsonb),
+                'publicContacts', coalesce(ep.public_contacts, '[]'::jsonb),
                 'companySize', ep.company_size,
                 'foundedYear', ep.founded_year,
                 'verificationStatus', ep.verification_status,
+                'moderationStatus', ep.moderation_status,
+                'approvedPublicSnapshot', coalesce(ep.approved_public_snapshot, '{}'::jsonb),
                 'city', case
                     when c.id is null then null
                     else jsonb_build_object(

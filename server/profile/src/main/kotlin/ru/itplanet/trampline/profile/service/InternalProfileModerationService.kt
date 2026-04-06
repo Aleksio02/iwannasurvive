@@ -3,6 +3,7 @@ package ru.itplanet.trampline.profile.service
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.commons.dao.CityDao
@@ -12,6 +13,8 @@ import ru.itplanet.trampline.commons.model.moderation.InternalModerationApproveR
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationRejectRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationRequestChangesRequest
 import ru.itplanet.trampline.commons.model.profile.ApplicantProfileModerationStatus
+import ru.itplanet.trampline.commons.model.profile.EmployerProfileModerationStatus
+import ru.itplanet.trampline.profile.converter.EmployerProfileConverter
 import ru.itplanet.trampline.profile.dao.ApplicantProfileDao
 import ru.itplanet.trampline.profile.dao.EmployerProfileDao
 import ru.itplanet.trampline.profile.dao.EmployerVerificationDao
@@ -39,6 +42,7 @@ class InternalProfileModerationService(
     private val cityDao: CityDao,
     private val locationDao: LocationDao,
     private val objectMapper: ObjectMapper,
+    private val employerProfileConverter: EmployerProfileConverter,
 ) {
 
     @Transactional
@@ -94,6 +98,8 @@ class InternalProfileModerationService(
         }
 
         applyEmployerPatch(profile, request.applyPatch)
+        profile.moderationStatus = EmployerProfileModerationStatus.APPROVED
+        profile.approvedPublicSnapshot = buildApprovedEmployerPublicSnapshot(profile)
 
         return InternalModerationActionResultResponse(affectedUserId = userId)
     }
@@ -103,9 +109,11 @@ class InternalProfileModerationService(
         userId: Long,
         request: InternalModerationRejectRequest,
     ): InternalModerationActionResultResponse {
-        employerProfileDao.findById(userId).orElseThrow {
+        val profile = employerProfileDao.findById(userId).orElseThrow {
             notFoundEmployerProfile(userId)
         }
+
+        profile.moderationStatus = EmployerProfileModerationStatus.NEEDS_REVISION
 
         return InternalModerationActionResultResponse(affectedUserId = userId)
     }
@@ -115,9 +123,11 @@ class InternalProfileModerationService(
         userId: Long,
         request: InternalModerationRequestChangesRequest,
     ): InternalModerationActionResultResponse {
-        employerProfileDao.findById(userId).orElseThrow {
+        val profile = employerProfileDao.findById(userId).orElseThrow {
             notFoundEmployerProfile(userId)
         }
+
+        profile.moderationStatus = EmployerProfileModerationStatus.NEEDS_REVISION
 
         return InternalModerationActionResultResponse(affectedUserId = userId)
     }
@@ -233,8 +243,6 @@ class InternalProfileModerationService(
         if (!patch.isObject) return
 
         textField(patch, "companyName") { profile.companyName = it }
-        textField(patch, "legalName") { profile.legalName = it }
-        textField(patch, "inn") { profile.inn = it }
         textField(patch, "description") { profile.description = it }
         textField(patch, "industry") { profile.industry = it }
         textField(patch, "websiteUrl") { profile.websiteUrl = it }
@@ -249,8 +257,6 @@ class InternalProfileModerationService(
         if (patch.has("publicContacts")) {
             profile.publicContacts = contactMethods(patch.get("publicContacts"))
         }
-
-        enumField<VerificationStatus>(patch, "verificationStatus") { profile.verificationStatus = it }
 
         if (patch.has("cityId")) {
             profile.city = patch.get("cityId")
@@ -279,6 +285,19 @@ class InternalProfileModerationService(
                     }
                 }
         }
+    }
+
+    private fun buildApprovedEmployerPublicSnapshot(
+        profile: EmployerProfileDto,
+    ): JsonNode {
+        val publicView = employerProfileConverter.fromDto(profile).copy(
+            legalName = null,
+            inn = null,
+            moderationStatus = EmployerProfileModerationStatus.APPROVED,
+            logo = null,
+        )
+
+        return objectMapper.valueToTree(publicView)
     }
 
     private fun applyEmployerVerificationPatch(
