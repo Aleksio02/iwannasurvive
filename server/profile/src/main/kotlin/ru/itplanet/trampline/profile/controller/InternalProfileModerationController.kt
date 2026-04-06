@@ -69,6 +69,30 @@ class InternalProfileModerationController(
         return internalProfileModerationService.requestChangesEmployerProfile(userId, request)
     }
 
+    @PostMapping("/employer-company/{userId}/approve")
+    fun approveEmployerCompany(
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
+        @Valid @RequestBody request: InternalModerationApproveRequest,
+    ): InternalModerationActionResultResponse {
+        return internalProfileModerationService.approveEmployerCompany(userId, request)
+    }
+
+    @PostMapping("/employer-company/{userId}/reject")
+    fun rejectEmployerCompany(
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
+        @Valid @RequestBody request: InternalModerationRejectRequest,
+    ): InternalModerationActionResultResponse {
+        return internalProfileModerationService.rejectEmployerCompany(userId, request)
+    }
+
+    @PostMapping("/employer-company/{userId}/request-changes")
+    fun requestChangesEmployerCompany(
+        @PathVariable @Positive(message = "Идентификатор пользователя должен быть положительным") userId: Long,
+        @Valid @RequestBody request: InternalModerationRequestChangesRequest,
+    ): InternalModerationActionResultResponse {
+        return internalProfileModerationService.requestChangesEmployerCompany(userId, request)
+    }
+
     @PostMapping("/employer-verifications/{verificationId}/approve")
     fun approveEmployerVerification(
         @PathVariable @Positive(message = "Идентификатор запроса на верификацию должен быть положительным") verificationId: Long,

@@ -9,6 +9,7 @@ import ru.itplanet.trampline.profile.model.ApplicantProfile
 import ru.itplanet.trampline.profile.model.ApplicantProfileSearchPage
 import ru.itplanet.trampline.profile.model.EmployerProfile
 import ru.itplanet.trampline.profile.model.request.ApplicantProfilePatchRequest
+import ru.itplanet.trampline.profile.model.request.EmployerCompanyPatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.GetApplicantProfileListRequest
 
@@ -21,7 +22,9 @@ interface ProfileService {
     fun deleteApplicantFile(userId: Long, fileId: Long): ApplicantProfile
 
     fun patchEmployerProfile(userId: Long, request: EmployerProfilePatchRequest): EmployerProfile
+    fun patchEmployerCompany(userId: Long, request: EmployerCompanyPatchRequest): EmployerProfile
     fun submitEmployerProfileForModeration(userId: Long): EmployerProfile
+    fun submitEmployerCompanyForModeration(userId: Long): EmployerProfile
     fun putEmployerLogo(userId: Long, file: MultipartFile): EmployerProfile
     fun deleteEmployerFile(userId: Long, fileId: Long): EmployerProfile
 

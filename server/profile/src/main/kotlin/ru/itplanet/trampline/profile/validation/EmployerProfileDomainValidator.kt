@@ -18,19 +18,20 @@ class EmployerProfileDomainValidator {
     }
 
     private fun validateCompanyName(profile: EmployerProfileDto) {
-        profile.companyName?.let {
-            require(it.isNotBlank()) {
+        val companyName = profile.companyName
+        if (companyName != null) {
+            require(companyName.isNotBlank()) {
                 "Название компании не может быть пустым"
             }
-        }
-        require(profile.companyName?.length!! <= 100) {
-            "Название компании не должно превышать 100 символов"
+            require(companyName.length <= 100) {
+                "Название компании не должно превышать 100 символов"
+            }
         }
     }
 
     private fun validateInn(profile: EmployerProfileDto) {
         profile.inn?.let { inn ->
-            require(inn.matches(Regex("^\\d{10}|\\d{12}$"))) {
+            require(inn.matches(Regex("^(\\d{10}|\\d{12})$"))) {
                 "ИНН должен содержать 10 или 12 цифр"
             }
         }
@@ -68,7 +69,7 @@ class EmployerProfileDomainValidator {
     }
 
     private fun validateSocialLinks(profile: EmployerProfileDto) {
-        profile.socialLinks?.forEach { link ->
+        profile.socialLinks.forEach { link ->
             require(link.url.startsWith("http://") || link.url.startsWith("https://")) {
                 "Ссылка ${link.url} должна начинаться с http:// или https://"
             }

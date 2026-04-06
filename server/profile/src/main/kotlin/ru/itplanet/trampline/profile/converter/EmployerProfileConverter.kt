@@ -30,6 +30,7 @@ class EmployerProfileConverter(
             location = source.location?.let { locationConverter.toDto(it) }
             verificationStatus = source.verificationStatus
             moderationStatus = source.moderationStatus
+            companyModerationStatus = source.companyModerationStatus
         }
     }
 
@@ -50,6 +51,7 @@ class EmployerProfileConverter(
             location = source.location?.let { locationConverter.fromDto(it) },
             verificationStatus = source.verificationStatus,
             moderationStatus = source.moderationStatus,
+            companyModerationStatus = source.companyModerationStatus,
         )
     }
 }

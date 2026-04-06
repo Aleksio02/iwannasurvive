@@ -52,6 +52,24 @@ interface ProfileModerationOwnerClient {
         @RequestBody request: InternalModerationRequestChangesRequest,
     ): InternalModerationActionResultResponse
 
+    @PostMapping("/internal/moderation/employer-company/{userId}/approve")
+    fun approveEmployerCompany(
+        @PathVariable userId: Long,
+        @RequestBody request: InternalModerationApproveRequest,
+    ): InternalModerationActionResultResponse
+
+    @PostMapping("/internal/moderation/employer-company/{userId}/reject")
+    fun rejectEmployerCompany(
+        @PathVariable userId: Long,
+        @RequestBody request: InternalModerationRejectRequest,
+    ): InternalModerationActionResultResponse
+
+    @PostMapping("/internal/moderation/employer-company/{userId}/request-changes")
+    fun requestChangesEmployerCompany(
+        @PathVariable userId: Long,
+        @RequestBody request: InternalModerationRequestChangesRequest,
+    ): InternalModerationActionResultResponse
+
     @PostMapping("/internal/moderation/employer-verifications/{verificationId}/approve")
     fun approveEmployerVerification(
         @PathVariable verificationId: Long,
