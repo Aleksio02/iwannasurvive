@@ -22,5 +22,6 @@ data class EmployerProfile(
     val publicContacts: List<ContactMethod>,
     val verificationStatus: VerificationStatus,
     val moderationStatus: EmployerProfileModerationStatus = EmployerProfileModerationStatus.DRAFT,
+    val companyModerationStatus: EmployerProfileModerationStatus = EmployerProfileModerationStatus.DRAFT,
     val logo: InternalFileMetadataResponse? = null,
 )

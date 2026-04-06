@@ -20,6 +20,7 @@ import ru.itplanet.trampline.profile.model.ApplicantProfile
 import ru.itplanet.trampline.profile.model.ApplicantProfileSearchPage
 import ru.itplanet.trampline.profile.model.EmployerProfile
 import ru.itplanet.trampline.profile.model.request.ApplicantProfilePatchRequest
+import ru.itplanet.trampline.profile.model.request.EmployerCompanyPatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.GetApplicantProfileListRequest
 import ru.itplanet.trampline.profile.security.AuthenticatedUser
@@ -76,6 +77,21 @@ class ProfileController(
         return profileService.patchEmployerProfile(currentUser.userId, request)
     }
 
+    @PatchMapping("/employer/company")
+    fun patchEmployerCompany(
+        @Valid @RequestBody request: EmployerCompanyPatchRequest,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): EmployerProfile {
+        if (currentUser.role != Role.EMPLOYER) {
+            throw ProfileForbiddenException(
+                message = "Только работодатель может редактировать данные компании",
+                code = "employer_role_required",
+            )
+        }
+
+        return profileService.patchEmployerCompany(currentUser.userId, request)
+    }
+
     @PostMapping("/employer/moderation/submit")
     fun submitEmployerProfileForModeration(
         @CurrentUser currentUser: AuthenticatedUser,
@@ -88,6 +104,20 @@ class ProfileController(
         }
 
         return profileService.submitEmployerProfileForModeration(currentUser.userId)
+    }
+
+    @PostMapping("/employer/company/moderation/submit")
+    fun submitEmployerCompanyForModeration(
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): EmployerProfile {
+        if (currentUser.role != Role.EMPLOYER) {
+            throw ProfileForbiddenException(
+                message = "Только работодатель может отправить данные компании на модерацию",
+                code = "employer_role_required",
+            )
+        }
+
+        return profileService.submitEmployerCompanyForModeration(currentUser.userId)
     }
 
     @GetMapping("/applicants")
