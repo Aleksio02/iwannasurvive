@@ -356,6 +356,7 @@ class ApplicantProfileDomainPatchService(
         return when (this) {
             ResumeVisibility.PUBLIC -> FileAssetVisibility.PUBLIC
             ResumeVisibility.AUTHENTICATED -> FileAssetVisibility.AUTHENTICATED
+            ResumeVisibility.CONTACTS_ONLY -> FileAssetVisibility.AUTHENTICATED
             ResumeVisibility.PRIVATE -> FileAssetVisibility.PRIVATE
         }
     }

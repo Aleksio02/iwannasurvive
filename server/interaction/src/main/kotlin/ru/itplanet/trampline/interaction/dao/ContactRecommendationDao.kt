@@ -23,4 +23,14 @@ interface ContactRecommendationDao : JpaRepository<ContactRecommendationDto, Lon
         id: Long,
         fromApplicantUserId: Long,
     ): ContactRecommendationDto?
+
+    fun findByIdAndToApplicantUserId(
+        id: Long,
+        toApplicantUserId: Long,
+    ): ContactRecommendationDto?
+
+    fun findByOpportunityIdAndToApplicantUserId(
+        opportunityId: Long,
+        toApplicantUserId: Long,
+    ): List<ContactRecommendationDto>
 }

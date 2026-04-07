@@ -65,6 +65,24 @@ class ApplicantProfileVisibilityService(
         return sanitized
     }
 
+    fun canViewApplicantProfileBlock(
+        visibility: ProfileVisibility,
+        currentUserId: Long?,
+        targetUserId: Long,
+    ): Boolean {
+        val viewer = resolveViewer(currentUserId, targetUserId)
+        return canAccessProfileBlock(visibility, viewer)
+    }
+
+    fun canViewApplicantResumeBlock(
+        visibility: ResumeVisibility,
+        currentUserId: Long?,
+        targetUserId: Long,
+    ): Boolean {
+        val viewer = resolveViewer(currentUserId, targetUserId)
+        return canAccessResumeBlock(visibility, viewer)
+    }
+
     fun canViewApplicantContacts(
         visibility: ContactsVisibility,
         currentUserId: Long?,
@@ -140,6 +158,7 @@ class ApplicantProfileVisibilityService(
         return when (visibility) {
             ResumeVisibility.PUBLIC -> true
             ResumeVisibility.AUTHENTICATED -> viewer != ApplicantProfileViewer.ANONYMOUS
+            ResumeVisibility.CONTACTS_ONLY -> viewer == ApplicantProfileViewer.OWNER || viewer == ApplicantProfileViewer.CONTACT
             ResumeVisibility.PRIVATE -> viewer == ApplicantProfileViewer.OWNER
         }
     }
@@ -151,6 +170,7 @@ class ApplicantProfileVisibilityService(
         return when (visibility) {
             ContactsVisibility.PUBLIC -> true
             ContactsVisibility.AUTHENTICATED -> viewer != ApplicantProfileViewer.ANONYMOUS
+            ContactsVisibility.CONTACTS_ONLY -> viewer == ApplicantProfileViewer.OWNER || viewer == ApplicantProfileViewer.CONTACT
             ContactsVisibility.PRIVATE -> viewer == ApplicantProfileViewer.OWNER
         }
     }
@@ -162,6 +182,7 @@ class ApplicantProfileVisibilityService(
         return when (visibility) {
             ApplicationsVisibility.PUBLIC -> true
             ApplicationsVisibility.AUTHENTICATED -> viewer != ApplicantProfileViewer.ANONYMOUS
+            ApplicationsVisibility.CONTACTS_ONLY -> viewer == ApplicantProfileViewer.OWNER || viewer == ApplicantProfileViewer.CONTACT
             ApplicationsVisibility.PRIVATE -> viewer == ApplicantProfileViewer.OWNER
         }
     }
