@@ -3,8 +3,10 @@ package ru.itplanet.trampline.opportunity.validation
 import org.springframework.stereotype.Component
 import ru.itplanet.trampline.commons.model.enums.OpportunityStatus
 import ru.itplanet.trampline.commons.model.enums.OpportunityType
+import ru.itplanet.trampline.commons.model.enums.TagCategory
 import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
+import ru.itplanet.trampline.opportunity.exception.OpportunityValidationException
 import java.time.LocalDate
 import java.time.OffsetDateTime
 
@@ -17,6 +19,7 @@ class OpportunityDomainValidator {
         validateLocationCombination(opportunity)
         validateStatusByDates(opportunity)
         validateEventSpecificRules(opportunity)
+        validateTagConflicts(opportunity)
     }
 
     private fun validateSalary(opportunity: OpportunityDto) {
@@ -95,6 +98,25 @@ class OpportunityDomainValidator {
             }
             require(opportunity.eventDate != null) {
                 "Event type opportunity must have eventDate"
+            }
+        }
+    }
+
+    private fun validateTagConflicts(opportunity: OpportunityDto) {
+        val tags = opportunity.tags
+        if (tags.isEmpty()) return
+
+        val categories = tags.groupBy { it.category }
+
+        val singleValueCategories = setOf(TagCategory.GRADE, TagCategory.EMPLOYMENT_TYPE)
+
+        for ((category, tagList) in categories) {
+            if (category in singleValueCategories && tagList.size > 1) {
+                val tagNames = tagList.joinToString(", ") { it.name }
+                throw OpportunityValidationException(
+                    message = "Нельзя выбрать более одного тега категории $category",
+                    details = mapOf("tags" to tagNames)
+                )
             }
         }
     }
