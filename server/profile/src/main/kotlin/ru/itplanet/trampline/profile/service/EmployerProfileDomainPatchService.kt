@@ -21,11 +21,14 @@ import ru.itplanet.trampline.profile.client.MediaServiceClient
 import ru.itplanet.trampline.profile.client.ModerationServiceClient
 import ru.itplanet.trampline.profile.converter.EmployerProfileConverter
 import ru.itplanet.trampline.profile.dao.EmployerProfileDao
+import ru.itplanet.trampline.profile.dao.EmployerVerificationDao
 import ru.itplanet.trampline.profile.dao.dto.EmployerProfileDto
 import ru.itplanet.trampline.profile.exception.ProfileBadRequestException
+import ru.itplanet.trampline.profile.exception.ProfileConflictException
 import ru.itplanet.trampline.profile.exception.ProfileIntegrationException
 import ru.itplanet.trampline.profile.exception.ProfileNotFoundException
 import ru.itplanet.trampline.profile.model.EmployerProfile
+import ru.itplanet.trampline.profile.model.enums.VerificationStatus
 import ru.itplanet.trampline.profile.model.request.EmployerCompanyPatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerProfilePatchRequest
 import ru.itplanet.trampline.profile.validation.EmployerProfileDomainValidator
@@ -33,6 +36,7 @@ import ru.itplanet.trampline.profile.validation.EmployerProfileDomainValidator
 @Service
 class EmployerProfileDomainPatchService(
     private val employerProfileDao: EmployerProfileDao,
+    private val employerVerificationDao: EmployerVerificationDao,
     private val cityDao: CityDao,
     private val locationDao: LocationDao,
     private val mediaServiceClient: MediaServiceClient,
@@ -71,9 +75,18 @@ class EmployerProfileDomainPatchService(
                 ProfileNotFoundException("Профиль не найден", "profile_not_found")
             }
 
+        val companyChanged = isCompanyDataChanged(profile, request)
+
+        if (companyChanged && hasPendingVerification(profile.userId)) {
+            throw ProfileConflictException(
+                message = "Сначала завершите или отмените текущую верификацию компании",
+                code = "employer_verification_pending",
+            )
+        }
+
         applyCompanyChanges(profile, request)
         validator.validate(profile)
-        handleEmployerCompanyContentChanged(profile)
+        handleEmployerCompanyChanged(profile, companyChanged)
 
         val saved = employerProfileDao.save(profile)
         return buildEmployerProfile(saved)
@@ -137,27 +150,16 @@ class EmployerProfileDomainPatchService(
         }
     }
 
-    private fun handleEmployerCompanyContentChanged(profile: EmployerProfileDto) {
-        if (hasApprovedCompanySnapshot(profile)) {
-            recreateModerationTask(
-                profile = profile,
-                taskType = ModerationTaskType.COMPANY_REVIEW,
-                snapshot = objectMapper.valueToTree(
-                    mapOf(
-                        "legalName" to profile.legalName,
-                        "inn" to profile.inn,
-                        "companyModerationStatus" to EmployerProfileModerationStatus.PENDING_MODERATION.name,
-                    ),
-                ),
-                sourceAction = "patchEmployerCompanyAutoSubmit",
-            )
-            profile.companyModerationStatus = EmployerProfileModerationStatus.PENDING_MODERATION
+    private fun handleEmployerCompanyChanged(
+        profile: EmployerProfileDto,
+        companyChanged: Boolean,
+    ) {
+        if (!companyChanged) {
             return
         }
 
-        if (profile.companyModerationStatus == EmployerProfileModerationStatus.PENDING_MODERATION) {
-            cancelActiveTask(profile.userId, ModerationTaskType.COMPANY_REVIEW)
-            profile.companyModerationStatus = EmployerProfileModerationStatus.DRAFT
+        if (profile.verificationStatus == VerificationStatus.APPROVED) {
+            profile.verificationStatus = VerificationStatus.REVOKED
         }
     }
 
@@ -165,8 +167,20 @@ class EmployerProfileDomainPatchService(
         return profile.approvedPublicSnapshot.isObject && profile.approvedPublicSnapshot.size() > 0
     }
 
-    private fun hasApprovedCompanySnapshot(profile: EmployerProfileDto): Boolean {
-        return profile.approvedCompanySnapshot.isObject && profile.approvedCompanySnapshot.size() > 0
+    private fun hasPendingVerification(userId: Long): Boolean {
+        return employerVerificationDao.existsByEmployerUserIdAndStatus(
+            userId,
+            VerificationStatus.PENDING,
+        )
+    }
+
+    private fun isCompanyDataChanged(
+        profile: EmployerProfileDto,
+        request: EmployerCompanyPatchRequest,
+    ): Boolean {
+        val legalNameChanged = request.legalName != null && request.legalName != profile.legalName
+        val innChanged = request.inn != null && request.inn != profile.inn
+        return legalNameChanged || innChanged
     }
 
     private fun recreateModerationTask(

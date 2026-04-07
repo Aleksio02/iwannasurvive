@@ -133,50 +133,6 @@ class InternalProfileModerationService(
     }
 
     @Transactional
-    fun approveEmployerCompany(
-        userId: Long,
-        request: InternalModerationApproveRequest,
-    ): InternalModerationActionResultResponse {
-        val profile = employerProfileDao.findById(userId).orElseThrow {
-            notFoundEmployerProfile(userId)
-        }
-
-        applyEmployerCompanyPatch(profile, request.applyPatch)
-        profile.companyModerationStatus = EmployerProfileModerationStatus.APPROVED
-        profile.approvedCompanySnapshot = buildApprovedEmployerCompanySnapshot(profile)
-
-        return InternalModerationActionResultResponse(affectedUserId = userId)
-    }
-
-    @Transactional
-    fun rejectEmployerCompany(
-        userId: Long,
-        request: InternalModerationRejectRequest,
-    ): InternalModerationActionResultResponse {
-        val profile = employerProfileDao.findById(userId).orElseThrow {
-            notFoundEmployerProfile(userId)
-        }
-
-        profile.companyModerationStatus = EmployerProfileModerationStatus.NEEDS_REVISION
-
-        return InternalModerationActionResultResponse(affectedUserId = userId)
-    }
-
-    @Transactional
-    fun requestChangesEmployerCompany(
-        userId: Long,
-        request: InternalModerationRequestChangesRequest,
-    ): InternalModerationActionResultResponse {
-        val profile = employerProfileDao.findById(userId).orElseThrow {
-            notFoundEmployerProfile(userId)
-        }
-
-        profile.companyModerationStatus = EmployerProfileModerationStatus.NEEDS_REVISION
-
-        return InternalModerationActionResultResponse(affectedUserId = userId)
-    }
-
-    @Transactional
     fun approveEmployerVerification(
         verificationId: Long,
         request: InternalModerationApproveRequest,
@@ -331,16 +287,6 @@ class InternalProfileModerationService(
         }
     }
 
-    private fun applyEmployerCompanyPatch(
-        profile: EmployerProfileDto,
-        patch: JsonNode,
-    ) {
-        if (!patch.isObject) return
-
-        textField(patch, "legalName") { profile.legalName = it }
-        textField(patch, "inn") { profile.inn = it }
-    }
-
     private fun buildApprovedEmployerPublicSnapshot(
         profile: EmployerProfileDto,
     ): JsonNode {
@@ -352,17 +298,6 @@ class InternalProfileModerationService(
         )
 
         return objectMapper.valueToTree(publicView)
-    }
-
-    private fun buildApprovedEmployerCompanySnapshot(
-        profile: EmployerProfileDto,
-    ): JsonNode {
-        return objectMapper.valueToTree(
-            mapOf(
-                "legalName" to profile.legalName,
-                "inn" to profile.inn,
-            ),
-        )
     }
 
     private fun applyEmployerVerificationPatch(
