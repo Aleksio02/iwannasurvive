@@ -2,6 +2,8 @@ package ru.itplanet.trampline.interaction.dao.dto
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
@@ -40,6 +42,16 @@ open class ContactRecommendationDto {
     @Column(name = "message")
     open var message: String? = null
 
+    @Column(name = "status", nullable = false, length = 32)
+    @Enumerated(EnumType.STRING)
+    open var status: ContactRecommendationStatus = ContactRecommendationStatus.NEW
+
+    @Column(name = "viewed_at")
+    open var viewedAt: OffsetDateTime? = null
+
+    @Column(name = "responded_at")
+    open var respondedAt: OffsetDateTime? = null
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     open var createdAt: OffsetDateTime? = null
@@ -51,10 +63,20 @@ open class ContactRecommendationDto {
         fromApplicantUserId: Long,
         toApplicantUserId: Long,
         message: String?,
+        status: ContactRecommendationStatus = ContactRecommendationStatus.NEW,
     ) {
         this.opportunityId = opportunityId
         this.fromApplicantUserId = fromApplicantUserId
         this.toApplicantUserId = toApplicantUserId
         this.message = message
+        this.status = status
     }
+}
+
+enum class ContactRecommendationStatus {
+    NEW,
+    VIEWED,
+    INTERESTED,
+    APPLIED,
+    DECLINED,
 }
