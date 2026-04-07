@@ -22,6 +22,7 @@ import ru.itplanet.trampline.profile.client.MediaServiceClient
 import ru.itplanet.trampline.profile.client.ModerationServiceClient
 import ru.itplanet.trampline.profile.dao.EmployerProfileDao
 import ru.itplanet.trampline.profile.dao.EmployerVerificationDao
+import ru.itplanet.trampline.profile.dao.dto.EmployerProfileDto
 import ru.itplanet.trampline.profile.dao.dto.EmployerVerificationDto
 import ru.itplanet.trampline.profile.exception.ProfileBadRequestException
 import ru.itplanet.trampline.profile.exception.ProfileConflictException
@@ -49,6 +50,14 @@ class EmployerVerificationServiceImpl(
         employerUserId: Long,
         request: EmployerVerificationRequest,
     ): EmployerVerificationResponse {
+        val profile = employerProfileDao.findById(employerUserId)
+            .orElseThrow {
+                ProfileNotFoundException(
+                    message = "Профиль работодателя с идентификатором пользователя $employerUserId не найден",
+                    code = "employer_profile_not_found",
+                )
+            }
+
         val hasPending = employerVerificationDao.existsByEmployerUserIdAndStatus(
             employerUserId,
             VerificationStatus.PENDING,
@@ -57,6 +66,13 @@ class EmployerVerificationServiceImpl(
             throw ProfileConflictException(
                 message = "У вас уже есть активный запрос на верификацию работодателя",
                 code = "employer_verification_pending",
+            )
+        }
+
+        if (profile.verificationStatus == VerificationStatus.APPROVED) {
+            throw ProfileConflictException(
+                message = "Компания уже верифицирована. Повторная отправка не требуется",
+                code = "employer_already_verified",
             )
         }
 
@@ -71,16 +87,25 @@ class EmployerVerificationServiceImpl(
             )
         }
 
+        validateVerificationRequest(
+            profile = profile,
+            method = method,
+            corporateEmail = request.corporateEmail,
+            professionalLinks = request.professionalLinks,
+        )
+
         val entity = EmployerVerificationDto(
             employerUserId = employerUserId,
             verificationMethod = method,
             corporateEmail = request.corporateEmail,
-            inn = request.inn,
+            inn = profile.inn,
             professionalLinks = request.professionalLinks,
             submittedComment = request.submittedComment,
         )
 
         val saved = employerVerificationDao.save(entity)
+        profile.verificationStatus = VerificationStatus.PENDING
+
         val response = toResponse(saved)
 
         runModerationAction(
@@ -209,6 +234,50 @@ class EmployerVerificationServiceImpl(
             code = "employer_verification_attachments_load_failed",
         ) {
             loadVerificationAttachments(verificationId)
+        }
+    }
+
+    private fun validateVerificationRequest(
+        profile: EmployerProfileDto,
+        method: VerificationMethod,
+        corporateEmail: String?,
+        professionalLinks: List<String>,
+    ) {
+        when (method) {
+            VerificationMethod.CORPORATE_EMAIL -> {
+                if (corporateEmail.isNullOrBlank()) {
+                    throw ProfileBadRequestException(
+                        message = "Для верификации по корпоративной почте укажите корпоративный email",
+                        code = "employer_verification_corporate_email_required",
+                    )
+                }
+            }
+
+            VerificationMethod.TIN -> {
+                if (profile.legalName.isNullOrBlank()) {
+                    throw ProfileBadRequestException(
+                        message = "Перед верификацией по ИНН укажите юридическое название компании",
+                        code = "employer_company_legal_name_required",
+                    )
+                }
+                if (profile.inn.isNullOrBlank()) {
+                    throw ProfileBadRequestException(
+                        message = "Для верификации по ИНН сначала заполните ИНН в данных компании",
+                        code = "employer_company_inn_required",
+                    )
+                }
+            }
+
+            VerificationMethod.PROFESSIONAL_LINKS -> {
+                if (professionalLinks.isEmpty()) {
+                    throw ProfileBadRequestException(
+                        message = "Для верификации по профессиональным ссылкам добавьте хотя бы одну ссылку",
+                        code = "employer_verification_links_required",
+                    )
+                }
+            }
+
+            VerificationMethod.MANUAL -> Unit
         }
     }
 
