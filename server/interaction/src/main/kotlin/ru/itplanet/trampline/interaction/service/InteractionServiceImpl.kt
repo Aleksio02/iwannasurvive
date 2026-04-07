@@ -27,6 +27,7 @@ import ru.itplanet.trampline.interaction.dao.dto.ContactDto
 import ru.itplanet.trampline.interaction.dao.dto.ContactDtoId
 import ru.itplanet.trampline.interaction.dao.dto.ContactInfoApplicantProfileDto
 import ru.itplanet.trampline.interaction.dao.dto.ContactRecommendationDto
+import ru.itplanet.trampline.interaction.dao.dto.ContactRecommendationStatus
 import ru.itplanet.trampline.interaction.dao.dto.ContactStatus
 import ru.itplanet.trampline.interaction.dao.dto.FavoriteDto
 import ru.itplanet.trampline.interaction.dao.dto.FavoriteTargetType
@@ -41,6 +42,7 @@ import ru.itplanet.trampline.interaction.model.request.CreateContactRecommendati
 import ru.itplanet.trampline.interaction.model.request.GetEmployerResponseListRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseStatusUpdateRequest
+import ru.itplanet.trampline.interaction.model.request.UpdateContactRecommendationStatusRequest
 import ru.itplanet.trampline.interaction.model.response.ContactRecommendationResponse
 import ru.itplanet.trampline.interaction.model.response.ContactResponse
 import ru.itplanet.trampline.interaction.model.response.EmployerOpportunityResponseItem
@@ -98,6 +100,12 @@ class InteractionServiceImpl(
         )
 
         val saved = opportunityResponseDao.save(opportunityResponseDto)
+
+        markIncomingRecommendationsAsApplied(
+            applicantUserId = userId,
+            opportunityId = request.opportunityId,
+        )
+
         return toOpportunityResponseResponse(saved, opportunity.title)
     }
 
@@ -488,6 +496,48 @@ class InteractionServiceImpl(
         return mapRecommendations(recommendations)
     }
 
+    override fun updateRecommendationStatus(
+        userId: Long,
+        recommendationId: Long,
+        request: UpdateContactRecommendationStatusRequest,
+    ): ContactRecommendationResponse {
+        ensureApplicantApprovedForNetworking(userId)
+
+        val recommendation = contactRecommendationDao.findByIdAndToApplicantUserId(
+            id = recommendationId,
+            toApplicantUserId = userId,
+        ) ?: throw InteractionNotFoundException(
+            message = "Рекомендация не найдена",
+            code = "recommendation_not_found",
+        )
+
+        if (recommendation.status != request.status) {
+            validateRecommendationStatusTransition(
+                currentStatus = recommendation.status,
+                targetStatus = request.status,
+            )
+
+            applyRecommendationStatus(
+                recommendation = recommendation,
+                targetStatus = request.status,
+                changedAt = OffsetDateTime.now(),
+            )
+
+            contactRecommendationDao.save(recommendation)
+        }
+
+        val opportunity = loadOpportunity(recommendation.opportunityId)
+        val fromApplicant = loadApplicant(recommendation.fromApplicantUserId)
+        val toApplicant = loadApplicant(recommendation.toApplicantUserId)
+
+        return toContactRecommendationResponse(
+            recommendation = recommendation,
+            opportunity = opportunity,
+            fromApplicant = fromApplicant,
+            toApplicant = toApplicant,
+        )
+    }
+
     override fun deleteRecommendation(
         userId: Long,
         recommendationId: Long,
@@ -604,6 +654,103 @@ class InteractionServiceImpl(
                 "updatedAt" to resumeFile.updatedAt,
             ),
         )
+    }
+
+    private fun markIncomingRecommendationsAsApplied(
+        applicantUserId: Long,
+        opportunityId: Long,
+    ) {
+        val recommendations = contactRecommendationDao.findByOpportunityIdAndToApplicantUserId(
+            opportunityId = opportunityId,
+            toApplicantUserId = applicantUserId,
+        )
+
+        if (recommendations.isEmpty()) {
+            return
+        }
+
+        val changedAt = OffsetDateTime.now()
+
+        recommendations.forEach { recommendation ->
+            if (recommendation.status != ContactRecommendationStatus.APPLIED) {
+                applyRecommendationStatus(
+                    recommendation = recommendation,
+                    targetStatus = ContactRecommendationStatus.APPLIED,
+                    changedAt = changedAt,
+                )
+            }
+        }
+
+        contactRecommendationDao.saveAll(recommendations)
+    }
+
+    private fun validateRecommendationStatusTransition(
+        currentStatus: ContactRecommendationStatus,
+        targetStatus: ContactRecommendationStatus,
+    ) {
+        if (currentStatus == targetStatus) {
+            return
+        }
+
+        val allowedTargets = when (currentStatus) {
+            ContactRecommendationStatus.NEW -> setOf(
+                ContactRecommendationStatus.VIEWED,
+                ContactRecommendationStatus.INTERESTED,
+                ContactRecommendationStatus.APPLIED,
+                ContactRecommendationStatus.DECLINED,
+            )
+
+            ContactRecommendationStatus.VIEWED -> setOf(
+                ContactRecommendationStatus.INTERESTED,
+                ContactRecommendationStatus.APPLIED,
+                ContactRecommendationStatus.DECLINED,
+            )
+
+            ContactRecommendationStatus.INTERESTED -> setOf(
+                ContactRecommendationStatus.APPLIED,
+                ContactRecommendationStatus.DECLINED,
+            )
+
+            ContactRecommendationStatus.APPLIED,
+            ContactRecommendationStatus.DECLINED -> emptySet()
+        }
+
+        if (targetStatus !in allowedTargets) {
+            throw InteractionConflictException(
+                message = "Недопустимый переход статуса рекомендации: $currentStatus -> $targetStatus",
+                code = "recommendation_status_transition_forbidden",
+            )
+        }
+    }
+
+    private fun applyRecommendationStatus(
+        recommendation: ContactRecommendationDto,
+        targetStatus: ContactRecommendationStatus,
+        changedAt: OffsetDateTime,
+    ) {
+        recommendation.status = targetStatus
+
+        when (targetStatus) {
+            ContactRecommendationStatus.NEW -> {
+                recommendation.viewedAt = null
+                recommendation.respondedAt = null
+            }
+
+            ContactRecommendationStatus.VIEWED -> {
+                if (recommendation.viewedAt == null) {
+                    recommendation.viewedAt = changedAt
+                }
+            }
+
+            ContactRecommendationStatus.INTERESTED,
+            ContactRecommendationStatus.APPLIED,
+            ContactRecommendationStatus.DECLINED -> {
+                if (recommendation.viewedAt == null) {
+                    recommendation.viewedAt = changedAt
+                }
+                recommendation.respondedAt = changedAt
+            }
+        }
     }
 
     private fun ensureAcceptedContact(
@@ -874,6 +1021,9 @@ class InteractionServiceImpl(
             toApplicantUserId = recommendation.toApplicantUserId,
             toApplicantName = fullApplicantName(toApplicant),
             message = recommendation.message,
+            status = recommendation.status,
+            viewedAt = recommendation.viewedAt,
+            respondedAt = recommendation.respondedAt,
             createdAt = recommendation.createdAt,
         )
     }

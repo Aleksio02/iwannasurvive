@@ -46,12 +46,12 @@ import ru.itplanet.trampline.profile.model.ApplicantProfileSearchItem
 import ru.itplanet.trampline.profile.model.ApplicantProfileSearchPage
 import ru.itplanet.trampline.profile.model.EmployerProfile
 import ru.itplanet.trampline.profile.model.enums.ApplicantTagRelationType
+import ru.itplanet.trampline.profile.model.enums.ProfileVisibility
+import ru.itplanet.trampline.profile.model.enums.ResumeVisibility
 import ru.itplanet.trampline.profile.model.request.ApplicantProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerCompanyPatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.GetApplicantProfileListRequest
-import ru.itplanet.trampline.profile.model.enums.ProfileVisibility
-import ru.itplanet.trampline.profile.model.enums.ResumeVisibility
 
 @Primary
 @Service
@@ -464,7 +464,12 @@ class ProfileServiceImpl(
             .associateBy { it.userId }
 
         val items = applicantUserIds.mapNotNull { applicantUserId ->
-            profilesById[applicantUserId]?.let(::buildApplicantProfileSearchItem)
+            profilesById[applicantUserId]?.let { profileDto ->
+                buildApplicantProfileSearchItem(
+                    currentUserId = currentUserId,
+                    profileDto = profileDto,
+                )
+            }
         }
 
         return ApplicantProfileSearchPage(
@@ -716,35 +721,52 @@ class ProfileServiceImpl(
     }
 
     private fun buildApplicantProfileSearchItem(
+        currentUserId: Long,
         profileDto: ApplicantProfileDto,
     ): ApplicantProfileSearchItem {
         val baseProfile = applicantProfileConverter.fromDto(profileDto)
 
-        val avatar = loadApplicantSingleFileOrNull(
-            userId = profileDto.userId,
-            attachmentRole = FileAttachmentRole.AVATAR,
-            visibility = profileDto.profileVisibility.toFileVisibility(),
-            logSubject = "аватар соискателя",
+        val canViewProfileBlock = applicantProfileVisibilityService.canViewApplicantProfileBlock(
+            visibility = profileDto.profileVisibility,
+            currentUserId = currentUserId,
+            targetUserId = profileDto.userId,
         )
 
-        val applicantTags = if (profileDto.resumeVisibility == ResumeVisibility.PRIVATE) {
-            ApplicantTagsView()
+        val canViewResumeBlock = applicantProfileVisibilityService.canViewApplicantResumeBlock(
+            visibility = profileDto.resumeVisibility,
+            currentUserId = currentUserId,
+            targetUserId = profileDto.userId,
+        )
+
+        val avatar = if (canViewProfileBlock) {
+            loadApplicantSingleFileOrNull(
+                userId = profileDto.userId,
+                attachmentRole = FileAttachmentRole.AVATAR,
+                visibility = profileDto.profileVisibility.toFileVisibility(),
+                logSubject = "аватар соискателя",
+            )
         } else {
+            null
+        }
+
+        val applicantTags = if (canViewResumeBlock) {
             loadApplicantTags(profileDto.userId)
+        } else {
+            ApplicantTagsView()
         }
 
         return ApplicantProfileSearchItem(
             userId = baseProfile.userId,
-            firstName = baseProfile.firstName,
-            lastName = baseProfile.lastName,
-            middleName = baseProfile.middleName,
-            universityName = baseProfile.universityName,
-            facultyName = baseProfile.facultyName,
-            studyProgram = baseProfile.studyProgram,
-            course = baseProfile.course,
-            graduationYear = baseProfile.graduationYear,
-            city = baseProfile.city,
-            about = baseProfile.about,
+            firstName = if (canViewProfileBlock) baseProfile.firstName else null,
+            lastName = if (canViewProfileBlock) baseProfile.lastName else null,
+            middleName = if (canViewProfileBlock) baseProfile.middleName else null,
+            universityName = if (canViewProfileBlock) baseProfile.universityName else null,
+            facultyName = if (canViewProfileBlock) baseProfile.facultyName else null,
+            studyProgram = if (canViewProfileBlock) baseProfile.studyProgram else null,
+            course = if (canViewProfileBlock) baseProfile.course else null,
+            graduationYear = if (canViewProfileBlock) baseProfile.graduationYear else null,
+            city = if (canViewProfileBlock) baseProfile.city else null,
+            about = if (canViewProfileBlock) baseProfile.about else null,
             avatar = avatar,
             skills = applicantTags.skills,
             interests = applicantTags.interests,
@@ -1250,40 +1272,20 @@ class ProfileServiceImpl(
         }
 
         return when (attachment.attachmentRole) {
-            FileAttachmentRole.AVATAR -> canAccessProfileVisibility(
+            FileAttachmentRole.AVATAR -> applicantProfileVisibilityService.canViewApplicantProfileBlock(
                 visibility = profileDto.profileVisibility,
                 currentUserId = currentUserId,
+                targetUserId = targetUserId,
             )
 
             FileAttachmentRole.RESUME,
-            FileAttachmentRole.PORTFOLIO -> canAccessResumeVisibility(
+            FileAttachmentRole.PORTFOLIO -> applicantProfileVisibilityService.canViewApplicantResumeBlock(
                 visibility = profileDto.resumeVisibility,
                 currentUserId = currentUserId,
+                targetUserId = targetUserId,
             )
 
             else -> false
-        }
-    }
-
-    private fun canAccessProfileVisibility(
-        visibility: ProfileVisibility,
-        currentUserId: Long?,
-    ): Boolean {
-        return when (visibility) {
-            ProfileVisibility.PUBLIC -> true
-            ProfileVisibility.AUTHENTICATED -> currentUserId != null
-            ProfileVisibility.PRIVATE -> false
-        }
-    }
-
-    private fun canAccessResumeVisibility(
-        visibility: ResumeVisibility,
-        currentUserId: Long?,
-    ): Boolean {
-        return when (visibility) {
-            ResumeVisibility.PUBLIC -> true
-            ResumeVisibility.AUTHENTICATED -> currentUserId != null
-            ResumeVisibility.PRIVATE -> false
         }
     }
 
@@ -1315,6 +1317,7 @@ class ProfileServiceImpl(
         return when (this) {
             ResumeVisibility.PUBLIC -> FileAssetVisibility.PUBLIC
             ResumeVisibility.AUTHENTICATED -> FileAssetVisibility.AUTHENTICATED
+            ResumeVisibility.CONTACTS_ONLY -> FileAssetVisibility.AUTHENTICATED
             ResumeVisibility.PRIVATE -> FileAssetVisibility.PRIVATE
         }
     }

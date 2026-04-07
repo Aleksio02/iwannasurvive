@@ -1,6 +1,7 @@
 package ru.itplanet.trampline.interaction.model.response
 
 import ru.itplanet.trampline.commons.model.enums.OpportunityType
+import ru.itplanet.trampline.interaction.dao.dto.ContactRecommendationStatus
 import java.time.OffsetDateTime
 
 data class ContactRecommendationResponse(
@@ -14,5 +15,8 @@ data class ContactRecommendationResponse(
     val toApplicantUserId: Long,
     val toApplicantName: String,
     val message: String?,
+    val status: ContactRecommendationStatus,
+    val viewedAt: OffsetDateTime?,
+    val respondedAt: OffsetDateTime?,
     val createdAt: OffsetDateTime?,
 )
