@@ -8,7 +8,14 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.commons.exception.ApiException
 import ru.itplanet.trampline.commons.model.Tag
-import ru.itplanet.trampline.commons.model.file.*
+import ru.itplanet.trampline.commons.model.file.FileAssetKind
+import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
+import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
+import ru.itplanet.trampline.commons.model.file.FileAttachmentRole
+import ru.itplanet.trampline.commons.model.file.InternalCreateFileAttachmentRequest
+import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
+import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
+import ru.itplanet.trampline.commons.model.file.InternalFileMetadataResponse
 import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTaskRequest
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskPriority
@@ -27,15 +34,25 @@ import ru.itplanet.trampline.profile.dao.EmployerProfileDao
 import ru.itplanet.trampline.profile.dao.dto.ApplicantProfileDto
 import ru.itplanet.trampline.profile.dao.dto.ApplicantTagDto
 import ru.itplanet.trampline.profile.dao.dto.EmployerProfileDto
-import ru.itplanet.trampline.profile.exception.*
-import ru.itplanet.trampline.profile.model.*
-import ru.itplanet.trampline.profile.model.enums.ApplicantTagRelationType
-import ru.itplanet.trampline.profile.model.enums.ProfileVisibility
-import ru.itplanet.trampline.profile.model.enums.ResumeVisibility
+import ru.itplanet.trampline.profile.exception.ProfileBadRequestException
+import ru.itplanet.trampline.profile.exception.ProfileConflictException
+import ru.itplanet.trampline.profile.exception.ProfileForbiddenException
+import ru.itplanet.trampline.profile.exception.ProfileIntegrationException
+import ru.itplanet.trampline.profile.exception.ProfileNotFoundException
+import ru.itplanet.trampline.profile.model.ApplicantApplicationSummary
+import ru.itplanet.trampline.profile.model.ApplicantContactSummary
+import ru.itplanet.trampline.profile.model.ApplicantProfile
+import ru.itplanet.trampline.profile.model.ApplicantProfileSearchItem
+import ru.itplanet.trampline.profile.model.ApplicantProfileSearchPage
+import ru.itplanet.trampline.profile.model.ApplicantTagRelationType
+import ru.itplanet.trampline.profile.model.EmployerProfile
+import ru.itplanet.trampline.profile.model.ProfileLink
 import ru.itplanet.trampline.profile.model.request.ApplicantProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerCompanyPatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.GetApplicantProfileListRequest
+import ru.itplanet.trampline.profile.model.enums.ProfileVisibility
+import ru.itplanet.trampline.profile.model.enums.ResumeVisibility
 
 @Primary
 @Service
@@ -323,71 +340,6 @@ class ProfileServiceImpl(
         }
 
         profile.moderationStatus = EmployerProfileModerationStatus.PENDING_MODERATION
-        val saved = employerProfileDao.save(profile)
-        return buildEmployerProfile(saved)
-    }
-
-    @Transactional
-    override fun submitEmployerCompanyForModeration(
-        userId: Long,
-    ): EmployerProfile {
-        val profile = loadEmployerProfileDto(userId)
-
-        if (hasApprovedEmployerCompanySnapshot(profile)) {
-            throw ProfileConflictException(
-                message = "После первого одобрения новые изменения данных компании отправляются на модерацию автоматически при сохранении",
-                code = "employer_company_auto_moderation_enabled",
-            )
-        }
-
-        when (profile.companyModerationStatus) {
-            EmployerProfileModerationStatus.PENDING_MODERATION -> {
-                throw ProfileConflictException(
-                    message = "Данные компании уже находятся на модерации",
-                    code = "employer_company_already_on_moderation",
-                )
-            }
-
-            EmployerProfileModerationStatus.APPROVED -> {
-                throw ProfileConflictException(
-                    message = "Данные компании уже одобрены",
-                    code = "employer_company_already_approved",
-                )
-            }
-
-            EmployerProfileModerationStatus.DRAFT,
-            EmployerProfileModerationStatus.NEEDS_REVISION -> Unit
-        }
-
-        val profileView = buildEmployerProfile(profile)
-        validateEmployerCompanyCanBeSubmitted(profileView)
-
-        runModerationAction(
-            logMessage = "Не удалось создать задачу модерации company data работодателя userId=$userId",
-            errorMessage = "Не удалось отправить данные компании на модерацию",
-            code = "employer_company_task_create_failed",
-        ) {
-            moderationServiceClient.createTask(
-                CreateInternalModerationTaskRequest(
-                    entityType = ModerationEntityType.EMPLOYER_PROFILE,
-                    entityId = userId,
-                    taskType = ModerationTaskType.COMPANY_REVIEW,
-                    priority = ModerationTaskPriority.MEDIUM,
-                    createdByUserId = userId,
-                    snapshot = objectMapper.valueToTree(
-                        mapOf(
-                            "legalName" to profileView.legalName,
-                            "inn" to profileView.inn,
-                            "companyModerationStatus" to EmployerProfileModerationStatus.PENDING_MODERATION.name,
-                        ),
-                    ),
-                    sourceService = "profile",
-                    sourceAction = "submitEmployerCompanyForModeration",
-                ),
-            )
-        }
-
-        profile.companyModerationStatus = EmployerProfileModerationStatus.PENDING_MODERATION
         val saved = employerProfileDao.save(profile)
         return buildEmployerProfile(saved)
     }
@@ -875,7 +827,6 @@ class ProfileServiceImpl(
             publicContacts = emptyList(),
             verificationStatus = profileDto.verificationStatus,
             moderationStatus = profileDto.moderationStatus,
-            companyModerationStatus = profileDto.companyModerationStatus,
             logo = logo,
         )
     }
@@ -1046,26 +997,6 @@ class ProfileServiceImpl(
         }
     }
 
-    private fun validateEmployerCompanyCanBeSubmitted(
-        profile: EmployerProfile,
-    ) {
-        val issues = mutableListOf<String>()
-
-        if (profile.legalName.isNullOrBlank()) {
-            issues += "укажите юридическое название компании"
-        }
-        if (profile.inn.isNullOrBlank()) {
-            issues += "укажите ИНН"
-        }
-
-        if (issues.isNotEmpty()) {
-            throw ProfileBadRequestException(
-                message = "Данные компании пока нельзя отправить на модерацию: ${issues.joinToString("; ")}",
-                code = "employer_company_moderation_submit_invalid",
-            )
-        }
-    }
-
     private fun handleApplicantProfileContentChanged(
         profile: ApplicantProfileDto,
     ) {
@@ -1104,12 +1035,6 @@ class ProfileServiceImpl(
         profile: EmployerProfileDto,
     ): Boolean {
         return profile.approvedPublicSnapshot.isObject && profile.approvedPublicSnapshot.size() > 0
-    }
-
-    private fun hasApprovedEmployerCompanySnapshot(
-        profile: EmployerProfileDto,
-    ): Boolean {
-        return profile.approvedCompanySnapshot.isObject && profile.approvedCompanySnapshot.size() > 0
     }
 
     private fun hasEmployerAccessToApplicantProfile(

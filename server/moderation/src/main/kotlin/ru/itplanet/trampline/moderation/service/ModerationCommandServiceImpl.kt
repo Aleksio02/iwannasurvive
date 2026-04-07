@@ -651,18 +651,7 @@ class ModerationCommandServiceImpl(
                     profileModerationOwnerClient.approveApplicantProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_PROFILE ->
-                    when (task.taskType) {
-                        ModerationTaskType.PROFILE_REVIEW ->
-                            profileModerationOwnerClient.approveEmployerProfile(task.entityId, request)
-
-                        ModerationTaskType.COMPANY_REVIEW ->
-                            profileModerationOwnerClient.approveEmployerCompany(task.entityId, request)
-
-                        else -> throw ModerationBadRequestException(
-                            message = "Неподдерживаемый тип задачи для EMPLOYER_PROFILE: ${task.taskType}",
-                            code = "unsupported_employer_profile_task_type",
-                        )
-                    }
+                    profileModerationOwnerClient.approveEmployerProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_VERIFICATION ->
                     profileModerationOwnerClient.approveEmployerVerification(task.entityId, request)
@@ -688,18 +677,7 @@ class ModerationCommandServiceImpl(
                     profileModerationOwnerClient.requestChangesApplicantProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_PROFILE ->
-                    when (task.taskType) {
-                        ModerationTaskType.PROFILE_REVIEW ->
-                            profileModerationOwnerClient.requestChangesEmployerProfile(task.entityId, request)
-
-                        ModerationTaskType.COMPANY_REVIEW ->
-                            profileModerationOwnerClient.requestChangesEmployerCompany(task.entityId, request)
-
-                        else -> throw ModerationBadRequestException(
-                            message = "Неподдерживаемый тип задачи для EMPLOYER_PROFILE: ${task.taskType}",
-                            code = "unsupported_employer_profile_task_type",
-                        )
-                    }
+                    profileModerationOwnerClient.requestChangesEmployerProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_VERIFICATION ->
                     profileModerationOwnerClient.requestChangesEmployerVerification(task.entityId, request)
@@ -725,18 +703,7 @@ class ModerationCommandServiceImpl(
                     profileModerationOwnerClient.rejectApplicantProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_PROFILE ->
-                    when (task.taskType) {
-                        ModerationTaskType.PROFILE_REVIEW ->
-                            profileModerationOwnerClient.rejectEmployerProfile(task.entityId, request)
-
-                        ModerationTaskType.COMPANY_REVIEW ->
-                            profileModerationOwnerClient.rejectEmployerCompany(task.entityId, request)
-
-                        else -> throw ModerationBadRequestException(
-                            message = "Неподдерживаемый тип задачи для EMPLOYER_PROFILE: ${task.taskType}",
-                            code = "unsupported_employer_profile_task_type",
-                        )
-                    }
+                    profileModerationOwnerClient.rejectEmployerProfile(task.entityId, request)
 
                 ModerationEntityType.EMPLOYER_VERIFICATION ->
                     profileModerationOwnerClient.rejectEmployerVerification(task.entityId, request)

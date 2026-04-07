@@ -81,14 +81,6 @@ open class EmployerProfileDto {
     @JdbcTypeCode(SqlTypes.JSON)
     open var approvedPublicSnapshot: JsonNode = JsonNodeFactory.instance.objectNode()
 
-    @Column(name = "company_moderation_status", length = 32, nullable = false)
-    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
-    open var companyModerationStatus: EmployerProfileModerationStatus = EmployerProfileModerationStatus.DRAFT
-
-    @Column(name = "approved_company_snapshot", columnDefinition = "jsonb", nullable = false)
-    @JdbcTypeCode(SqlTypes.JSON)
-    open var approvedCompanySnapshot: JsonNode = JsonNodeFactory.instance.objectNode()
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     open var createdAt: OffsetDateTime? = null
