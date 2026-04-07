@@ -16,7 +16,7 @@ open class TagDto : BaseLongIdEntity() {
     @Column(name = "name", nullable = false, length = 100)
     var name: String = ""
 
-    @Column(name = "name", nullable = false, length = 100)
+    @Column(name = "normalized_name", nullable = false, length = 100)
     var normalizedName: String = ""
 
     @Enumerated(EnumType.STRING)
