@@ -19,6 +19,7 @@ import ru.itplanet.trampline.interaction.model.request.ContactRequest
 import ru.itplanet.trampline.interaction.model.request.CreateContactRecommendationRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseStatusUpdateRequest
+import ru.itplanet.trampline.interaction.model.request.UpdateContactRecommendationStatusRequest
 import ru.itplanet.trampline.interaction.model.response.ContactRecommendationResponse
 import ru.itplanet.trampline.interaction.model.response.ContactResponse
 import ru.itplanet.trampline.interaction.model.response.FavoriteResponse
@@ -132,6 +133,16 @@ class InteractionController(
     ): List<ContactRecommendationResponse> {
         ensureApplicant(currentUser)
         return interactionService.getOutgoingRecommendations(currentUser.userId)
+    }
+
+    @PatchMapping("/recommendations/{id}/status")
+    fun updateRecommendationStatus(
+        @CurrentUser currentUser: AuthenticatedUser,
+        @PathVariable @Positive(message = "Идентификатор рекомендации должен быть положительным") id: Long,
+        @Valid @RequestBody request: UpdateContactRecommendationStatusRequest,
+    ): ContactRecommendationResponse {
+        ensureApplicant(currentUser)
+        return interactionService.updateRecommendationStatus(currentUser.userId, id, request)
     }
 
     @DeleteMapping("/recommendations/{id}")

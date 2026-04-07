@@ -6,6 +6,7 @@ import ru.itplanet.trampline.interaction.model.request.CreateContactRecommendati
 import ru.itplanet.trampline.interaction.model.request.GetEmployerResponseListRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseRequest
 import ru.itplanet.trampline.interaction.model.request.OpportunityResponseStatusUpdateRequest
+import ru.itplanet.trampline.interaction.model.request.UpdateContactRecommendationStatusRequest
 import ru.itplanet.trampline.interaction.model.response.ContactRecommendationResponse
 import ru.itplanet.trampline.interaction.model.response.ContactResponse
 import ru.itplanet.trampline.interaction.model.response.EmployerOpportunityResponseItem
@@ -92,6 +93,12 @@ interface InteractionService {
     fun getIncomingRecommendations(userId: Long): List<ContactRecommendationResponse>
 
     fun getOutgoingRecommendations(userId: Long): List<ContactRecommendationResponse>
+
+    fun updateRecommendationStatus(
+        userId: Long,
+        recommendationId: Long,
+        request: UpdateContactRecommendationStatusRequest,
+    ): ContactRecommendationResponse
 
     fun deleteRecommendation(
         userId: Long,
