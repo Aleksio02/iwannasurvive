@@ -20,4 +20,9 @@ class TagController(
     ): List<Tag> {
         return tagService.getActiveTags(category)
     }
+
+    @GetMapping("/popular")
+    fun getPopularTags(@RequestParam(defaultValue = "10") limit: Int): List<Tag> {
+        return tagService.getPopularTags(limit)
+    }
 }

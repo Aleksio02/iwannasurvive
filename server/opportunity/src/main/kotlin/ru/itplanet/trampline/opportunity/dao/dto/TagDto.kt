@@ -16,9 +16,15 @@ open class TagDto : BaseLongIdEntity() {
     @Column(name = "name", nullable = false, length = 100)
     var name: String = ""
 
+    @Column(name = "name", nullable = false, length = 100)
+    var normalizedName: String = ""
+
     @Enumerated(EnumType.STRING)
     @Column(name = "category", nullable = false, length = 32)
-    var category: TagCategory = TagCategory.TECH
+    var category: TagCategory = TagCategory.OTHER
+
+    @Column(name = "usage_count", nullable = false)
+    var usageCount: Int = 0
 
     @Enumerated(EnumType.STRING)
     @Column(name = "created_by_type", nullable = false, length = 32)
