@@ -16,12 +16,13 @@ import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
 import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundDomainException
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import java.time.OffsetDateTime
+import java.util.*
 
 @Service
 class InternalOpportunityModerationService(
     private val opportunityDao: OpportunityDao,
     private val tagDao: TagDao,
-    private val patchService: OpportunityDomainPatchService
+    private val patchService: OpportunityDomainPatchService,
 ) {
 
     @Transactional
@@ -41,6 +42,10 @@ class InternalOpportunityModerationService(
 
         if (opportunity.status == OpportunityStatus.PUBLISHED && opportunity.publishedAt == null) {
             opportunity.publishedAt = OffsetDateTime.now()
+        }
+
+        opportunity.tags.forEach { tag ->
+            tagDao.incrementUsageCount(tag.id!!)
         }
 
         opportunity.moderationComment = request.comment
@@ -137,6 +142,9 @@ class InternalOpportunityModerationService(
         tag.moderationStatus = TagModerationStatus.REJECTED
         tag.isActive = false
 
+        tag.normalizedName = normalizeTagName(tag.name)
+        tag.name = tag.name.trim()
+
         return InternalModerationActionResultResponse(
             affectedUserId = tag.createdByUserId,
         )
@@ -209,6 +217,18 @@ class InternalOpportunityModerationService(
     ) {
         if (!patch.hasNonNull(fieldName)) return
         setter(enumValueOf(patch.get(fieldName).asText().trim().uppercase()))
+    }
+
+    fun normalizeTagName(raw: String): String {
+        var normalized = raw.trim().lowercase(Locale.ROOT)
+        normalized = normalized.replace(Regex("[^\\p{L}\\p{N}\\s-]"), "")
+        normalized = normalized.replace(Regex("\\s+"), " ")
+        when (normalized) {
+            "js" -> normalized = "javascript"
+            "c#" -> normalized = "csharp"
+            ".net" -> normalized = "dotnet"
+        }
+        return normalized
     }
 
     private fun normalizeName(

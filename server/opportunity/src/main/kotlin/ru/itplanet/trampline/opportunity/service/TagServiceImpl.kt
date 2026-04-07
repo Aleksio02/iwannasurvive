@@ -12,7 +12,7 @@ import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 @Service
 class TagServiceImpl(
     private val tagDao: TagDao,
-    private val tagConverter: TagConverter
+    private val tagConverter: TagConverter,
 ) : TagService {
 
     override fun getActiveTags(category: TagCategory?): List<Tag> {
@@ -39,5 +39,11 @@ class TagServiceImpl(
             ids = ids.distinct(),
             moderationStatus = TagModerationStatus.APPROVED,
         ).map(tagConverter::toModel)
+    }
+
+    override fun getPopularTags(limit: Int): List<Tag> {
+        return tagDao.findTop10ByOrderByUsageCountDesc().take(limit).map {
+            tagConverter.toModel(it)
+        }
     }
 }
