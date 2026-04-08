@@ -5,6 +5,8 @@ import ru.itplanet.trampline.auth.model.request.PasswordResetConfirmRequest
 import ru.itplanet.trampline.auth.model.request.PasswordResetRequest
 import ru.itplanet.trampline.auth.model.request.PasswordResetVerifyRequest
 import ru.itplanet.trampline.auth.model.request.Registration
+import ru.itplanet.trampline.auth.model.request.RegistrationConfirmRequest
+import ru.itplanet.trampline.auth.model.request.RegistrationResendRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorConfirmRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorPasswordRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorResendRequest
@@ -12,11 +14,14 @@ import ru.itplanet.trampline.auth.model.response.AuthResponse
 import ru.itplanet.trampline.auth.model.response.CurrentSessionResponse
 import ru.itplanet.trampline.auth.model.response.LoginResponse
 import ru.itplanet.trampline.auth.model.response.PasswordResetVerifyResponse
+import ru.itplanet.trampline.auth.model.response.RegistrationChallengeResponse
 import ru.itplanet.trampline.auth.model.response.TwoFactorChallengeResponse
 import ru.itplanet.trampline.commons.model.TokenPayload
 
 interface AuthService {
-    fun register(request: Registration): AuthResponse
+    fun register(request: Registration): RegistrationChallengeResponse
+    fun confirmRegistration(request: RegistrationConfirmRequest): AuthResponse
+    fun resendRegistrationCode(request: RegistrationResendRequest)
     fun login(request: Authorization): LoginResponse
     fun verifyLoginTwoFactor(request: TwoFactorConfirmRequest): AuthResponse
     fun resendLoginTwoFactorCode(request: TwoFactorResendRequest)

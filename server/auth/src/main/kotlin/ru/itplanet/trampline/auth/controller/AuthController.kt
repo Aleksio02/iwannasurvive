@@ -19,6 +19,8 @@ import ru.itplanet.trampline.auth.model.request.PasswordResetConfirmRequest
 import ru.itplanet.trampline.auth.model.request.PasswordResetRequest
 import ru.itplanet.trampline.auth.model.request.PasswordResetVerifyRequest
 import ru.itplanet.trampline.auth.model.request.Registration
+import ru.itplanet.trampline.auth.model.request.RegistrationConfirmRequest
+import ru.itplanet.trampline.auth.model.request.RegistrationResendRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorConfirmRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorPasswordRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorResendRequest
@@ -27,6 +29,7 @@ import ru.itplanet.trampline.auth.model.response.CsrfResponse
 import ru.itplanet.trampline.auth.model.response.CurrentSessionResponse
 import ru.itplanet.trampline.auth.model.response.LoginResponse
 import ru.itplanet.trampline.auth.model.response.PasswordResetVerifyResponse
+import ru.itplanet.trampline.auth.model.response.RegistrationChallengeResponse
 import ru.itplanet.trampline.auth.model.response.TwoFactorChallengeResponse
 import ru.itplanet.trampline.auth.service.AuthService
 import ru.itplanet.trampline.auth.service.SessionCookieService
@@ -42,12 +45,27 @@ class AuthController(
 
     @PostMapping("/register")
     fun register(
-        @Valid @RequestBody request: Registration,
+        @Valid @RequestBody request: Registration
+    ): RegistrationChallengeResponse {
+        return authService.register(request)
+    }
+
+    @PostMapping("/register/confirm")
+    fun confirmRegistration(
+        @Valid @RequestBody request: RegistrationConfirmRequest,
         response: HttpServletResponse
     ): AuthResponse {
-        val authResponse = authService.register(request)
+        val authResponse = authService.confirmRegistration(request)
         sessionCookieService.writeSessionCookie(response, authResponse.sessionId)
         return authResponse
+    }
+
+    @PostMapping("/register/resend")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun resendRegistrationCode(
+        @Valid @RequestBody request: RegistrationResendRequest
+    ) {
+        authService.resendRegistrationCode(request)
     }
 
     @PostMapping("/login")
