@@ -15,12 +15,31 @@ class UserConverter {
         normalizedEmail: String,
         passwordHash: String,
     ): UserDto {
-        return UserDto(
+        val user = UserDto(
             displayName = source.displayName.trim(),
             email = normalizedEmail,
             passwordHash = passwordHash,
             role = source.role,
         )
+        user.emailVerified = true
+        return user
+    }
+
+    fun toUserDto(
+        displayName: String,
+        normalizedEmail: String,
+        passwordHash: String,
+        role: Role,
+        emailVerified: Boolean,
+    ): UserDto {
+        val user = UserDto(
+            displayName = displayName.trim(),
+            email = normalizedEmail,
+            passwordHash = passwordHash,
+            role = role,
+        )
+        user.emailVerified = emailVerified
+        return user
     }
 
     fun toCuratorUserDto(

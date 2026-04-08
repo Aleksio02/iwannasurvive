@@ -64,17 +64,6 @@ auth:
     secure-cookie: false
     same-site: Lax
 
-moderation:
-  service:
-    url: ${MODERATION_SERVER_HOST:http://localhost:8082}
-
-feign:
-  client:
-    config:
-      default:
-        connectTimeout: 5000
-        readTimeout: 5000
-
   password-reset:
     code-ttl-minutes: ${PASSWORD_RESET_CODE_TTL_MINUTES:10}
     reset-token-ttl-minutes: ${PASSWORD_RESET_TOKEN_TTL_MINUTES:10}
@@ -91,6 +80,24 @@ feign:
     login-subject: "${TWO_FACTOR_LOGIN_MAIL_SUBJECT:Код входа Tramplin}"
     enable-subject: "${TWO_FACTOR_ENABLE_MAIL_SUBJECT:Подтверждение включения 2FA Tramplin}"
     disable-subject: "${TWO_FACTOR_DISABLE_MAIL_SUBJECT:Подтверждение отключения 2FA Tramplin}"
+
+  registration-verification:
+    code-ttl-minutes: ${REGISTRATION_CODE_TTL_MINUTES:10}
+    resend-cooldown-seconds: ${REGISTRATION_RESEND_COOLDOWN_SECONDS:60}
+    max-verify-attempts: ${REGISTRATION_MAX_VERIFY_ATTEMPTS:5}
+    mail-from: ${REGISTRATION_MAIL_FROM:no-reply@tramplin.local}
+    subject: "${REGISTRATION_MAIL_SUBJECT:Подтверждение регистрации Tramplin}"
+
+moderation:
+  service:
+    url: ${MODERATION_SERVER_HOST:http://localhost:8082}
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
 
 internal-api:
   api-key: ${INTERNAL_API_KEY}
