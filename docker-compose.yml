@@ -45,10 +45,8 @@ services:
 
     ports:
       - "9999:9999"
-
-    redis:
-      condition: service_healthy
-      restart: true
+    depends_on:
+      - redis
 
     restart: unless-stopped
 
