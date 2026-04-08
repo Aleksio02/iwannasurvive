@@ -22,6 +22,8 @@ import ru.itplanet.trampline.auth.model.request.PasswordResetConfirmRequest
 import ru.itplanet.trampline.auth.model.request.PasswordResetRequest
 import ru.itplanet.trampline.auth.model.request.PasswordResetVerifyRequest
 import ru.itplanet.trampline.auth.model.request.Registration
+import ru.itplanet.trampline.auth.model.request.RegistrationConfirmRequest
+import ru.itplanet.trampline.auth.model.request.RegistrationResendRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorConfirmRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorPasswordRequest
 import ru.itplanet.trampline.auth.model.request.TwoFactorResendRequest
@@ -29,6 +31,7 @@ import ru.itplanet.trampline.auth.model.response.AuthResponse
 import ru.itplanet.trampline.auth.model.response.CurrentSessionResponse
 import ru.itplanet.trampline.auth.model.response.LoginResponse
 import ru.itplanet.trampline.auth.model.response.PasswordResetVerifyResponse
+import ru.itplanet.trampline.auth.model.response.RegistrationChallengeResponse
 import ru.itplanet.trampline.auth.model.response.SessionInfoResponse
 import ru.itplanet.trampline.auth.model.response.TwoFactorChallengeResponse
 import ru.itplanet.trampline.auth.util.EmailNormalizer
@@ -52,10 +55,11 @@ class AuthServiceImpl(
     private val passwordResetMailService: PasswordResetMailService,
     private val passwordResetProperties: PasswordResetProperties,
     private val twoFactorChallengeService: TwoFactorChallengeService,
+    private val registrationChallengeService: RegistrationChallengeService,
 ) : AuthService {
 
-    @Transactional
-    override fun register(request: Registration): AuthResponse {
+    @Transactional(readOnly = true)
+    override fun register(request: Registration): RegistrationChallengeResponse {
         if (request.role != Role.EMPLOYER && request.role != Role.APPLICANT) {
             throw RegistrationRoleNotAllowedException()
         }
@@ -66,14 +70,35 @@ class AuthServiceImpl(
             throw UserAlreadyExistsException()
         }
 
-        val userToSave = userConverter.toUserDto(
-            source = request,
-            normalizedEmail = normalizedEmail,
+        return registrationChallengeService.createChallenge(
+            displayName = request.displayName.trim(),
+            email = normalizedEmail,
             passwordHash = passwordEncoder.encode(request.password),
+            role = request.role
+        )
+    }
+
+    @Transactional
+    override fun confirmRegistration(request: RegistrationConfirmRequest): AuthResponse {
+        val pendingRegistration = registrationChallengeService.verifyChallenge(
+            pendingToken = request.pendingToken,
+            code = request.code
         )
 
+        if (userDao.findByEmail(pendingRegistration.email) != null) {
+            throw UserAlreadyExistsException()
+        }
+
         val savedUser = try {
-            userDao.saveAndFlush(userToSave)
+            userDao.saveAndFlush(
+                userConverter.toUserDto(
+                    displayName = pendingRegistration.displayName,
+                    normalizedEmail = pendingRegistration.email,
+                    passwordHash = pendingRegistration.passwordHash,
+                    role = pendingRegistration.role,
+                    emailVerified = true
+                )
+            )
         } catch (_: DataIntegrityViolationException) {
             throw UserAlreadyExistsException()
         }
@@ -89,6 +114,10 @@ class AuthServiceImpl(
             sessionId = sessionId,
             user = userConverter.fromDtoToUser(savedUser)
         )
+    }
+
+    override fun resendRegistrationCode(request: RegistrationResendRequest) {
+        registrationChallengeService.resendChallenge(request.pendingToken)
     }
 
     @Transactional
