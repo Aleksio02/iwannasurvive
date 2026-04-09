@@ -58,3 +58,14 @@ class InteractionIntegrationException(
     message = message,
     details = details,
 )
+
+class InteractionInternalException(
+    message: String,
+    code: String = "interaction_internal_error",
+    details: Map<String, String> = emptyMap(),
+) : ApiException(
+    status = HttpStatus.INTERNAL_SERVER_ERROR,
+    code = code,
+    message = message,
+    details = details,
+)
