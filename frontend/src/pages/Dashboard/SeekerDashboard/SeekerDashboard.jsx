@@ -360,7 +360,7 @@ function SeekerDashboard() {
                     setHasLoadedNetworking(true)
                 }
             } catch (error) {
-                if (error?.status === 401) {
+                if ([401].includes(error?.status)) {
                     clearSessionUser()
                     setUser(null)
                     setApplications([])
@@ -1075,7 +1075,9 @@ function SeekerDashboard() {
                         <div className="profile-card">
                             <div
                                 className={`profile-card__avatar-wrap ${isEditing ? 'is-editing' : ''}`}
-                                onClick={() => { if (isEditing) avatarInputRef.current?.click() }}
+                                onClick={() => {
+                                    if (isEditing) avatarInputRef.current?.click()
+                                }}
                                 role={isEditing ? 'button' : undefined}
                                 tabIndex={isEditing ? 0 : undefined}
                                 onKeyDown={(e) => {
