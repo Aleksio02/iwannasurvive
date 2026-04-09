@@ -38,24 +38,36 @@ class EmployerLocationService(
         ensureEmployerProfileExists(currentUserId)
 
         val city = loadActiveCityOrThrow(request.cityId)
+        val title = normalizeOptionalText(request.title)
+        val addressLine = normalizeRequiredText(request.addressLine, "Адрес")
+        val addressLine2 = normalizeOptionalText(request.addressLine2)
+        val postalCode = normalizeOptionalText(request.postalCode)
+        val fiasId = normalizeOptionalText(request.fiasId)
+        val unrestrictedValue = normalizeOptionalText(request.unrestrictedValue)
+
         validateCoordinatesPair(request.latitude, request.longitude)
+        validateUnrestrictedValueConsistency(
+            city = city,
+            addressLine = addressLine,
+            unrestrictedValue = unrestrictedValue,
+        )
 
         val location = LocationDto().apply {
             ownerEmployerUserId = currentUserId
             cityId = requireNotNull(city.id)
             this.city = city
-            title = normalizeOptionalText(request.title)
-            addressLine = normalizeRequiredText(request.addressLine, "Адрес")
-            addressLine2 = normalizeOptionalText(request.addressLine2)
-            postalCode = normalizeOptionalText(request.postalCode)
+            this.title = title
+            this.addressLine = addressLine
+            this.addressLine2 = addressLine2
+            this.postalCode = postalCode
             latitude = request.latitude
             longitude = request.longitude
-            fiasId = normalizeOptionalText(request.fiasId)
-            unrestrictedValue = normalizeOptionalText(request.unrestrictedValue)
+            this.fiasId = fiasId
+            this.unrestrictedValue = unrestrictedValue
             qcGeo = request.qcGeo?.toShort()
             source = resolveSource(
-                fiasId = fiasId,
-                unrestrictedValue = unrestrictedValue,
+                fiasId = this.fiasId,
+                unrestrictedValue = this.unrestrictedValue,
                 currentSource = null,
             )
             isActive = true
@@ -91,6 +103,11 @@ class EmployerLocationService(
         request.qcGeo?.let { location.qcGeo = it.toShort() }
 
         validateCoordinatesPair(location.latitude, location.longitude)
+        validateUnrestrictedValueConsistency(
+            city = location.city ?: loadActiveCityOrThrow(requireNotNull(location.cityId)),
+            addressLine = normalizeRequiredText(location.addressLine, "Адрес"),
+            unrestrictedValue = location.unrestrictedValue,
+        )
 
         if (
             request.fiasId != null ||
@@ -187,11 +204,35 @@ class EmployerLocationService(
         }
     }
 
+    private fun validateUnrestrictedValueConsistency(
+        city: CityDto,
+        addressLine: String,
+        unrestrictedValue: String?,
+    ) {
+        val normalizedUnrestrictedValue = normalizeOptionalForContains(unrestrictedValue) ?: return
+        val normalizedCityName = normalizeForContains(city.name)
+        val normalizedAddressLine = normalizeForContains(addressLine)
+
+        if (!normalizedUnrestrictedValue.contains(normalizedCityName)) {
+            throw ProfileBadRequestException(
+                message = "Полный адрес не соответствует выбранному городу",
+                code = "location_unrestricted_value_city_mismatch",
+            )
+        }
+
+        if (!normalizedUnrestrictedValue.contains(normalizedAddressLine)) {
+            throw ProfileBadRequestException(
+                message = "Полный адрес не содержит указанный addressLine",
+                code = "location_unrestricted_value_address_mismatch",
+            )
+        }
+    }
+
     private fun normalizeRequiredText(
-        value: String,
+        value: String?,
         fieldName: String,
     ): String {
-        val normalized = value.trim()
+        val normalized = value?.trim().orEmpty()
         if (normalized.isEmpty()) {
             throw ProfileBadRequestException(
                 message = "$fieldName не может быть пустым",
@@ -205,6 +246,25 @@ class EmployerLocationService(
         value: String?,
     ): String? {
         return value?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun normalizeForContains(
+        value: String,
+    ): String {
+        return value
+            .trim()
+            .lowercase()
+            .replace(Regex("\\s+"), " ")
+    }
+
+    private fun normalizeOptionalForContains(
+        value: String?,
+    ): String? {
+        return value
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.lowercase()
+            ?.replace(Regex("\\s+"), " ")
     }
 
     private fun resolveSource(
