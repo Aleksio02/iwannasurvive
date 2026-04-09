@@ -9,6 +9,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.sql.Connection
 import java.sql.DriverManager
+import java.sql.Statement
 
 class CityReferenceImporter(
     private val datasource: ApplicationConfig.Datasource,
@@ -41,6 +42,7 @@ class CityReferenceImporter(
                     connection = connection,
                     csvPath = csvPath,
                     countryCode = options.countryCode,
+                    batchSize = options.batchSize,
                 )
 
                 connection.commit()
@@ -125,6 +127,7 @@ class CityReferenceImporter(
         connection: Connection,
         csvPath: Path,
         countryCode: String,
+        batchSize: Int,
     ): ImportResult {
         val csvFormat = CSVFormat.DEFAULT
             .builder()
@@ -134,45 +137,80 @@ class CityReferenceImporter(
             .setTrim(true)
             .build()
 
+        val existingCityIndex = loadExistingCities(connection, countryCode)
+
         var processedRows = 0
         var rowsWithoutCoordinates = 0
         var upsertedRows = 0
 
-        connection.prepareStatement(UPDATE_BY_FIAS_SQL).use { updateByFias ->
-            connection.prepareStatement(UPDATE_BY_NATURAL_KEY_SQL).use { updateByNaturalKey ->
-                connection.prepareStatement(INSERT_CITY_SQL).use { insertCity ->
-                    Files.newBufferedReader(csvPath, StandardCharsets.UTF_8).use { reader ->
-                        csvFormat.parse(reader).use { parser ->
-                            for (record in parser) {
-                                val row = CityCsvRow.fromRecord(record.toMap(), countryCode)
+        connection.prepareStatement(UPDATE_BY_ID_SQL).use { updateById ->
+            connection.prepareStatement(INSERT_CITY_SQL, Statement.RETURN_GENERATED_KEYS).use { insertCity ->
+                val pendingInsertRows = ArrayList<CityCsvRow>(batchSize)
 
-                                val updatedByFias = if (row.fiasId != null) {
-                                    updateByFias.fillForUpdateByFias(row)
-                                    updateByFias.executeUpdate()
-                                } else {
-                                    0
+                Files.newBufferedReader(csvPath, StandardCharsets.UTF_8).use { reader ->
+                    csvFormat.parse(reader).use { parser ->
+                        for (record in parser) {
+                            val row = CityCsvRow.fromRecord(record.toMap(), countryCode)
+
+                            if (existingCityIndex.hasPending(row)) {
+                                flushInsertBatch(
+                                    insertCity = insertCity,
+                                    pendingInsertRows = pendingInsertRows,
+                                    existingCityIndex = existingCityIndex,
+                                )
+                            }
+
+                            val existingCity = existingCityIndex.find(row)
+
+                            if (existingCity != null) {
+                                updateById.fillForUpdateById(
+                                    cityId = existingCity.id,
+                                    row = row,
+                                )
+                                updateById.addBatch()
+
+                                existingCityIndex.register(
+                                    existingCity.copy(
+                                        fiasId = row.fiasId ?: existingCity.fiasId,
+                                        naturalKey = row.naturalKey(),
+                                    ),
+                                )
+
+                                if (processedRows > 0 && processedRows % batchSize == 0) {
+                                    updateById.executeBatch()
                                 }
+                            } else {
+                                insertCity.fillForInsert(row)
+                                insertCity.addBatch()
+                                pendingInsertRows.add(row)
+                                existingCityIndex.registerPending(row)
 
-                                if (updatedByFias == 0) {
-                                    updateByNaturalKey.fillForNaturalUpdate(row)
-                                    val updatedByNaturalKey = updateByNaturalKey.executeUpdate()
-
-                                    if (updatedByNaturalKey == 0) {
-                                        insertCity.fillForInsert(row)
-                                        insertCity.executeUpdate()
-                                    }
+                                if (pendingInsertRows.size >= batchSize) {
+                                    flushInsertBatch(
+                                        insertCity = insertCity,
+                                        pendingInsertRows = pendingInsertRows,
+                                        existingCityIndex = existingCityIndex,
+                                    )
                                 }
+                            }
 
-                                processedRows++
-                                upsertedRows++
+                            processedRows++
+                            upsertedRows++
 
-                                if (row.latitude == null || row.longitude == null) {
-                                    rowsWithoutCoordinates++
-                                }
+                            if (row.latitude == null || row.longitude == null) {
+                                rowsWithoutCoordinates++
                             }
                         }
                     }
                 }
+
+                updateById.executeBatch()
+
+                flushInsertBatch(
+                    insertCity = insertCity,
+                    pendingInsertRows = pendingInsertRows,
+                    existingCityIndex = existingCityIndex,
+                )
             }
         }
 
@@ -183,26 +221,80 @@ class CityReferenceImporter(
         )
     }
 
-    private fun java.sql.PreparedStatement.fillForUpdateByFias(
-        row: CityCsvRow,
-    ) {
-        setString(1, row.name)
-        setString(2, row.regionName)
-        setString(3, row.countryCode)
-        setNullableBigDecimal(4, row.latitude)
-        setNullableBigDecimal(5, row.longitude)
-        setString(6, row.fiasId)
+    private fun loadExistingCities(
+        connection: Connection,
+        countryCode: String,
+    ): ExistingCityIndex {
+        val index = ExistingCityIndex()
+
+        connection.prepareStatement(SELECT_EXISTING_CITIES_SQL).use { statement ->
+            statement.setString(1, countryCode)
+
+            statement.executeQuery().use { resultSet ->
+                while (resultSet.next()) {
+                    val city = ExistingCity(
+                        id = resultSet.getLong("id"),
+                        fiasId = resultSet.getString("fias_id")?.trim()?.takeIf { it.isNotEmpty() },
+                        naturalKey = NaturalKey(
+                            name = resultSet.getString("name"),
+                            regionName = resultSet.getString("region_name"),
+                            countryCode = resultSet.getString("country_code"),
+                        ),
+                    )
+                    index.register(city)
+                }
+            }
+        }
+
+        return index
     }
 
-    private fun java.sql.PreparedStatement.fillForNaturalUpdate(
+    private fun flushInsertBatch(
+        insertCity: java.sql.PreparedStatement,
+        pendingInsertRows: MutableList<CityCsvRow>,
+        existingCityIndex: ExistingCityIndex,
+    ) {
+        if (pendingInsertRows.isEmpty()) {
+            return
+        }
+
+        insertCity.executeBatch()
+
+        insertCity.generatedKeys.use { generatedKeys ->
+            var index = 0
+
+            while (generatedKeys.next()) {
+                val row = pendingInsertRows[index]
+                existingCityIndex.register(
+                    ExistingCity(
+                        id = generatedKeys.getLong(1),
+                        fiasId = row.fiasId,
+                        naturalKey = row.naturalKey(),
+                    ),
+                )
+                index++
+            }
+
+            require(index == pendingInsertRows.size) {
+                "Не удалось получить generated keys для всех вставленных городов"
+            }
+        }
+
+        pendingInsertRows.clear()
+        existingCityIndex.clearPending()
+    }
+
+    private fun java.sql.PreparedStatement.fillForUpdateById(
+        cityId: Long,
         row: CityCsvRow,
     ) {
         setNullableString(1, row.fiasId)
-        setNullableBigDecimal(2, row.latitude)
-        setNullableBigDecimal(3, row.longitude)
-        setString(4, row.name)
-        setString(5, row.regionName)
-        setString(6, row.countryCode)
+        setString(2, row.name)
+        setString(3, row.regionName)
+        setString(4, row.countryCode)
+        setNullableBigDecimal(5, row.latitude)
+        setNullableBigDecimal(6, row.longitude)
+        setLong(7, cityId)
     }
 
     private fun java.sql.PreparedStatement.fillForInsert(
@@ -252,24 +344,29 @@ class CityReferenceImporter(
         val latitude: BigDecimal?,
         val longitude: BigDecimal?,
     ) {
+        fun naturalKey(): NaturalKey = NaturalKey(
+            name = name,
+            regionName = regionName,
+            countryCode = countryCode,
+        )
+
         companion object {
             fun fromRecord(
                 record: Map<String, String>,
                 defaultCountryCode: String,
             ): CityCsvRow {
-                val city = record["city"]?.trim().orEmpty()
-                val settlement = record["settlement"]?.trim().orEmpty()
+                val city = record["city"].toNormalizedLocalityName()
+                val settlement = record["settlement"].toNormalizedLocalityName()
                 val address = record["address"]?.trim().orEmpty()
 
                 val name = city
-                    .takeIf { it.isNotBlank() }
-                    ?: settlement.takeIf { it.isNotBlank() }
-                    ?: address.takeIf { it.isNotBlank() }
-                    ?: throw IllegalArgumentException("В CSV не удалось определить name по колонкам city/settlement/address")
+                    ?: settlement
+                    ?: extractNameFromAddress(address)
+                    ?: throw IllegalArgumentException(
+                        "В CSV не удалось определить name по колонкам city/settlement/address",
+                    )
 
-                val regionName = record["region"]?.trim()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: throw IllegalArgumentException("В CSV отсутствует обязательное поле region")
+                val regionName = buildRegionName(record)
 
                 val fiasId = record["fias_id"]?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -292,37 +389,126 @@ class CityReferenceImporter(
                 )
             }
 
+            private fun buildRegionName(record: Map<String, String>): String {
+                val region = record["region"]?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: throw IllegalArgumentException("В CSV отсутствует обязательное поле region")
+
+                val regionType = record["region_type"]?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+
+                return when (regionType) {
+                    "Респ" -> "Республика $region"
+                    "край" -> "$region край"
+                    "обл" -> "$region область"
+                    "АО" -> "$region АО"
+                    else -> region
+                }
+            }
+
+            private fun extractNameFromAddress(address: String): String? {
+                if (address.isBlank()) {
+                    return null
+                }
+
+                return address
+                    .split(',')
+                    .asSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .lastOrNull()
+                    ?.normalizeLocalityName()
+            }
+
+            private fun String?.toNormalizedLocalityName(): String? {
+                return this?.normalizeLocalityName()
+            }
+
+            private fun String.normalizeLocalityName(): String? {
+                val normalized = trim()
+                    .replace(LEADING_CITY_PREFIX_REGEX, "")
+                    .trim()
+
+                return normalized.takeIf { it.isNotEmpty() }
+            }
+
             private fun String?.toNullableBigDecimal(): BigDecimal? {
                 val normalized = this?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
                 return normalized.toBigDecimalOrNull()
                     ?: throw IllegalArgumentException("Некорректное числовое значение координаты: $normalized")
             }
+
+            private val LEADING_CITY_PREFIX_REGEX = Regex("""^(г\.?\s+)""")
+        }
+    }
+
+    private data class NaturalKey(
+        val name: String,
+        val regionName: String,
+        val countryCode: String,
+    )
+
+    private data class ExistingCity(
+        val id: Long,
+        val fiasId: String?,
+        val naturalKey: NaturalKey,
+    )
+
+    private class ExistingCityIndex {
+        private val byFias = HashMap<String, ExistingCity>(2048)
+        private val byNaturalKey = HashMap<NaturalKey, ExistingCity>(2048)
+
+        private val pendingFiasIds = HashSet<String>(256)
+        private val pendingNaturalKeys = HashSet<NaturalKey>(256)
+
+        fun find(row: CityCsvRow): ExistingCity? {
+            val byFiasMatch = row.fiasId?.let { byFias[it] }
+            if (byFiasMatch != null) {
+                return byFiasMatch
+            }
+
+            return byNaturalKey[row.naturalKey()]
+        }
+
+        fun register(city: ExistingCity) {
+            city.fiasId?.let { byFias[it] = city }
+            byNaturalKey[city.naturalKey] = city
+        }
+
+        fun registerPending(row: CityCsvRow) {
+            row.fiasId?.let { pendingFiasIds += it }
+            pendingNaturalKeys += row.naturalKey()
+        }
+
+        fun hasPending(row: CityCsvRow): Boolean {
+            val hasPendingFias = row.fiasId?.let { it in pendingFiasIds } ?: false
+            return hasPendingFias || row.naturalKey() in pendingNaturalKeys
+        }
+
+        fun clearPending() {
+            pendingFiasIds.clear()
+            pendingNaturalKeys.clear()
         }
     }
 
     private companion object {
-        private const val UPDATE_BY_FIAS_SQL = """
+        private const val SELECT_EXISTING_CITIES_SQL = """
+            SELECT id, fias_id, name, region_name, country_code
+            FROM city
+            WHERE country_code = ?
+        """
+
+        private const val UPDATE_BY_ID_SQL = """
             UPDATE city
             SET
+                fias_id = COALESCE(fias_id, ?),
                 name = ?,
                 region_name = ?,
                 country_code = ?,
-                latitude = COALESCE(?, city.latitude),
-                longitude = COALESCE(?, city.longitude),
+                latitude = COALESCE(?, latitude),
+                longitude = COALESCE(?, longitude),
                 is_active = TRUE
-            WHERE fias_id = ?
-        """
-
-        private const val UPDATE_BY_NATURAL_KEY_SQL = """
-            UPDATE city
-            SET
-                fias_id = COALESCE(city.fias_id, ?),
-                latitude = COALESCE(?, city.latitude),
-                longitude = COALESCE(?, city.longitude),
-                is_active = TRUE
-            WHERE name = ?
-              AND region_name = ?
-              AND country_code = ?
+            WHERE id = ?
         """
 
         private const val INSERT_CITY_SQL = """
