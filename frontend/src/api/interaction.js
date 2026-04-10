@@ -1,10 +1,10 @@
-import { httpJson, toQuery } from './http'
-import { getSessionUser, getSessionUserId } from '../utils/sessionStore'
+
+import { httpJson, toQuery, getSessionUserFromApi, getSessionUserIdFromApi, getRequiredCurrentUserPayload } from './http'
 
 const API_BASE = '/api/interaction'
 
-function getCurrentUser() {
-    const user = getSessionUser()
+async function getCurrentUser() {
+    const user = await getSessionUserFromApi()
     if (!user?.id || !user?.email || !user?.role) return null
 
     return {
@@ -14,8 +14,8 @@ function getCurrentUser() {
     }
 }
 
-function getRequiredUserId() {
-    const userId = getSessionUserId()
+async function getRequiredUserId() {
+    const userId = await getSessionUserIdFromApi()
     if (!userId) {
         const error = new Error('Пользователь не авторизован')
         error.status = 401
@@ -24,13 +24,13 @@ function getRequiredUserId() {
     return userId
 }
 
-function getCurrentUserQueryValue() {
-    const currentUser = getCurrentUser()
+async function getCurrentUserQueryValue() {
+    const currentUser = await getCurrentUser()
     return currentUser ? JSON.stringify(currentUser) : null
 }
 
-function getRequiredCurrentUser() {
-    const currentUser = getCurrentUserQueryValue()
+async function getRequiredCurrentUser() {
+    const currentUser = JSON.stringify(await getRequiredCurrentUserPayload())
     if (!currentUser) {
         const error = new Error('Пользователь не авторизован')
         error.status = 401
@@ -40,7 +40,7 @@ function getRequiredCurrentUser() {
 }
 
 export async function getContacts() {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) return []
 
     const query = toQuery({ userId })
@@ -48,7 +48,7 @@ export async function getContacts() {
 }
 
 export async function addContact(contactUserId) {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
     const query = toQuery({ userId })
 
     return httpJson(`${API_BASE}/contacts?${query}`, {
@@ -58,7 +58,7 @@ export async function addContact(contactUserId) {
 }
 
 export async function acceptContactRequest(contactUserId) {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
     const query = toQuery({ userId })
 
     return httpJson(`${API_BASE}/contacts/${contactUserId}/accept?${query}`, {
@@ -67,7 +67,7 @@ export async function acceptContactRequest(contactUserId) {
 }
 
 export async function declineContactRequest(contactUserId) {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
     const query = toQuery({ userId })
 
     return httpJson(`${API_BASE}/contacts/${contactUserId}/decline?${query}`, {
@@ -76,7 +76,7 @@ export async function declineContactRequest(contactUserId) {
 }
 
 export async function removeContact(contactUserId) {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
     const query = toQuery({ userId })
 
     return httpJson(`${API_BASE}/contacts/${contactUserId}?${query}`, {
@@ -85,15 +85,15 @@ export async function removeContact(contactUserId) {
 }
 
 export async function getMyResponses() {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) return []
 
     return httpJson(`${API_BASE}/responses/my?${toQuery({ userId })}`)
 }
 
 export async function getEmployerResponses(params = {}) {
-    const currentUser = getCurrentUserQueryValue()
-    const user = getSessionUser()
+    const currentUser = await getCurrentUserQueryValue()
+    const user = await getSessionUserFromApi()
 
     const fullQuery = toQuery({
         limit: params.limit ?? 20,
@@ -131,7 +131,7 @@ export async function getEmployerResponses(params = {}) {
 }
 
 export async function createResponse(opportunityId, applicantComment = '', coverLetter = '') {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
     const query = toQuery({ userId })
 
     return httpJson(`${API_BASE}/responses?${query}`, {
@@ -145,7 +145,7 @@ export async function createResponse(opportunityId, applicantComment = '', cover
 }
 
 export async function updateResponseStatus(responseId, status, employerComment = '') {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
     const query = toQuery({ userId })
 
     return httpJson(`${API_BASE}/responses/${responseId}/status?${query}`, {
@@ -155,14 +155,14 @@ export async function updateResponseStatus(responseId, status, employerComment =
 }
 
 export async function getFavorites() {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) return []
 
     return httpJson(`${API_BASE}/favorites?${toQuery({ userId })}`)
 }
 
 export async function addToFavorites(opportunityId) {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
 
     return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
         method: 'POST',
@@ -170,7 +170,7 @@ export async function addToFavorites(opportunityId) {
 }
 
 export async function removeFromFavorites(opportunityId) {
-    const userId = getRequiredUserId()
+    const userId = await getRequiredUserId()
 
     return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
         method: 'DELETE',
@@ -178,7 +178,7 @@ export async function removeFromFavorites(opportunityId) {
 }
 
 export async function createRecommendation({ opportunityId, toApplicantUserId, message = '' }) {
-    const currentUser = getRequiredCurrentUser()
+    const currentUser = await getRequiredCurrentUser()
 
     return httpJson(`${API_BASE}/recommendations?${toQuery({ currentUser })}`, {
         method: 'POST',
@@ -191,21 +191,21 @@ export async function createRecommendation({ opportunityId, toApplicantUserId, m
 }
 
 export async function getIncomingRecommendations() {
-    const currentUser = getCurrentUserQueryValue()
+    const currentUser = await getCurrentUserQueryValue()
     if (!currentUser) return []
 
     return httpJson(`${API_BASE}/recommendations/incoming?${toQuery({ currentUser })}`)
 }
 
 export async function getOutgoingRecommendations() {
-    const currentUser = getCurrentUserQueryValue()
+    const currentUser = await getCurrentUserQueryValue()
     if (!currentUser) return []
 
     return httpJson(`${API_BASE}/recommendations/outgoing?${toQuery({ currentUser })}`)
 }
 
 export async function deleteRecommendation(recommendationId) {
-    const currentUser = getRequiredCurrentUser()
+    const currentUser = await getRequiredCurrentUser()
 
     return httpJson(`${API_BASE}/recommendations/${recommendationId}?${toQuery({ currentUser })}`, {
         method: 'DELETE',

@@ -1,3 +1,4 @@
+
 const API_BASE = '/api'
 
 import { CITIES } from '../constants/cities'
@@ -28,7 +29,13 @@ import {
     getEmployerResponses,
     updateResponseStatus as updateInteractionResponseStatus,
 } from './interaction'
-import { clearSessionUser, getSessionUser, getSessionUserId } from '../utils/sessionStore'
+import {
+    httpJson,
+    getSessionUserFromApi,
+    getSessionUserIdFromApi,
+    getRequiredCurrentUserPayload,
+    clearSessionUserCache,
+} from './http'
 
 function createApiError(message, status = 0, extra = {}) {
     const error = new Error(message)
@@ -37,19 +44,6 @@ function createApiError(message, status = 0, extra = {}) {
     error.details = extra.details || {}
     error.payload = extra.payload || null
     return error
-}
-
-function getAuthenticatedUserPayload() {
-    const user = getSessionUser()
-    if (!user?.id || !user?.email || !user?.role) {
-        throw createApiError('Пользователь не авторизован', 401)
-    }
-
-    return {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-    }
 }
 
 async function parseApiResponse(response) {
@@ -72,6 +66,14 @@ async function parseApiResponse(response) {
     } catch {
         return null
     }
+}
+
+export async function getCurrentSessionUser(options = {}) {
+    return getSessionUserFromApi(options)
+}
+
+async function getAuthenticatedUserPayload() {
+    return getRequiredCurrentUserPayload()
 }
 
 async function apiRequest(endpoint, options = {}) {
@@ -101,7 +103,7 @@ async function apiRequest(endpoint, options = {}) {
             'Ошибка запроса'
 
         if (response.status === 401) {
-            clearSessionUser()
+            clearSessionUserCache()
         }
 
         throw createApiError(errorMessage, response.status, {
@@ -139,7 +141,7 @@ async function multipartRequest(endpoint, formData, options = {}) {
             'Ошибка загрузки файла'
 
         if (response.status === 401) {
-            clearSessionUser()
+            clearSessionUserCache()
         }
 
         throw createApiError(errorMessage, response.status, {
@@ -152,8 +154,8 @@ async function multipartRequest(endpoint, formData, options = {}) {
     return data
 }
 
-function createMultipartWithCurrentUser(file) {
-    const currentUser = getAuthenticatedUserPayload()
+async function createMultipartWithCurrentUser(file) {
+    const currentUser = await getAuthenticatedUserPayload()
     const formData = new FormData()
 
     formData.append('file', file)
@@ -214,6 +216,65 @@ function normalizeProfileLinks(links) {
     return []
 }
 
+function detectContactType(value = '', label = '') {
+    const normalizedValue = String(value).trim().toLowerCase()
+    const normalizedLabel = String(label).trim().toLowerCase()
+
+    if (
+        normalizedLabel.includes('email') ||
+        normalizedLabel.includes('mail') ||
+        normalizedLabel.includes('почт') ||
+        normalizedValue.includes('@')
+    ) {
+        return 'EMAIL'
+    }
+
+    if (
+        normalizedLabel.includes('telegram') ||
+        normalizedLabel.includes('tg') ||
+        normalizedLabel.includes('телеграм') ||
+        normalizedValue.startsWith('https://t.me/') ||
+        normalizedValue.startsWith('http://t.me/') ||
+        normalizedValue.startsWith('@')
+    ) {
+        return 'TELEGRAM'
+    }
+
+    if (
+        normalizedLabel.includes('whatsapp') ||
+        normalizedLabel.includes('wa')
+    ) {
+        return 'WHATSAPP'
+    }
+
+    if (
+        normalizedLabel.includes('vk') ||
+        normalizedValue.includes('vk.com')
+    ) {
+        return 'VK'
+    }
+
+    if (
+        normalizedLabel.includes('linkedin') ||
+        normalizedValue.includes('linkedin.com')
+    ) {
+        return 'LINKEDIN'
+    }
+
+    if (
+        normalizedLabel.includes('phone') ||
+        normalizedLabel.includes('tel') ||
+        normalizedLabel.includes('тел') ||
+        normalizedLabel.includes('звон') ||
+        normalizedValue.startsWith('+') ||
+        /^\d[\d\s\-()]+$/.test(normalizedValue)
+    ) {
+        return 'PHONE'
+    }
+
+    return 'OTHER'
+}
+
 function normalizeContactMethods(contacts) {
     if (!contacts) return []
 
@@ -225,7 +286,7 @@ function normalizeContactMethods(contacts) {
                     if (!value) return null
 
                     return {
-                        type: 'OTHER',
+                        type: detectContactType(value),
                         value,
                         label: `Контакт ${index + 1}`,
                     }
@@ -239,10 +300,17 @@ function normalizeContactMethods(contacts) {
 
                     if (!value) return null
 
+                    const label =
+                        item.label?.trim?.() ||
+                        item.title?.trim?.() ||
+                        `Контакт ${index + 1}`
+
                     return {
-                        type: item.type || 'OTHER',
+                        type: ['EMAIL', 'PHONE', 'TELEGRAM', 'WHATSAPP', 'VK', 'LINKEDIN', 'OTHER'].includes(item.type)
+                            ? item.type
+                            : detectContactType(value, label),
                         value,
-                        label: item.label?.trim?.() || item.title?.trim?.() || `Контакт ${index + 1}`,
+                        label,
                     }
                 }
 
@@ -257,10 +325,12 @@ function normalizeContactMethods(contacts) {
                 const normalizedValue = typeof value === 'string' ? value.trim() : ''
                 if (!normalizedValue) return null
 
+                const normalizedLabel = label?.trim?.() || `Контакт ${index + 1}`
+
                 return {
-                    type: 'OTHER',
+                    type: detectContactType(normalizedValue, normalizedLabel),
                     value: normalizedValue,
-                    label: label?.trim?.() || `Контакт ${index + 1}`,
+                    label: normalizedLabel,
                 }
             })
             .filter(Boolean)
@@ -279,6 +349,9 @@ function normalizeApplicantProfile(data = {}) {
         portfolioFiles: Array.isArray(data.portfolioFiles) ? data.portfolioFiles : [],
         avatar: data.avatar || null,
         resumeFile: data.resumeFile || null,
+        skills: Array.isArray(data.skills) ? data.skills : [],
+        interests: Array.isArray(data.interests) ? data.interests : [],
+        moderationStatus: data.moderationStatus || 'DRAFT',
     }
 }
 
@@ -292,6 +365,7 @@ function normalizeEmployerProfile(data = {}) {
         socialLinks: normalizeProfileLinks(data.socialLinks),
         publicContacts: normalizeContactMethods(data.publicContacts),
         logo: data.logo || null,
+        moderationStatus: data.moderationStatus || 'DRAFT',
     }
 }
 
@@ -305,9 +379,11 @@ export function getFileDownloadUrlByUserAndFile(role, userId, fileId) {
     return `${API_BASE}/profile/applicant/${userId}/files/${fileId}`
 }
 
+// localStorage ниже оставлен только для гостевых фич (избранное) и направления контактных заявок.
+// Аутентификация и профильные запросы на них больше не завязаны.
+
 function getContactDirectionStorageKey() {
-    const user = getSessionUser()
-    return user?.id ? `tramplin_contact_directions_${user.id}` : 'tramplin_contact_directions_guest'
+    return 'tramplin_contact_directions'
 }
 
 function readContactDirections() {
@@ -387,7 +463,7 @@ export function removeGuestFavoriteOpportunity(opportunityId) {
 }
 
 export async function migrateGuestFavoritesToAccount() {
-    const user = getSessionUser()
+    const user = await getCurrentSessionUser()
     if (!user?.id) return
 
     const guestIds = readGuestFavorites()
@@ -412,7 +488,7 @@ export async function migrateGuestFavoritesToAccount() {
 export async function uploadApplicantAvatar(file) {
     if (!file) throw createApiError('Файл не выбран', 400)
 
-    const formData = createMultipartWithCurrentUser(file)
+    const formData = await createMultipartWithCurrentUser(file)
     const data = await multipartRequest(`${API_BASE}/applicant/profile/avatar`, formData, {
         method: 'PUT',
     })
@@ -423,7 +499,7 @@ export async function uploadApplicantAvatar(file) {
 export async function uploadApplicantResumeFile(file) {
     if (!file) throw createApiError('Файл не выбран', 400)
 
-    const formData = createMultipartWithCurrentUser(file)
+    const formData = await createMultipartWithCurrentUser(file)
     const data = await multipartRequest(`${API_BASE}/applicant/profile/resume-file`, formData, {
         method: 'PUT',
     })
@@ -434,7 +510,7 @@ export async function uploadApplicantResumeFile(file) {
 export async function uploadApplicantPortfolioFile(file) {
     if (!file) throw createApiError('Файл не выбран', 400)
 
-    const formData = createMultipartWithCurrentUser(file)
+    const formData = await createMultipartWithCurrentUser(file)
     const data = await multipartRequest(`${API_BASE}/applicant/profile/portfolio/files`, formData, {
         method: 'POST',
     })
@@ -445,7 +521,7 @@ export async function uploadApplicantPortfolioFile(file) {
 export async function deleteApplicantFile(fileId) {
     if (!fileId) throw createApiError('Не указан fileId', 400)
 
-    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
     const data = await apiRequest(`${API_BASE}/applicant/profile/files/${fileId}?currentUser=${currentUser}`, {
         method: 'DELETE',
     })
@@ -456,7 +532,7 @@ export async function deleteApplicantFile(fileId) {
 export async function uploadEmployerLogo(file) {
     if (!file) throw createApiError('Файл не выбран', 400)
 
-    const formData = createMultipartWithCurrentUser(file)
+    const formData = await createMultipartWithCurrentUser(file)
     const data = await multipartRequest(`${API_BASE}/employer/profile/logo`, formData, {
         method: 'PUT',
     })
@@ -467,7 +543,7 @@ export async function uploadEmployerLogo(file) {
 export async function deleteEmployerFile(fileId) {
     if (!fileId) throw createApiError('Не указан fileId', 400)
 
-    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
     const data = await apiRequest(`${API_BASE}/employer/profile/files/${fileId}?currentUser=${currentUser}`, {
         method: 'DELETE',
     })
@@ -476,7 +552,7 @@ export async function deleteEmployerFile(fileId) {
 }
 
 export async function createEmployerVerification(payload) {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) {
         throw createApiError('Пользователь не авторизован', 401)
     }
@@ -491,14 +567,14 @@ export async function uploadEmployerVerificationAttachment(verificationId, file)
     if (!verificationId) throw createApiError('Не указан verificationId', 400)
     if (!file) throw createApiError('Файл не выбран', 400)
 
-    const formData = createMultipartWithCurrentUser(file)
+    const formData = await createMultipartWithCurrentUser(file)
     return multipartRequest(`${API_BASE}/employer/verifications/${verificationId}/attachments`, formData, {
         method: 'POST',
     })
 }
 
 export async function getEmployerVerificationModerationTask(verificationId) {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) {
         throw createApiError('Пользователь не авторизован', 401)
     }
@@ -507,7 +583,7 @@ export async function getEmployerVerificationModerationTask(verificationId) {
 }
 
 export async function cancelEmployerVerificationModerationTask(verificationId) {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) {
         throw createApiError('Пользователь не авторизован', 401)
     }
@@ -626,32 +702,24 @@ export async function searchCities(query) {
 // ========== СОИСКАТЕЛЬ ==========
 
 export async function getApplicantProfile() {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) {
         return null
     }
 
-    const url = `${API_BASE}/profile/applicant/${userId}`
-
     try {
-        const data = await apiRequest(url)
+        const data = await apiRequest(`${API_BASE}/profile/applicant/${userId}?currentUserId=${userId}`)
         return normalizeApplicantProfile(data)
     } catch (error) {
-        if ([401, 403, 404, 500, 503].includes(error.status)) {
+        if (error.status === 404) {
             return null
         }
-
         throw error
     }
 }
 
 export async function updateApplicantProfile(profile) {
-    const user = getSessionUser()
-    if (!user) {
-        throw createApiError('Пользователь не авторизован', 401)
-    }
-
-    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
 
     const payload = {
         firstName: profile.firstName || '',
@@ -688,19 +756,16 @@ export async function updateApplicantProfile(profile) {
 // ========== РАБОТОДАТЕЛЬ ==========
 
 export async function getEmployerProfile() {
-    const userId = getSessionUserId()
+    const userId = await getSessionUserIdFromApi()
     if (!userId) {
         return null
     }
 
-    const currentUserId = getSessionUserId()
-    const url = `${API_BASE}/profile/employer/${userId}${currentUserId ? `?currentUserId=${currentUserId}` : ''}`
-
     try {
-        const data = await apiRequest(url)
+        const data = await apiRequest(`${API_BASE}/profile/employer/${userId}?currentUserId=${userId}`)
         return normalizeEmployerProfile(data)
     } catch (error) {
-        if ([401, 403, 404, 500, 503].includes(error.status)) {
+        if (error.status === 404) {
             return null
         }
 
@@ -709,17 +774,10 @@ export async function getEmployerProfile() {
 }
 
 export async function updateEmployerProfile(profile) {
-    const user = getSessionUser()
-    if (!user) {
-        throw createApiError('Пользователь не авторизован', 401)
-    }
-
-    const currentUser = encodeURIComponent(JSON.stringify(getAuthenticatedUserPayload()))
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
 
     const payload = {
-        companyName: profile.companyName || '',
-        legalName: profile.legalName || null,
-        inn: profile.inn || '',
+        companyName: profile.companyName || null,
         description: profile.description || null,
         industry: profile.industry || null,
         websiteUrl: profile.websiteUrl || null,
@@ -729,7 +787,6 @@ export async function updateEmployerProfile(profile) {
         foundedYear: profile.foundedYear ? Number(profile.foundedYear) : null,
         socialLinks: normalizeProfileLinks(profile.socialLinks),
         publicContacts: normalizeContactMethods(profile.publicContacts),
-        verificationStatus: profile.verificationStatus || undefined,
     }
 
     const data = await apiRequest(`${API_BASE}/profile/employer?currentUser=${currentUser}`, {
@@ -744,7 +801,6 @@ export async function submitVerification(payload) {
     const body = {
         verificationMethod: payload.verificationMethod,
         corporateEmail: payload.corporateEmail || null,
-        inn: payload.inn || null,
         professionalLinks: Array.isArray(payload.professionalLinks)
             ? payload.professionalLinks.filter(Boolean)
             : [],
@@ -1045,4 +1101,40 @@ export async function getEmployerApplications(params = {}) {
 
 export async function updateApplicationStatus(applicationId, status, employerComment = '') {
     return updateInteractionResponseStatus(applicationId, status, employerComment)
+}
+
+export async function updateEmployerCompanyData(companyData) {
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    const payload = {
+        legalName: companyData.legalName || '',
+        inn: companyData.inn || '',
+    }
+
+    const data = await apiRequest(`${API_BASE}/profile/employer/company?currentUser=${currentUser}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+    })
+
+    return normalizeEmployerProfile(data)
+}
+
+export async function submitEmployerProfileForModeration() {
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    const data = await apiRequest(`${API_BASE}/profile/employer/moderation/submit?currentUser=${currentUser}`, {
+        method: 'POST',
+    })
+
+    return normalizeEmployerProfile(data)
+}
+
+export async function submitApplicantProfileForModeration() {
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    const data = await apiRequest(`${API_BASE}/profile/applicant/moderation/submit?currentUser=${currentUser}`, {
+        method: 'POST',
+    })
+
+    return normalizeApplicantProfile(data)
 }
