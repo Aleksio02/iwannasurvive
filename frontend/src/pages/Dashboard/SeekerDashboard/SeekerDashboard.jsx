@@ -17,7 +17,6 @@ import {
 import {
     getApplicantProfile,
     updateApplicantProfile,
-    submitApplicantProfileForModeration,
     getSeekerApplications,
     getSeekerSaved,
     getSeekerContacts,
@@ -76,9 +75,6 @@ function SeekerDashboard() {
     const [errors, setErrors] = useState({})
     const { toast } = useToast()
 
-    const [networkingBlockedMessage, setNetworkingBlockedMessage] = useState('')
-    const [hasLoadedNetworking, setHasLoadedNetworking] = useState(false)
-
     const avatarInputRef = useRef(null)
     const resumeFileInputRef = useRef(null)
     const portfolioFileInputRef = useRef(null)
@@ -88,7 +84,6 @@ function SeekerDashboard() {
     const [isPortfolioFileUploading, setIsPortfolioFileUploading] = useState(false)
 
     const [profile, setProfile] = useState({
-        userId: null,
         firstName: '',
         lastName: '',
         middleName: '',
@@ -109,12 +104,9 @@ function SeekerDashboard() {
         contactsVisibility: 'AUTHENTICATED',
         openToWork: true,
         openToEvents: true,
-        moderationStatus: 'DRAFT',
         avatar: null,
         resumeFile: null,
         portfolioFiles: [],
-        skills: [],
-        interests: [],
     })
 
     const [tempPortfolioLinks, setTempPortfolioLinks] = useState([])
@@ -136,13 +128,8 @@ function SeekerDashboard() {
     const [citySearchQuery, setCitySearchQuery] = useState('')
     const [citySuggestions, setCitySuggestions] = useState([])
     const [cityActiveIndex, setCityActiveIndex] = useState(-1)
-
     const citySearchRef = useRef(null)
     const [, navigate] = useLocation()
-
-    const isNetworkingBlockedError = (error) =>
-        error?.status === 403 &&
-        error?.code === 'applicant_networking_requires_approved_profile'
 
     const formatDate = (dateString) => {
         if (!dateString) return 'Дата не указана'
@@ -158,17 +145,6 @@ function SeekerDashboard() {
             title: item?.label || item?.title || '',
             url: item?.url || item?.value || item || '',
         }))
-    }
-
-    const submitApplicantProfileToModerationAction = async () => {
-        const updatedProfile = await submitApplicantProfileForModeration()
-
-        setProfile((prev) => ({
-            ...prev,
-            ...updatedProfile,
-        }))
-
-        return updatedProfile
     }
 
     const handleCancelPortfolioEdit = () => {
@@ -194,7 +170,7 @@ function SeekerDashboard() {
     }
 
     const handleSelectCity = (city) => {
-        setProfile((prev) => ({
+        setProfile(prev => ({
             ...prev,
             cityId: city.id,
             cityName: city.name,
@@ -206,19 +182,9 @@ function SeekerDashboard() {
     const loadContacts = async () => {
         setIsContactsLoading(true)
         try {
-            setNetworkingBlockedMessage('')
             const contactsList = await getSeekerContacts()
             setContacts(contactsList)
-            setNetworkingBlockedMessage('')
         } catch (error) {
-            if (isNetworkingBlockedError(error)) {
-                setContacts([])
-                setNetworkingBlockedMessage(
-                    error?.message || 'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
-                )
-                return
-            }
-
             toast({
                 title: 'Ошибка',
                 description: error?.message || 'Не удалось загрузить контакты',
@@ -235,14 +201,6 @@ function SeekerDashboard() {
             const data = await getSeekerRecommendations()
             setRecommendations(data)
         } catch (error) {
-            if (isNetworkingBlockedError(error)) {
-                setRecommendations({ incoming: [], outgoing: [] })
-                setNetworkingBlockedMessage(
-                    error?.message || 'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
-                )
-                return
-            }
-
             toast({
                 title: 'Ошибка',
                 description: error?.message || 'Не удалось загрузить рекомендации',
@@ -257,12 +215,11 @@ function SeekerDashboard() {
         const freshProfile = await getApplicantProfile()
         if (!freshProfile) return
 
-        setProfile((prev) => ({
+        setProfile(prev => ({
             ...prev,
             avatar: freshProfile.avatar || null,
             resumeFile: freshProfile.resumeFile || null,
             portfolioFiles: freshProfile.portfolioFiles || [],
-            moderationStatus: freshProfile.moderationStatus || prev.moderationStatus,
         }))
     }
 
@@ -273,7 +230,6 @@ function SeekerDashboard() {
 
         const loadData = async () => {
             setIsLoading(true)
-
             try {
                 const currentUser = getSessionUser()
                 setUser(currentUser)
@@ -283,16 +239,13 @@ function SeekerDashboard() {
                     setSavedOpportunities([])
                     setContacts([])
                     setRecommendations({ incoming: [], outgoing: [] })
-                    setNetworkingBlockedMessage('')
-                    setHasLoadedNetworking(true)
                     return
                 }
 
                 const profileData = await getApplicantProfile()
                 if (profileData) {
-                    setProfile((prev) => ({
+                    setProfile(prev => ({
                         ...prev,
-                        userId: profileData.userId || currentUser?.id || null,
                         firstName: profileData.firstName || '',
                         lastName: profileData.lastName || '',
                         middleName: profileData.middleName || '',
@@ -313,12 +266,9 @@ function SeekerDashboard() {
                         contactsVisibility: profileData.contactsVisibility || 'AUTHENTICATED',
                         openToWork: profileData.openToWork ?? true,
                         openToEvents: profileData.openToEvents ?? true,
-                        moderationStatus: profileData.moderationStatus || 'DRAFT',
                         avatar: profileData.avatar || null,
                         resumeFile: profileData.resumeFile || null,
                         portfolioFiles: profileData.portfolioFiles || [],
-                        skills: profileData.skills || [],
-                        interests: profileData.interests || [],
                     }))
 
                     if (profileData.cityName || profileData.city?.name) {
@@ -335,46 +285,25 @@ function SeekerDashboard() {
                 const saved = await getSeekerSaved()
                 setSavedOpportunities(saved)
 
-                setNetworkingBlockedMessage('')
-                setHasLoadedNetworking(false)
+                const contactsList = await getSeekerContacts()
+                setContacts(contactsList)
 
-                try {
-                    const [contactsList, recommendationsData] = await Promise.all([
-                        getSeekerContacts(),
-                        getSeekerRecommendations(),
-                    ])
-
-                    setContacts(contactsList)
-                    setRecommendations(recommendationsData)
-                } catch (error) {
-                    if (isNetworkingBlockedError(error)) {
-                        setContacts([])
-                        setRecommendations({ incoming: [], outgoing: [] })
-                        setNetworkingBlockedMessage(
-                            error?.message || 'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
-                        )
-                    } else {
-                        throw error
-                    }
-                } finally {
-                    setHasLoadedNetworking(true)
-                }
+                const recommendationsData = await getSeekerRecommendations()
+                setRecommendations(recommendationsData)
             } catch (error) {
-                if ([401].includes(error?.status)) {
+                if ([401, 403, 500, 503].includes(error?.status)) {
                     clearSessionUser()
                     setUser(null)
                     setApplications([])
                     setSavedOpportunities([])
                     setContacts([])
                     setRecommendations({ incoming: [], outgoing: [] })
-                    setNetworkingBlockedMessage('')
-                    setHasLoadedNetworking(true)
                     return
                 }
 
                 toast({
                     title: 'Ошибка',
-                    description: error?.message || 'Не удалось загрузить профиль',
+                    description: 'Не удалось загрузить профиль',
                     variant: 'destructive',
                 })
             } finally {
@@ -397,40 +326,6 @@ function SeekerDashboard() {
         return Object.keys(newErrors).length === 0
     }
 
-    const handleSubmitApplicantProfileForModeration = async () => {
-        if (!validateProfile()) {
-            toast({
-                title: 'Проверьте форму',
-                description: 'Заполните обязательные поля перед отправкой на модерацию',
-                variant: 'destructive',
-            })
-            return
-        }
-
-        setIsLoading(true)
-
-        try {
-            await updateApplicantProfile(profile)
-            await submitApplicantProfileToModerationAction()
-
-            toast({
-                title: 'Профиль отправлен на модерацию',
-                description: 'После проверки куратором нетворкинг и связанные функции станут доступны',
-            })
-
-            setIsEditing(false)
-            setErrors({})
-        } catch (error) {
-            toast({
-                title: 'Ошибка',
-                description: error?.message || 'Не удалось отправить профиль на модерацию',
-                variant: 'destructive',
-            })
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
     const handleSaveProfile = async () => {
         if (!validateProfile()) {
             toast({
@@ -443,32 +338,7 @@ function SeekerDashboard() {
 
         setIsLoading(true)
         try {
-            const updatedProfile = await updateApplicantProfile(profile)
-
-            setProfile((prev) => ({
-                ...prev,
-                ...updatedProfile,
-            }))
-
-            if (profile.moderationStatus === 'APPROVED' || profile.moderationStatus === 'NEEDS_REVISION') {
-                const submittedProfile = await submitApplicantProfileToModerationAction()
-
-                setProfile((prev) => ({
-                    ...prev,
-                    ...submittedProfile,
-                }))
-
-                toast({
-                    title: 'Профиль обновлён',
-                    description: 'Изменения сохранены и автоматически отправлены на повторную модерацию',
-                })
-            } else {
-                toast({
-                    title: 'Профиль сохранён',
-                    description: 'Теперь отправьте профиль на модерацию отдельной кнопкой',
-                })
-            }
-
+            await updateApplicantProfile(profile)
             setIsEditing(false)
             setErrors({})
 
@@ -479,10 +349,15 @@ function SeekerDashboard() {
                     role: 'APPLICANT',
                 },
             }))
-        } catch (error) {
+
+            toast({
+                title: 'Профиль обновлён',
+                description: 'Ваши данные успешно сохранены',
+            })
+        } catch {
             toast({
                 title: 'Ошибка',
-                description: error?.message || 'Не удалось сохранить профиль',
+                description: 'Не удалось сохранить профиль',
                 variant: 'destructive',
             })
         } finally {
@@ -493,8 +368,7 @@ function SeekerDashboard() {
     const handleSaveAbout = async () => {
         setIsLoading(true)
         try {
-            const updatedProfile = await updateApplicantProfile({ ...profile, about: profile.about })
-            setProfile((prev) => ({ ...prev, ...updatedProfile }))
+            await updateApplicantProfile(profile)
             setIsEditingAbout(false)
             toast({
                 title: 'Обновлено',
@@ -514,8 +388,7 @@ function SeekerDashboard() {
     const handleSaveResume = async () => {
         setIsLoading(true)
         try {
-            const updatedProfile = await updateApplicantProfile({ ...profile, resumeText: profile.resumeText })
-            setProfile((prev) => ({ ...prev, ...updatedProfile }))
+            await updateApplicantProfile(profile)
             setIsEditingResume(false)
             toast({
                 title: 'Обновлено',
@@ -536,14 +409,15 @@ function SeekerDashboard() {
         setIsLoading(true)
         try {
             const portfolioLinks = tempPortfolioLinks
-                .filter((link) => link.url?.trim())
-                .map((link) => ({
+                .filter(link => link.url?.trim())
+                .map(link => ({
                     label: link.title?.trim() || '',
                     url: link.url.trim(),
                 }))
 
-            const updatedProfile = await updateApplicantProfile({ ...profile, portfolioLinks })
-            setProfile((prev) => ({ ...prev, ...updatedProfile, portfolioLinks }))
+            const updatedProfile = { ...profile, portfolioLinks }
+            await updateApplicantProfile(updatedProfile)
+            setProfile(updatedProfile)
             setIsEditingPortfolio(false)
             toast({
                 title: 'Обновлено',
@@ -564,15 +438,16 @@ function SeekerDashboard() {
         setIsLoading(true)
         try {
             const contactLinks = tempContactLinks
-                .filter((link) => link.url?.trim())
-                .map((link) => ({
+                .filter(link => link.url?.trim())
+                .map(link => ({
                     type: 'OTHER',
                     label: link.title?.trim() || '',
                     value: link.url.trim(),
                 }))
 
-            const updatedProfile = await updateApplicantProfile({ ...profile, contactLinks })
-            setProfile((prev) => ({ ...prev, ...updatedProfile, contactLinks }))
+            const updatedProfile = { ...profile, contactLinks }
+            await updateApplicantProfile(updatedProfile)
+            setProfile(updatedProfile)
             setIsEditingContacts(false)
             toast({
                 title: 'Обновлено',
@@ -590,16 +465,16 @@ function SeekerDashboard() {
     }
 
     const handleFieldChange = (field, value) => {
-        setProfile((prev) => ({ ...prev, [field]: value }))
+        setProfile(prev => ({ ...prev, [field]: value }))
         if (errors[field]) {
-            setErrors((prev) => ({ ...prev, [field]: '' }))
+            setErrors(prev => ({ ...prev, [field]: '' }))
         }
     }
 
     const handleRemoveSaved = async (id, title) => {
         try {
             await removeFromSaved(id)
-            setSavedOpportunities((prev) => prev.filter((opp) => opp.id !== id))
+            setSavedOpportunities(prev => prev.filter(opp => opp.id !== id))
             toast({
                 title: 'Удалено из избранного',
                 description: `«${title}» удалено из избранного`,
@@ -650,7 +525,7 @@ function SeekerDashboard() {
     const handleRemoveContact = async (userId, direction = 'confirmed') => {
         try {
             await removeContact(userId)
-            setContacts((prev) => prev.filter((c) => c.id !== userId))
+            setContacts(prev => prev.filter(c => c.id !== userId))
             toast({
                 title: direction === 'outgoing' ? 'Заявка отменена' : 'Контакт удалён',
                 description: direction === 'outgoing'
@@ -771,9 +646,8 @@ function SeekerDashboard() {
         try {
             setIsAvatarUploading(true)
             const updatedProfile = await uploadApplicantAvatar(file)
-            setProfile((prev) => ({
+            setProfile(prev => ({
                 ...prev,
-                ...updatedProfile,
                 avatar: updatedProfile.avatar || null,
             }))
             toast({
@@ -813,9 +687,8 @@ function SeekerDashboard() {
         try {
             setIsResumeFileUploading(true)
             const updatedProfile = await uploadApplicantResumeFile(file)
-            setProfile((prev) => ({
+            setProfile(prev => ({
                 ...prev,
-                ...updatedProfile,
                 resumeFile: updatedProfile.resumeFile || null,
             }))
             toast({
@@ -875,9 +748,8 @@ function SeekerDashboard() {
     const handleDeleteApplicantMedia = async (fileId, kindLabel) => {
         try {
             const updatedProfile = await deleteApplicantFile(fileId)
-            setProfile((prev) => ({
+            setProfile(prev => ({
                 ...prev,
-                ...updatedProfile,
                 avatar: updatedProfile.avatar || null,
                 resumeFile: updatedProfile.resumeFile || null,
                 portfolioFiles: updatedProfile.portfolioFiles || [],
@@ -1068,15 +940,35 @@ function SeekerDashboard() {
             <div className="dashboard-panel">
                 {activeTab === 'profile' && (
                     <div className="seeker-profile">
-                        <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={handleAvatarUpload} />
-                        <input ref={resumeFileInputRef} type="file" accept=".pdf,application/pdf" hidden onChange={handleResumeFileUpload} />
-                        <input ref={portfolioFileInputRef} type="file" accept=".pdf,application/pdf" hidden onChange={handlePortfolioFileUpload} />
+                        <input
+                            ref={avatarInputRef}
+                            type="file"
+                            accept="image/*"
+                            hidden
+                            onChange={handleAvatarUpload}
+                        />
+                        <input
+                            ref={resumeFileInputRef}
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            hidden
+                            onChange={handleResumeFileUpload}
+                        />
+                        <input
+                            ref={portfolioFileInputRef}
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            hidden
+                            onChange={handlePortfolioFileUpload}
+                        />
 
                         <div className="profile-card">
                             <div
                                 className={`profile-card__avatar-wrap ${isEditing ? 'is-editing' : ''}`}
                                 onClick={() => {
-                                    if (isEditing) avatarInputRef.current?.click()
+                                    if (isEditing) {
+                                        avatarInputRef.current?.click()
+                                    }
                                 }}
                                 role={isEditing ? 'button' : undefined}
                                 tabIndex={isEditing ? 0 : undefined}
@@ -1116,7 +1008,11 @@ function SeekerDashboard() {
                                                 }}
                                                 disabled={isAvatarUploading}
                                             >
-                                                {isAvatarUploading ? 'Загрузка...' : profile.avatar ? 'Изменить фото профиля' : 'Загрузить фото профиля'}
+                                                {isAvatarUploading
+                                                    ? 'Загрузка...'
+                                                    : profile.avatar
+                                                        ? 'Изменить фото профиля'
+                                                        : 'Загрузить фото профиля'}
                                             </button>
 
                                             {profile.avatar && (
@@ -1147,31 +1043,14 @@ function SeekerDashboard() {
                                             </button>
                                         )}
                                         {user?.id && (
-                                            <button className="profile-card__edit-btn" onClick={() => navigate(`/seekers/${user.id}`)}>
+                                            <button
+                                                className="profile-card__edit-btn"
+                                                onClick={() => navigate(`/seekers/${user.id}`)}
+                                            >
                                                 Открыть публичный профиль
                                             </button>
                                         )}
                                     </div>
-                                </div>
-
-                                <div className="profile-card__moderation">
-                                    <span className={`status-badge status-${(profile.moderationStatus || 'draft').toLowerCase()}`}>
-                                        {profile.moderationStatus === 'DRAFT' && 'Не отправлен на модерацию'}
-                                        {profile.moderationStatus === 'PENDING_MODERATION' && 'На модерации'}
-                                        {profile.moderationStatus === 'APPROVED' && 'Одобрен'}
-                                        {profile.moderationStatus === 'NEEDS_REVISION' && 'Нужны правки'}
-                                    </span>
-
-                                    {profile.moderationStatus === 'DRAFT' && (
-                                        <button
-                                            type="button"
-                                            className="profile-card__moderation-btn"
-                                            onClick={handleSubmitApplicantProfileForModeration}
-                                            disabled={isLoading}
-                                        >
-                                            {isLoading ? 'Отправка...' : 'Отправить на модерацию'}
-                                        </button>
-                                    )}
                                 </div>
 
                                 <div className="profile-card__details">
@@ -1302,16 +1181,36 @@ function SeekerDashboard() {
                                     <h4>Настройки приватности</h4>
                                     <div className="form-grid-2">
                                         <div className="form-group">
-                                            <CustomSelect label="Видимость профиля" value={profile.profileVisibility} onChange={(val) => handleFieldChange('profileVisibility', val)} options={VISIBILITY_OPTIONS} />
+                                            <CustomSelect
+                                                label="Видимость профиля"
+                                                value={profile.profileVisibility}
+                                                onChange={(val) => handleFieldChange('profileVisibility', val)}
+                                                options={VISIBILITY_OPTIONS}
+                                            />
                                         </div>
                                         <div className="form-group">
-                                            <CustomSelect label="Видимость резюме" value={profile.resumeVisibility} onChange={(val) => handleFieldChange('resumeVisibility', val)} options={VISIBILITY_OPTIONS} />
+                                            <CustomSelect
+                                                label="Видимость резюме"
+                                                value={profile.resumeVisibility}
+                                                onChange={(val) => handleFieldChange('resumeVisibility', val)}
+                                                options={VISIBILITY_OPTIONS}
+                                            />
                                         </div>
                                         <div className="form-group">
-                                            <CustomSelect label="Видимость откликов" value={profile.applicationsVisibility} onChange={(val) => handleFieldChange('applicationsVisibility', val)} options={VISIBILITY_OPTIONS} />
+                                            <CustomSelect
+                                                label="Видимость откликов"
+                                                value={profile.applicationsVisibility}
+                                                onChange={(val) => handleFieldChange('applicationsVisibility', val)}
+                                                options={VISIBILITY_OPTIONS}
+                                            />
                                         </div>
                                         <div className="form-group">
-                                            <CustomSelect label="Видимость контактов" value={profile.contactsVisibility} onChange={(val) => handleFieldChange('contactsVisibility', val)} options={VISIBILITY_OPTIONS} />
+                                            <CustomSelect
+                                                label="Видимость контактов"
+                                                value={profile.contactsVisibility}
+                                                onChange={(val) => handleFieldChange('contactsVisibility', val)}
+                                                options={VISIBILITY_OPTIONS}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -1374,8 +1273,16 @@ function SeekerDashboard() {
                                             <Textarea rows={6} value={profile.resumeText} onChange={(e) => handleFieldChange('resumeText', e.target.value)} />
 
                                             <div className="info-block__file-tools">
-                                                <Button className="button--outline" onClick={() => resumeFileInputRef.current?.click()} disabled={isResumeFileUploading}>
-                                                    {isResumeFileUploading ? 'Загрузка файла...' : profile.resumeFile ? 'Заменить файл резюме' : 'Прикрепить файл резюме'}
+                                                <Button
+                                                    className="button--outline"
+                                                    onClick={() => resumeFileInputRef.current?.click()}
+                                                    disabled={isResumeFileUploading}
+                                                >
+                                                    {isResumeFileUploading
+                                                        ? 'Загрузка файла...'
+                                                        : profile.resumeFile
+                                                            ? 'Заменить файл резюме'
+                                                            : 'Прикрепить файл резюме'}
                                                 </Button>
                                             </div>
 
@@ -1389,10 +1296,19 @@ function SeekerDashboard() {
                                                     </div>
 
                                                     <div className="embedded-file-card__actions">
-                                                        <a href={resumeFileUrl} target="_blank" rel="noopener noreferrer" className="media-link">
+                                                        <a
+                                                            href={resumeFileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="media-link"
+                                                        >
                                                             Открыть
                                                         </a>
-                                                        <button type="button" className="media-delete-btn" onClick={() => handleDeleteApplicantMedia(profile.resumeFile.fileId, 'Резюме')}>
+                                                        <button
+                                                            type="button"
+                                                            className="media-delete-btn"
+                                                            onClick={() => handleDeleteApplicantMedia(profile.resumeFile.fileId, 'Резюме')}
+                                                        >
                                                             <img src={trashIcon} alt="" className="icon-small" />
                                                         </button>
                                                     </div>
@@ -1415,7 +1331,12 @@ function SeekerDashboard() {
                                                         <p>{formatFileSize(profile.resumeFile.sizeBytes)}</p>
                                                     </div>
                                                     <div className="embedded-file-card__actions">
-                                                        <a href={resumeFileUrl} target="_blank" rel="noopener noreferrer" className="media-link">
+                                                        <a
+                                                            href={resumeFileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="media-link"
+                                                        >
                                                             Открыть файл
                                                         </a>
                                                     </div>
@@ -1445,7 +1366,11 @@ function SeekerDashboard() {
                                             />
 
                                             <div className="info-block__file-tools">
-                                                <Button className="button--outline" onClick={() => portfolioFileInputRef.current?.click()} disabled={isPortfolioFileUploading}>
+                                                <Button
+                                                    className="button--outline"
+                                                    onClick={() => portfolioFileInputRef.current?.click()}
+                                                    disabled={isPortfolioFileUploading}
+                                                >
                                                     {isPortfolioFileUploading ? 'Загрузка файла...' : 'Добавить файл портфолио'}
                                                 </Button>
                                             </div>
@@ -1464,10 +1389,19 @@ function SeekerDashboard() {
                                                                 </div>
 
                                                                 <div className="embedded-file-card__actions">
-                                                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="media-link">
+                                                                    <a
+                                                                        href={fileUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="media-link"
+                                                                    >
                                                                         Открыть
                                                                     </a>
-                                                                    <button type="button" className="media-delete-btn" onClick={() => handleDeleteApplicantMedia(file.fileId, 'Файл портфолио')}>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="media-delete-btn"
+                                                                        onClick={() => handleDeleteApplicantMedia(file.fileId, 'Файл портфолио')}
+                                                                    >
                                                                         <img src={trashIcon} alt="" className="icon-small" />
                                                                     </button>
                                                                 </div>
@@ -1500,8 +1434,14 @@ function SeekerDashboard() {
                                                                     <strong>{file.originalFileName}</strong>
                                                                     <p>{formatFileSize(file.sizeBytes)}</p>
                                                                 </div>
+
                                                                 <div className="embedded-file-card__actions">
-                                                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="media-link">
+                                                                    <a
+                                                                        href={fileUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="media-link"
+                                                                    >
                                                                         Открыть файл
                                                                     </a>
                                                                 </div>
@@ -1680,15 +1620,10 @@ function SeekerDashboard() {
                             </button>
                         </div>
 
-                        {isContactsLoading || !hasLoadedNetworking ? (
+                        {isContactsLoading ? (
                             <div className="dashboard-loading dashboard-loading--inner">
                                 <div className="loading-spinner"></div>
                                 <p>Загрузка контактов...</p>
-                            </div>
-                        ) : networkingBlockedMessage ? (
-                            <div className="empty-state">
-                                <p>Нетворкинг пока недоступен</p>
-                                <span>{networkingBlockedMessage}</span>
                             </div>
                         ) : currentContacts.length === 0 ? (
                             <div className="empty-state">
@@ -1717,7 +1652,10 @@ function SeekerDashboard() {
                                         </div>
 
                                         <div className="contact-card__actions">
-                                            <button className="contact-card__link" onClick={() => navigate(`/seekers/${contact.id}`)}>
+                                            <button
+                                                className="contact-card__link"
+                                                onClick={() => navigate(`/seekers/${contact.id}`)}
+                                            >
                                                 Профиль
                                             </button>
 
@@ -1873,11 +1811,15 @@ function SeekerDashboard() {
                         {!canSendRecommendation && (
                             <div className="modal__empty-state">
                                 {recommendationContactsOptions.length === 0 && (
-                                    <p>Сначала добавьте хотя бы один подтверждённый контакт.</p>
+                                    <p>
+                                        Сначала добавьте хотя бы один подтверждённый контакт.
+                                    </p>
                                 )}
 
                                 {recommendationContactsOptions.length > 0 && recommendationOpportunityOptions.length === 0 && (
-                                    <p>Пока нет подходящих возможностей для рекомендации.</p>
+                                    <p>
+                                        Пока нет подходящих возможностей для рекомендации.
+                                    </p>
                                 )}
                             </div>
                         )}
@@ -1939,7 +1881,11 @@ function SeekerDashboard() {
                         </div>
 
                         <div className="modal__actions">
-                            <button className="btn-primary-small" onClick={handleSendRecommendation} disabled={!canSendRecommendation}>
+                            <button
+                                className="btn-primary-small"
+                                onClick={handleSendRecommendation}
+                                disabled={!canSendRecommendation}
+                            >
                                 Отправить
                             </button>
                             <button
