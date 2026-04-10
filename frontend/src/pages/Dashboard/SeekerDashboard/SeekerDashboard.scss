@@ -2030,9 +2030,8 @@ $transition: all 0.2s ease;
 .profile-card__moderation {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: wrap;
-  margin-top: 12px;
   margin-bottom: 20px;
 }
 
@@ -2044,25 +2043,27 @@ $transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font: inherit;
+  box-sizing: border-box;
   font-size: 14px;
   line-height: 1;
-  box-sizing: border-box;
+  white-space: nowrap;
 }
 
 .profile-card__moderation-btn {
   border: 1px solid var(--color-border, #d7dbe7);
-  background: var(--color-surface, #fff);
+  background: var(--color-surface-secondary, #f5f7fb);
   color: var(--color-text, #1f2430);
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .profile-card__moderation-btn:hover {
-  background: var(--color-surface-secondary, #f5f7fb);
+  background: var(--color-surface, #ffffff);
+  border-color: var(--color-border-hover, #c8cfdd);
 }
 
 .profile-card__moderation-btn:disabled {
-  opacity: 0.7;
-  cursor: default;
+  opacity: 0.65;
+  cursor: not-allowed;
 }

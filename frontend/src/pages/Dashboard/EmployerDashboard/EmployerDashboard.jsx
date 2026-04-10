@@ -7,13 +7,7 @@ import Label from '../../../components/Label'
 import Textarea from '../../../components/Textarea'
 import CustomSelect from '../../../components/CustomSelect'
 import LinksEditor from '../../../components/LinksEditor'
-import { clearSessionUser, getSessionUser, subscribeSessionChange } from '../../../utils/sessionStore'
 import {
-    getEmployerProfile,
-    updateEmployerProfile,
-    updateEmployerCompanyData,
-    submitEmployerProfileForModeration,
-    submitVerification,
     getEmployerOpportunities,
     getEmployerOpportunityById,
     createOpportunity,
@@ -164,24 +158,15 @@ function detectEmployerContactType(value = '', label = '') {
         return 'TELEGRAM'
     }
 
-    if (
-        normalizedLabel.includes('whatsapp') ||
-        normalizedLabel.includes('wa')
-    ) {
+    if (normalizedLabel.includes('whatsapp') || normalizedLabel.includes('wa')) {
         return 'WHATSAPP'
     }
 
-    if (
-        normalizedLabel.includes('vk') ||
-        normalizedValue.includes('vk.com')
-    ) {
+    if (normalizedLabel.includes('vk') || normalizedValue.includes('vk.com')) {
         return 'VK'
     }
 
-    if (
-        normalizedLabel.includes('linkedin') ||
-        normalizedValue.includes('linkedin.com')
-    ) {
+    if (normalizedLabel.includes('linkedin') || normalizedValue.includes('linkedin.com')) {
         return 'LINKEDIN'
     }
 
@@ -196,6 +181,114 @@ function detectEmployerContactType(value = '', label = '') {
     }
 
     return 'OTHER'
+}
+
+async function requestJson(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {}),
+        },
+        ...options,
+    })
+
+    if (response.status === 204) {
+        return null
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    const data = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text()
+
+    if (!response.ok) {
+        const error = new Error(
+            typeof data === 'object' && data?.message
+                ? data.message
+                : 'Ошибка запроса'
+        )
+        error.status = response.status
+        error.code = typeof data === 'object' ? data?.code : undefined
+        error.details = typeof data === 'object' ? data?.details : undefined
+        throw error
+    }
+
+    return data
+}
+
+async function fetchCurrentSessionUser() {
+    const response = await requestJson('/api/auth/me')
+
+    if (!response?.user) {
+        return null
+    }
+
+    return {
+        id: response.user.id,
+        userId: response.user.id,
+        displayName: response.user.displayName || '',
+        email: response.user.email || '',
+        role: response.user.role || '',
+    }
+}
+
+async function fetchEmployerProfileByUserId(userId) {
+    return requestJson(`/api/profile/employer/${userId}?currentUserId=${userId}`)
+}
+
+async function patchEmployerProfileRequest(payload) {
+    return requestJson('/api/profile/employer', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+    })
+}
+
+async function patchEmployerCompanyRequest(payload) {
+    return requestJson('/api/profile/employer/company', {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+    })
+}
+
+async function submitEmployerProfileForModerationRequest() {
+    return requestJson('/api/profile/employer/moderation/submit', {
+        method: 'POST',
+    })
+}
+
+async function createEmployerVerificationRequest(employerUserId, payload) {
+    return requestJson(`/api/employer/verification?employerUserId=${employerUserId}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
+}
+
+function normalizeEmployerProfile(profileData = {}) {
+    return {
+        companyName: profileData.companyName || '',
+        legalName: profileData.legalName || '',
+        inn: profileData.inn || '',
+        description: profileData.description || '',
+        industry: profileData.industry || '',
+        websiteUrl: profileData.websiteUrl || '',
+        cityId: profileData.city?.id ?? null,
+        cityName: profileData.city?.name || '',
+        locationId: profileData.location?.id ?? null,
+        companySize: profileData.companySize || '',
+        foundedYear: profileData.foundedYear ?? '',
+        socialLinks: Array.isArray(profileData.socialLinks) ? profileData.socialLinks : [],
+        publicContacts: Array.isArray(profileData.publicContacts) ? profileData.publicContacts : [],
+        verificationStatus: profileData.verificationStatus || '',
+        moderationStatus: profileData.moderationStatus || 'DRAFT',
+    }
+}
+
+function mergeEmployerProfileSafely(prev, patch) {
+    return {
+        ...prev,
+        ...normalizeEmployerProfile(patch),
+    }
 }
 
 function EmployerDashboard() {
@@ -227,8 +320,8 @@ function EmployerDashboard() {
     const [citySuggestions, setCitySuggestions] = useState([])
     const citySearchRef = useRef(null)
 
-    const [socialRows, setSocialRows] = useState([])
-    const [contactRows, setContactRows] = useState([])
+    const [socialRows, setSocialRows] = useState([createLinkRow()])
+    const [contactRows, setContactRows] = useState([createLinkRow()])
     const [verificationLinkRows, setVerificationLinkRows] = useState([createLinkRow()])
     const [resourceRows, setResourceRows] = useState([createLinkRow()])
 
@@ -250,7 +343,7 @@ function EmployerDashboard() {
         cityName: '',
         locationId: null,
         companySize: '',
-        foundedYear: null,
+        foundedYear: '',
         socialLinks: [],
         publicContacts: [],
         verificationStatus: '',
@@ -293,6 +386,63 @@ function EmployerDashboard() {
     const isVerified = verificationState === 'APPROVED'
     const isVerificationRejected = verificationState === 'REJECTED'
 
+    const linksToRows = (items = []) =>
+        items.length > 0
+            ? items.map((item) => createLinkRow(item.label || '', item.url || item.value || ''))
+            : [createLinkRow()]
+
+    const rowsToLinks = (rows = []) =>
+        rows
+            .filter((row) => row.url?.trim())
+            .map((row, index) => ({
+                label: row.title?.trim() || `Ссылка ${index + 1}`,
+                url: row.url.trim(),
+            }))
+
+    const buildEmployerProfilePayload = () => {
+        const payload = {
+            companyName: profile.companyName?.trim() || '',
+            description: profile.description?.trim() || '',
+            industry: profile.industry?.trim() || '',
+            websiteUrl: profile.websiteUrl?.trim() || '',
+            socialLinks: rowsToLinks(socialRows),
+            publicContacts: contactRows
+                .filter((row) => row.url?.trim())
+                .map((row, index) => ({
+                    type: detectEmployerContactType(row.url.trim(), row.title?.trim() || ''),
+                    label: row.title?.trim() || `Контакт ${index + 1}`,
+                    value: row.url.trim(),
+                })),
+        }
+
+        if (profile.cityId) {
+            payload.cityId = Number(profile.cityId)
+        }
+
+        if (profile.locationId) {
+            payload.locationId = Number(profile.locationId)
+        }
+
+        if (profile.companySize) {
+            payload.companySize = profile.companySize
+        }
+
+        if (
+            profile.foundedYear !== '' &&
+            profile.foundedYear !== null &&
+            Number.isFinite(Number(profile.foundedYear))
+        ) {
+            payload.foundedYear = Number(profile.foundedYear)
+        }
+
+        return payload
+    }
+
+    const buildEmployerCompanyPayload = () => ({
+        legalName: profile.legalName?.trim() || '',
+        inn: profile.inn?.trim() || '',
+    })
+
     const resetOpportunityForm = () => {
         setOpportunityMode('create')
         setEditingOpportunityId(null)
@@ -322,56 +472,131 @@ function EmployerDashboard() {
         })
     }
 
-    const linksToRows = (items = []) =>
-        items.length > 0
-            ? items.map((item) => createLinkRow(item.label || '', item.url || item.value || ''))
-            : [createLinkRow()]
+    const syncProfileState = useCallback((profileData) => {
+        const normalized = normalizeEmployerProfile(profileData)
 
-    const rowsToLinks = (rows = [], defaultLinkType = 'RESOURCE') =>
-        rows
-            .filter((row) => row.url?.trim())
-            .map((row, index) => ({
-                label: row.title?.trim() || `Ссылка ${index + 1}`,
-                url: row.url.trim(),
-                linkType: defaultLinkType,
-            }))
-
-    const buildEmployerProfilePayload = () => ({
-        description: profile.description || '',
-        industry: profile.industry || '',
-        websiteUrl: profile.websiteUrl || '',
-        cityId: profile.cityId || null,
-        locationId: profile.locationId || null,
-        companySize: profile.companySize || '',
-        foundedYear: profile.foundedYear || null,
-        socialLinks: rowsToLinks(socialRows),
-        publicContacts: contactRows
-            .filter((row) => row.url?.trim())
-            .map((row, index) => ({
-                type: detectEmployerContactType(row.url.trim(), row.title?.trim() || ''),
-                label: row.title?.trim() || `Контакт ${index + 1}`,
-                value: row.url.trim(),
-            })),
-    })
-
-    const buildEmployerCompanyPayload = () => ({
-        legalName: profile.legalName || '',
-        inn: profile.inn || '',
-    })
-
-    const submitEmployerProfileToModerationAction = async () => {
-        const updatedProfile = await submitEmployerProfileForModeration()
-
-        setProfile((prev) => ({
+        setProfile(normalized)
+        setSocialRows(linksToRows(normalized.socialLinks))
+        setContactRows(
+            normalized.publicContacts.length > 0
+                ? normalized.publicContacts.map((item) =>
+                    createLinkRow(item.label || item.type || 'Контакт', item.value || '')
+                )
+                : [createLinkRow()]
+        )
+        setCitySearchQuery(normalized.cityName || '')
+        setVerificationData((prev) => ({
             ...prev,
-            ...updatedProfile,
+            inn: normalized.inn || '',
         }))
 
-        return updatedProfile
+        return normalized
+    }, [])
+
+    const reloadEmployerProfile = useCallback(async () => {
+        if (!user?.userId) return null
+        const freshProfile = await fetchEmployerProfileByUserId(user.userId)
+        return syncProfileState(freshProfile)
+    }, [syncProfileState, user])
+
+    const moderationMissingItems = useMemo(() => {
+        const items = []
+
+        if (!profile.companyName?.trim()) {
+            items.push('название компании')
+        }
+
+        if (!profile.industry?.trim()) {
+            items.push('сфера деятельности')
+        }
+
+        if (!profile.cityId && !profile.locationId) {
+            items.push('город')
+        }
+
+        const hasPublicChannel =
+            Boolean(profile.websiteUrl?.trim()) ||
+            (Array.isArray(socialRows) && socialRows.some((item) => item.url?.trim())) ||
+            (Array.isArray(contactRows) && contactRows.some((item) => item.url?.trim()))
+
+        if (!hasPublicChannel) {
+            items.push('сайт, соцсеть или контакт')
+        }
+
+        return items
+    }, [profile, socialRows, contactRows])
+
+    const validatePublicProfile = () => {
+        const nextErrors = {}
+
+        if (!profile.companyName?.trim()) {
+            nextErrors.companyName = 'Укажите название компании'
+        }
+
+        if (!profile.industry?.trim()) {
+            nextErrors.industry = 'Укажите сферу деятельности'
+        }
+
+        if (!profile.cityId && !profile.locationId) {
+            nextErrors.city = 'Укажите город или локацию компании'
+        }
+
+        const hasPublicChannel =
+            Boolean(profile.websiteUrl?.trim()) ||
+            (Array.isArray(socialRows) && socialRows.some((item) => item.url?.trim())) ||
+            (Array.isArray(contactRows) && contactRows.some((item) => item.url?.trim()))
+
+        if (!hasPublicChannel) {
+            nextErrors.publicContacts = 'Добавьте сайт, социальную сеть или контакт для связи'
+        }
+
+        setErrors(nextErrors)
+
+        return {
+            isValid: Object.keys(nextErrors).length === 0,
+            nextErrors,
+        }
+    }
+
+    const validateCompanyData = () => {
+        const nextErrors = {}
+
+        if (!profile.legalName?.trim()) {
+            nextErrors.legalName = 'Укажите юридическое название'
+        }
+
+        if (!profile.inn?.trim() || !/^\d{10}(\d{2})?$/.test(profile.inn.trim())) {
+            nextErrors.inn = 'ИНН должен содержать 10 или 12 цифр'
+        }
+
+        setErrors(nextErrors)
+
+        return {
+            isValid: Object.keys(nextErrors).length === 0,
+            nextErrors,
+        }
+    }
+
+    const validateOpportunityForm = () => {
+        const nextErrors = {}
+
+        if (!opportunityForm.title.trim()) nextErrors.title = 'Укажите название'
+        if (!opportunityForm.shortDescription.trim()) nextErrors.shortDescription = 'Укажите краткое описание'
+        if (opportunityForm.type === 'EVENT' && !opportunityForm.eventDate) nextErrors.eventDate = 'Укажите дату мероприятия'
+        if (opportunityForm.type !== 'EVENT' && !opportunityForm.expiresAt) nextErrors.expiresAt = 'Укажите срок действия'
+
+        setErrors(nextErrors)
+        return Object.keys(nextErrors).length === 0
     }
 
     const handleCitySearch = async (value) => {
         setCitySearchQuery(value)
+
+        setProfile((prev) => ({
+            ...prev,
+            cityId: null,
+            cityName: value,
+        }))
 
         if (value.length < 2) {
             setCitySuggestions([])
@@ -379,9 +604,14 @@ function EmployerDashboard() {
             return
         }
 
-        const cities = await searchCities(value)
-        setCitySuggestions(cities)
-        setIsCitySearchOpen(true)
+        try {
+            const cities = await searchCities(value)
+            setCitySuggestions(cities || [])
+            setIsCitySearchOpen(true)
+        } catch {
+            setCitySuggestions([])
+            setIsCitySearchOpen(false)
+        }
     }
 
     const handleSelectCity = (city) => {
@@ -418,54 +648,23 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            const currentUser = getSessionUser()
+            const currentUser = await fetchCurrentSessionUser()
             setUser(currentUser)
 
-            if (!currentUser) {
+            if (!currentUser?.userId) {
                 setOpportunities([])
                 setResponsesPage({ items: [], total: 0, limit: 50, offset: 0 })
                 return
             }
 
-            const profileData = await getEmployerProfile()
-            if (profileData) {
-                setProfile({
-                    companyName: profileData.companyName || currentUser?.displayName || '',
-                    legalName: profileData.legalName || '',
-                    inn: profileData.inn || '',
-                    description: profileData.description || '',
-                    industry: profileData.industry || '',
-                    websiteUrl: profileData.websiteUrl || '',
-                    cityId: profileData.cityId,
-                    cityName: profileData.cityName || '',
-                    locationId: profileData.locationId,
-                    companySize: profileData.companySize || '',
-                    foundedYear: profileData.foundedYear || null,
-                    socialLinks: profileData.socialLinks || [],
-                    publicContacts: profileData.publicContacts || [],
-                    verificationStatus: profileData.verificationStatus || '',
-                    moderationStatus: profileData.moderationStatus || 'DRAFT',
-                })
+            const profileData = await fetchEmployerProfileByUserId(currentUser.userId)
+            const normalized = syncProfileState(profileData)
 
-                setSocialRows(linksToRows(profileData.socialLinks || []))
-                setContactRows(
-                    (profileData.publicContacts || []).length > 0
-                        ? profileData.publicContacts.map((item) =>
-                            createLinkRow(item.label || item.type || 'Контакт', item.value || '')
-                        )
-                        : [createLinkRow()]
-                )
-
-                if (profileData.cityName) {
-                    setCitySearchQuery(profileData.cityName)
-                }
-
-                setVerificationData((prev) => ({
-                    ...prev,
-                    inn: profileData.inn || '',
-                    corporateEmail: prev.corporateEmail || currentUser?.email || '',
-                }))
-            }
+            setVerificationData((prev) => ({
+                ...prev,
+                inn: normalized.inn || '',
+                corporateEmail: prev.corporateEmail || currentUser.email || '',
+            }))
 
             try {
                 const opportunityPage = await getEmployerOpportunities()
@@ -492,7 +691,6 @@ function EmployerDashboard() {
             console.error('Load error:', error)
 
             if ([401, 403].includes(error?.status)) {
-                clearSessionUser()
                 setUser(null)
                 setOpportunities([])
                 setResponsesPage({ items: [], total: 0, limit: 50, offset: 0 })
@@ -501,22 +699,16 @@ function EmployerDashboard() {
 
             toast({
                 title: 'Ошибка',
-                description: 'Не удалось загрузить кабинет работодателя',
+                description: error?.message || 'Не удалось загрузить кабинет работодателя',
                 variant: 'destructive',
             })
         } finally {
             setIsLoading(false)
         }
-    }, [responseFilters, toast])
+    }, [responseFilters, syncProfileState, toast])
 
     useEffect(() => {
-        const unsubscribe = subscribeSessionChange((nextUser) => {
-            setUser(nextUser)
-        })
-
         loadData()
-
-        return unsubscribe
     }, [loadData])
 
     useEffect(() => {
@@ -532,9 +724,20 @@ function EmployerDashboard() {
     }, [activeTab, user, loadEmployerResponsesData])
 
     useEffect(() => {
-        if (isEditingProfile) {
-            return
+        const handleClickOutside = (event) => {
+            if (citySearchRef.current && !citySearchRef.current.contains(event.target)) {
+                setIsCitySearchOpen(false)
+            }
         }
+
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (isEditingProfile) return
 
         setSocialRows(linksToRows(profile.socialLinks || []))
         setContactRows(
@@ -546,138 +749,58 @@ function EmployerDashboard() {
         )
     }, [isEditingProfile, profile])
 
-    const validateProfile = () => {
-        const nextErrors = {}
-
-        if (!profile.description?.trim()) {
-            nextErrors.description = 'Добавьте описание компании'
-        }
-
-        setErrors(nextErrors)
-        return Object.keys(nextErrors).length === 0
-    }
-
-    const validateCompanyData = () => {
-        const nextErrors = {}
-
-        if (!profile.legalName?.trim()) {
-            nextErrors.legalName = 'Укажите юридическое название'
-        }
-
-        if (!profile.inn?.trim() || !/^\d{10}(\d{2})?$/.test(profile.inn.trim())) {
-            nextErrors.inn = 'ИНН должен содержать 10 или 12 цифр'
-        }
-
-        setErrors(nextErrors)
-        return Object.keys(nextErrors).length === 0
-    }
-
-    const validateOpportunityForm = () => {
-        const nextErrors = {}
-
-        if (!opportunityForm.title.trim()) nextErrors.title = 'Укажите название'
-        if (!opportunityForm.shortDescription.trim()) nextErrors.shortDescription = 'Укажите краткое описание'
-        if (opportunityForm.type === 'EVENT' && !opportunityForm.eventDate) nextErrors.eventDate = 'Укажите дату мероприятия'
-        if (opportunityForm.type !== 'EVENT' && !opportunityForm.expiresAt) nextErrors.expiresAt = 'Укажите срок действия'
-
-        setErrors(nextErrors)
-        return Object.keys(nextErrors).length === 0
-    }
-
-    const handleSubmitEmployerProfileForModeration = async () => {
-        if (!validateProfile()) {
-            toast({
-                title: 'Ошибка',
-                description: 'Заполните обязательные поля перед отправкой на модерацию',
-                variant: 'destructive',
-            })
-            return
-        }
-
-        setIsLoading(true)
-        try {
-            const profilePatch = buildEmployerProfilePayload()
-
-            const updatedAfterPatch = await updateEmployerProfile(profilePatch)
-
-            setProfile((prev) => ({
-                ...prev,
-                ...updatedAfterPatch,
-            }))
-
-            const updatedAfterSubmit = await submitEmployerProfileToModerationAction()
-
-            setProfile((prev) => ({
-                ...prev,
-                ...updatedAfterSubmit,
-            }))
-
-            toast({
-                title: 'Профиль отправлен на модерацию',
-                description: 'Профиль работодателя отправлен на проверку',
-            })
-
-            setIsEditingProfile(false)
-        } catch (error) {
-            toast({
-                title: 'Ошибка',
-                description: error?.message || 'Не удалось отправить профиль на модерацию',
-                variant: 'destructive',
-            })
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
     const handleSaveProfile = async () => {
-        if (!validateProfile()) {
+        const validation = validatePublicProfile()
+
+        if (!validation.isValid) {
             toast({
                 title: 'Ошибка',
-                description: 'Заполните обязательные поля',
+                description: Object.values(validation.nextErrors)[0] || 'Заполните обязательные поля',
                 variant: 'destructive',
             })
             return
         }
 
         setIsLoading(true)
-        try {
-            const profilePatch = buildEmployerProfilePayload()
-            const updatedProfile = await updateEmployerProfile(profilePatch)
 
-            setProfile((prev) => ({
-                ...prev,
-                ...updatedProfile,
-            }))
+        try {
+            const updatedProfile = await patchEmployerProfileRequest(buildEmployerProfilePayload())
+            const normalized = syncProfileState(updatedProfile)
 
             if (profile.moderationStatus === 'APPROVED' || profile.moderationStatus === 'NEEDS_REVISION') {
-                const submittedProfile = await submitEmployerProfileToModerationAction()
-
-                setProfile((prev) => ({
-                    ...prev,
-                    ...submittedProfile,
-                }))
+                const submittedProfile = await submitEmployerProfileForModerationRequest()
+                const submittedNormalized = syncProfileState(submittedProfile)
 
                 toast({
                     title: 'Профиль сохранён',
                     description: 'Изменения автоматически отправлены на повторную модерацию',
                 })
+
+                window.dispatchEvent(
+                    new CustomEvent('profile-updated', {
+                        detail: {
+                            companyName: submittedNormalized.companyName,
+                            role: 'EMPLOYER',
+                        },
+                    })
+                )
             } else {
                 toast({
                     title: 'Профиль сохранён',
                     description: 'Изменения сохранены',
                 })
+
+                window.dispatchEvent(
+                    new CustomEvent('profile-updated', {
+                        detail: {
+                            companyName: normalized.companyName,
+                            role: 'EMPLOYER',
+                        },
+                    })
+                )
             }
 
             setIsEditingProfile(false)
-
-            window.dispatchEvent(
-                new CustomEvent('profile-updated', {
-                    detail: {
-                        companyName: profile.companyName,
-                        role: 'EMPLOYER',
-                    },
-                })
-            )
         } catch (error) {
             toast({
                 title: 'Ошибка',
@@ -690,23 +813,22 @@ function EmployerDashboard() {
     }
 
     const handleSaveCompanyData = async () => {
-        if (!validateCompanyData()) {
+        const validation = validateCompanyData()
+
+        if (!validation.isValid) {
             toast({
                 title: 'Ошибка',
-                description: 'Проверьте юридические данные компании',
+                description: Object.values(validation.nextErrors)[0] || 'Проверьте реквизиты компании',
                 variant: 'destructive',
             })
             return
         }
 
         setIsLoading(true)
-        try {
-            const updatedProfile = await updateEmployerCompanyData(buildEmployerCompanyPayload())
 
-            setProfile((prev) => ({
-                ...prev,
-                ...updatedProfile,
-            }))
+        try {
+            await patchEmployerCompanyRequest(buildEmployerCompanyPayload())
+            await reloadEmployerProfile()
 
             toast({
                 title: 'Данные компании сохранены',
@@ -725,7 +847,53 @@ function EmployerDashboard() {
         }
     }
 
+    const handleSubmitEmployerProfileForModeration = async () => {
+        const validation = validatePublicProfile()
+
+        if (!validation.isValid) {
+            toast({
+                title: 'Ошибка',
+                description: Object.values(validation.nextErrors)[0] || 'Заполните обязательные поля перед отправкой на модерацию',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        setIsLoading(true)
+
+        try {
+            await patchEmployerProfileRequest(buildEmployerProfilePayload())
+            const updatedAfterSubmit = await submitEmployerProfileForModerationRequest()
+            syncProfileState(updatedAfterSubmit)
+
+            toast({
+                title: 'Профиль отправлен на модерацию',
+                description: 'Профиль работодателя отправлен на проверку',
+            })
+
+            setIsEditingProfile(false)
+            setIsEditingCompanyData(false)
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось отправить профиль на модерацию',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
     const handleSubmitVerification = async () => {
+        if (!user?.userId) {
+            toast({
+                title: 'Ошибка',
+                description: 'Не удалось определить текущего пользователя',
+                variant: 'destructive',
+            })
+            return
+        }
+
         const professionalLinks = rowsToLinks(verificationLinkRows).map((item) => item.url)
 
         if (!verificationData.verificationMethod) {
@@ -737,7 +905,10 @@ function EmployerDashboard() {
             return
         }
 
-        if (verificationData.verificationMethod === 'CORPORATE_EMAIL' && !verificationData.corporateEmail.trim()) {
+        if (
+            verificationData.verificationMethod === 'CORPORATE_EMAIL' &&
+            !verificationData.corporateEmail.trim()
+        ) {
             toast({
                 title: 'Ошибка',
                 description: 'Укажите корпоративную почту',
@@ -746,21 +917,44 @@ function EmployerDashboard() {
             return
         }
 
-        if (verificationData.verificationMethod === 'TIN' && !verificationData.inn.trim()) {
-            toast({
-                title: 'Ошибка',
-                description: 'Укажите ИНН',
-                variant: 'destructive',
-            })
-            return
+        if (verificationData.verificationMethod === 'TIN') {
+            const normalizedInn = (verificationData.inn || profile.inn || '').trim()
+
+            if (!normalizedInn || !/^\d{10}(\d{2})?$/.test(normalizedInn)) {
+                toast({
+                    title: 'Ошибка',
+                    description: 'Укажите корректный ИНН',
+                    variant: 'destructive',
+                })
+                return
+            }
         }
 
         setIsLoading(true)
+
         try {
-            await submitVerification({
-                ...verificationData,
+            if (verificationData.verificationMethod === 'TIN') {
+                const normalizedInn = (verificationData.inn || profile.inn || '').trim()
+
+                await patchEmployerCompanyRequest({
+                    legalName: profile.legalName?.trim() || '',
+                    inn: normalizedInn,
+                })
+
+                await reloadEmployerProfile()
+            }
+
+            const payload = {
+                verificationMethod: verificationData.verificationMethod,
                 professionalLinks,
-            })
+                submittedComment: verificationData.submittedComment?.trim() || '',
+            }
+
+            if (verificationData.verificationMethod === 'CORPORATE_EMAIL') {
+                payload.corporateEmail = verificationData.corporateEmail.trim()
+            }
+
+            await createEmployerVerificationRequest(user.userId, payload)
 
             setProfile((prev) => ({ ...prev, verificationStatus: 'PENDING' }))
             setShowVerificationModal(false)
@@ -832,6 +1026,15 @@ function EmployerDashboard() {
             return
         }
 
+        if (!profile.companyName?.trim()) {
+            toast({
+                title: 'Ошибка',
+                description: 'Сначала заполните название компании',
+                variant: 'destructive',
+            })
+            return
+        }
+
         if (!validateOpportunityForm()) {
             toast({
                 title: 'Ошибка',
@@ -851,12 +1054,12 @@ function EmployerDashboard() {
                     description: 'Срок действия вакансии не может быть в прошлом',
                     variant: 'destructive',
                 })
-                setIsLoading(false)
                 return
             }
         }
 
         setIsLoading(true)
+
         try {
             const payload = {
                 title: opportunityForm.title?.trim(),
@@ -866,7 +1069,7 @@ function EmployerDashboard() {
                     opportunityForm.shortDescription?.trim() ||
                     '',
                 requirements: opportunityForm.requirements?.trim() || null,
-                companyName: (profile.companyName || user?.displayName || '').trim(),
+                companyName: profile.companyName.trim(),
                 type: opportunityForm.type || 'VACANCY',
                 workFormat: opportunityForm.workFormat || 'REMOTE',
                 employmentType: opportunityForm.employmentType || 'FULL_TIME',
@@ -901,7 +1104,7 @@ function EmployerDashboard() {
                     contactPerson: opportunityForm.contactPerson?.trim() || null,
                 },
 
-                resourceLinks: rowsToLinks(resourceRows, 'RESOURCE'),
+                resourceLinks: rowsToLinks(resourceRows),
                 tagIds: Array.isArray(opportunityForm.tagIds)
                     ? opportunityForm.tagIds.map(Number).filter((id) => Number.isFinite(id) && id > 0)
                     : [],
@@ -1034,7 +1237,7 @@ function EmployerDashboard() {
     }
 
     return (
-        <DashboardLayout title="Управление компанией" subtitle={profile.companyName || user?.displayName}>
+        <DashboardLayout title="Управление компанией" subtitle={profile.companyName || 'Компания'}>
             {!isVerified && (
                 <div className={`verification-banner ${isVerificationRejected ? 'verification-banner--warning' : ''}`}>
                     <div className="verification-banner__content">
@@ -1497,14 +1700,20 @@ function EmployerDashboard() {
                                     <div className="employer-profile__view-actions">
                                         <button className="profile-card__edit-btn" onClick={() => setIsEditingProfile(true)}>
                                             <img src={editIcon} alt="" className="icon" />
-                                            Редактировать профиль
+                                            Публичный профиль
                                         </button>
                                         <button className="profile-card__edit-btn" onClick={() => setIsEditingCompanyData(true)}>
                                             <img src={editIcon} alt="" className="icon" />
-                                            Данные компании
+                                            Реквизиты компании
                                         </button>
                                     </div>
                                 </div>
+
+                                {moderationMissingItems.length > 0 && (
+                                    <div className="field-hint" style={{ marginBottom: '16px' }}>
+                                        Для отправки на модерацию заполните: {moderationMissingItems.join(', ')}.
+                                    </div>
+                                )}
 
                                 <div className="employer-profile__grid">
                                     <div className="employer-profile__field">
@@ -1602,12 +1811,12 @@ function EmployerDashboard() {
                                     </div>
                                 </div>
 
-                                {moderationState === 'DRAFT' && (
+                                {(moderationState === 'DRAFT' || moderationState === 'NEEDS_REVISION') && (
                                     <div className="employer-profile__edit-actions">
                                         <Button
                                             className="button--primary"
                                             onClick={handleSubmitEmployerProfileForModeration}
-                                            disabled={isLoading}
+                                            disabled={isLoading || moderationMissingItems.length > 0}
                                         >
                                             {isLoading ? 'Отправка...' : 'Отправить профиль на модерацию'}
                                         </Button>
@@ -1617,7 +1826,7 @@ function EmployerDashboard() {
                         ) : isEditingCompanyData ? (
                             <div className="employer-profile__edit">
                                 <div className="employer-profile__edit-header">
-                                    <h2>Данные компании</h2>
+                                    <h2>Реквизиты компании</h2>
 
                                     <button
                                         type="button"
@@ -1629,10 +1838,9 @@ function EmployerDashboard() {
                                     </button>
                                 </div>
 
-                                <div className="employer-profile__edit-field">
-                                    <Label>Название компании</Label>
-                                    <Input value={profile.companyName || ''} disabled />
-                                </div>
+                                <p className="employer-profile__section-hint">
+                                    Здесь хранятся юридическое название и ИНН. Название компании для карточки и модерации редактируется в публичном профиле.
+                                </p>
 
                                 <div className="employer-profile__edit-field">
                                     <Label>Юридическое название <span className="required-star">*</span></Label>
@@ -1647,14 +1855,18 @@ function EmployerDashboard() {
                                     <Label>ИНН <span className="required-star">*</span></Label>
                                     <Input
                                         value={profile.inn || ''}
-                                        onChange={(e) => setProfile((prev) => ({ ...prev, inn: e.target.value }))}
+                                        maxLength={12}
+                                        onChange={(e) => setProfile((prev) => ({
+                                            ...prev,
+                                            inn: e.target.value.replace(/[^\d]/g, '').slice(0, 12),
+                                        }))}
                                     />
                                     {errors.inn && <p className="field-error">{errors.inn}</p>}
                                 </div>
 
                                 <div className="employer-profile__edit-actions">
                                     <Button className="button--primary" onClick={handleSaveCompanyData} disabled={isLoading}>
-                                        {isLoading ? 'Сохранение...' : 'Сохранить данные компании'}
+                                        {isLoading ? 'Сохранение...' : 'Сохранить реквизиты'}
                                     </Button>
                                     <Button className="button--ghost" onClick={() => setIsEditingCompanyData(false)}>
                                         Отменить
@@ -1664,7 +1876,7 @@ function EmployerDashboard() {
                         ) : (
                             <div className="employer-profile__edit">
                                 <div className="employer-profile__edit-header">
-                                    <h2>Редактирование профиля компании</h2>
+                                    <h2>Публичный профиль компании</h2>
 
                                     <button
                                         type="button"
@@ -1677,34 +1889,29 @@ function EmployerDashboard() {
                                 </div>
 
                                 <div className="employer-profile__edit-field">
-                                    <Label>Название компании</Label>
-                                    <Input value={profile.companyName || ''} disabled />
+                                    <Label>Название компании <span className="required-star">*</span></Label>
+                                    <Input
+                                        value={profile.companyName}
+                                        onChange={(e) => setProfile((prev) => ({
+                                            ...prev,
+                                            companyName: e.target.value,
+                                        }))}
+                                        placeholder="Как компания будет отображаться на платформе"
+                                    />
+                                    {errors.companyName && <p className="field-error">{errors.companyName}</p>}
                                 </div>
-
-                                <div className="employer-profile__edit-field">
-                                    <Label>Юридическое название</Label>
-                                    <Input value={profile.legalName || ''} disabled />
-                                </div>
-
-                                <div className="employer-profile__edit-field">
-                                    <Label>ИНН</Label>
-                                    <Input value={profile.inn || ''} disabled />
-                                </div>
-
-                                <p className="field-hint">
-                                    Название юрлица и ИНН редактируются в отдельном разделе данных компании.
-                                </p>
 
                                 <div className="employer-profile__edit-grid">
                                     <div className="employer-profile__edit-field">
-                                        <Label>Сфера деятельности</Label>
+                                        <Label>Сфера деятельности <span className="required-star">*</span></Label>
                                         <Input
                                             value={profile.industry}
                                             onChange={(e) => setProfile((prev) => ({
                                                 ...prev,
-                                                industry: e.target.value
+                                                industry: e.target.value,
                                             }))}
                                         />
+                                        {errors.industry && <p className="field-error">{errors.industry}</p>}
                                     </div>
 
                                     <div className="employer-profile__edit-field">
@@ -1713,7 +1920,7 @@ function EmployerDashboard() {
                                             value={profile.websiteUrl}
                                             onChange={(e) => setProfile((prev) => ({
                                                 ...prev,
-                                                websiteUrl: e.target.value
+                                                websiteUrl: e.target.value,
                                             }))}
                                         />
                                     </div>
@@ -1721,7 +1928,7 @@ function EmployerDashboard() {
 
                                 <div className="employer-profile__edit-grid">
                                     <div className="employer-profile__edit-field" ref={citySearchRef}>
-                                        <Label>Город</Label>
+                                        <Label>Город <span className="required-star">*</span></Label>
                                         <div className="autocomplete">
                                             <Input
                                                 value={citySearchQuery}
@@ -1745,6 +1952,7 @@ function EmployerDashboard() {
                                                 </div>
                                             )}
                                         </div>
+                                        {errors.city && <p className="field-error">{errors.city}</p>}
                                     </div>
 
                                     <CustomSelect
@@ -1761,7 +1969,7 @@ function EmployerDashboard() {
                                         value={profile.foundedYear || ''}
                                         onChange={(e) => setProfile((prev) => ({
                                             ...prev,
-                                            foundedYear: e.target.value
+                                            foundedYear: e.target.value.replace(/[^\d]/g, '').slice(0, 4),
                                         }))}
                                     />
                                 </div>
@@ -1773,10 +1981,9 @@ function EmployerDashboard() {
                                         value={profile.description}
                                         onChange={(e) => setProfile((prev) => ({
                                             ...prev,
-                                            description: e.target.value
+                                            description: e.target.value,
                                         }))}
                                     />
-                                    {errors.description && <p className="field-error">{errors.description}</p>}
                                 </div>
 
                                 <LinksEditor
@@ -1796,6 +2003,8 @@ function EmployerDashboard() {
                                         placeholderUrl="mailto: / tel: / https://..."
                                     />
                                 </div>
+
+                                {errors.publicContacts && <p className="field-error">{errors.publicContacts}</p>}
 
                                 <div className="employer-profile__edit-actions">
                                     <Button className="button--primary" onClick={handleSaveProfile} disabled={isLoading}>
@@ -1844,9 +2053,16 @@ function EmployerDashboard() {
                                 <Label>ИНН</Label>
                                 <Input
                                     value={verificationData.inn}
-                                    onChange={(e) => setVerificationData((prev) => ({ ...prev, inn: e.target.value }))}
+                                    maxLength={12}
+                                    onChange={(e) => setVerificationData((prev) => ({
+                                        ...prev,
+                                        inn: e.target.value.replace(/[^\d]/g, '').slice(0, 12),
+                                    }))}
                                     placeholder="1234567890"
                                 />
+                                <p className="field-hint">
+                                    Для проверки будет использован ИНН из реквизитов компании. Перед отправкой он сохранится в профиле.
+                                </p>
                             </div>
                         )}
 

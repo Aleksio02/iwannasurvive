@@ -1,4 +1,3 @@
-import { clearSessionUser } from '../utils/sessionStore'
 
 function createHttpError(message, status = 0, extra = {}) {
     const error = new Error(message)
@@ -31,6 +30,15 @@ async function parseResponseBody(response) {
     }
 }
 
+let sessionUserCache = null
+let sessionUserCacheAt = 0
+const SESSION_CACHE_TTL_MS = 15_000
+
+export function clearSessionUserCache() {
+    sessionUserCache = null
+    sessionUserCacheAt = 0
+}
+
 export async function httpJson(url, options = {}) {
     const fullUrl = url.startsWith('http') ? url : url
     console.log('[HTTP]', options.method || 'GET', fullUrl)
@@ -59,7 +67,7 @@ export async function httpJson(url, options = {}) {
             'Ошибка запроса'
 
         if (response.status === 401) {
-            clearSessionUser()
+            clearSessionUserCache()
         }
 
         throw createHttpError(message, response.status, {
@@ -88,4 +96,60 @@ export function toQuery(params = {}) {
     })
 
     return query.toString()
+}
+
+function mapSessionUser(response) {
+    if (!response?.user) return null
+
+    return {
+        id: response.user.id,
+        userId: response.user.id,
+        displayName: response.user.displayName || '',
+        email: response.user.email || '',
+        role: response.user.role || '',
+        twoFactorEnabled: Boolean(response.user.twoFactorEnabled),
+    }
+}
+
+export async function getSessionUserFromApi({ force = false } = {}) {
+    const isFresh =
+        sessionUserCache &&
+        Date.now() - sessionUserCacheAt < SESSION_CACHE_TTL_MS
+
+    if (!force && isFresh) {
+        return sessionUserCache
+    }
+
+    try {
+        const data = await httpJson('/api/auth/me')
+        const mapped = mapSessionUser(data)
+        sessionUserCache = mapped
+        sessionUserCacheAt = Date.now()
+        return mapped
+    } catch (error) {
+        if (error?.status === 401) {
+            clearSessionUserCache()
+            return null
+        }
+
+        throw error
+    }
+}
+
+export async function getSessionUserIdFromApi(options = {}) {
+    const user = await getSessionUserFromApi(options)
+    return user?.id || null
+}
+
+export async function getRequiredCurrentUserPayload() {
+    const user = await getSessionUserFromApi()
+    if (!user?.id || !user?.email || !user?.role) {
+        throw createHttpError('Пользователь не авторизован', 401)
+    }
+
+    return {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+    }
 }
