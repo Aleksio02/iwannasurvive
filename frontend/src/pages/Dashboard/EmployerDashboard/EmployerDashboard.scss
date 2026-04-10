@@ -938,3 +938,21 @@ $transition: all 0.2s ease;
     grid-template-columns: 1fr;
   }
 }
+
+.employer-profile__view-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.employer-profile__section-hint {
+  margin: 0 0 20px;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.employer-profile__edit-field + .employer-profile__edit-field {
+  margin-top: 4px;
+}
