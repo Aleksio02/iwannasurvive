@@ -345,7 +345,7 @@ function SecuritySettings() {
 
     if (isLoading) {
         return (
-            <DashboardLayout title="Настройки безопасности">
+            <DashboardLayout title="Настройки безопасности" hideHeaderActions>
                 <div className="security-settings security-settings--loading">
                     <div className="dashboard-loading">
                         <div className="loading-spinner"></div>
@@ -364,6 +364,7 @@ function SecuritySettings() {
         <DashboardLayout
             title="Настройки безопасности"
             subtitle={user.displayName || user.email}
+            hideHeaderActions
         >
             <div className="security-settings">
                 <Link
