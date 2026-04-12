@@ -1,6 +1,5 @@
 package ru.itplanet.trampline.opportunity.service
 
-import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -16,7 +15,6 @@ import ru.itplanet.trampline.opportunity.dao.OpportunityDao
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
 import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
 import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundDomainException
-import ru.itplanet.trampline.opportunity.model.EmployerOpportunityMediaItem
 
 @Service
 @Transactional
@@ -25,37 +23,6 @@ class EmployerOpportunityMediaService(
     private val mediaServiceClient: MediaServiceClient,
     private val employerOpportunityModerationService: EmployerOpportunityModerationService,
 ) {
-
-    @Transactional(readOnly = true)
-    fun getMedia(
-        currentUserId: Long,
-        opportunityId: Long,
-    ): List<EmployerOpportunityMediaItem> {
-        loadOwnedOpportunity(currentUserId, opportunityId)
-
-        return try {
-            getMediaAttachments(opportunityId).map { attachment ->
-                EmployerOpportunityMediaItem(
-                    attachmentId = attachment.attachmentId,
-                    fileId = attachment.fileId,
-                    originalFileName = attachment.file.originalFileName,
-                    mediaType = attachment.file.mediaType,
-                    sortOrder = attachment.sortOrder,
-                    downloadUrl = runCatching {
-                        mediaServiceClient.getDownloadUrl(attachment.fileId).url
-                    }.getOrNull(),
-                )
-            }
-        } catch (ex: Exception) {
-            logger.warn(
-                "Failed to load opportunity media for currentUserId={} opportunityId={}",
-                currentUserId,
-                opportunityId,
-                ex,
-            )
-            emptyList()
-        }
-    }
 
     fun addMedia(
         currentUserId: Long,
@@ -176,8 +143,6 @@ class EmployerOpportunityMediaService(
     }
 
     private companion object {
-        private val logger = LoggerFactory.getLogger(EmployerOpportunityMediaService::class.java)
-
         private val mediaEditableStatuses = setOf(
             OpportunityStatus.DRAFT,
             OpportunityStatus.REJECTED,
