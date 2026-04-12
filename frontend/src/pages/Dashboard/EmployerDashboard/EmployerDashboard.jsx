@@ -8,6 +8,15 @@ import Textarea from '../../../components/Textarea'
 import CustomSelect from '../../../components/CustomSelect'
 import LinksEditor from '../../../components/LinksEditor'
 import {
+    getCurrentSessionUser,
+    getEmployerProfile,
+    updateEmployerProfile,
+    updateEmployerCompanyData,
+    submitEmployerProfileForModeration,
+    submitVerification,
+    uploadEmployerLogo,
+    deleteEmployerFile,
+    getFileDownloadUrlByUserAndFile,
     getEmployerOpportunities,
     getEmployerOpportunityById,
     createOpportunity,
@@ -17,6 +26,10 @@ import {
     updateApplicationStatus,
     searchCities,
 } from '../../../api/profile'
+import {
+    getEntityModerationHistory,
+    getModerationTaskDetail,
+} from '../../../api/moderation'
 import { listTags, OPPORTUNITY_LABELS } from '../../../api/opportunities'
 import '../DashboardBase.scss'
 import './EmployerDashboard.scss'
@@ -80,6 +93,8 @@ const APPLICATION_SORT_OPTIONS = [
     { value: 'ASC', label: 'Сначала старые' },
 ]
 
+const EMPLOYER_LOGO_FORMATS_HINT = 'JPG, PNG, WEBP'
+
 function createLinkRow(title = '', url = '') {
     return {
         id: Date.now() + Math.random(),
@@ -97,7 +112,11 @@ function statusBucket(status) {
 
 function formatDate(date) {
     if (!date) return '—'
-    return new Date(date).toLocaleDateString('ru-RU', {
+
+    const parsed = new Date(date)
+    if (Number.isNaN(parsed.getTime())) return '—'
+
+    return parsed.toLocaleDateString('ru-RU', {
         day: 'numeric',
         month: 'long',
         year: 'numeric',
@@ -117,17 +136,29 @@ function renderContactMethod(contact) {
 
     if (contact.type === 'TELEGRAM') {
         const value = contact.value.replace(/^@/, '')
-        return <a href={`https://t.me/${value}`} target="_blank" rel="noopener noreferrer">@{value}</a>
+        return (
+            <a href={`https://t.me/${value}`} target="_blank" rel="noopener noreferrer">
+                @{value}
+            </a>
+        )
     }
 
     if (contact.type === 'WHATSAPP') {
         const value = contact.value.replace(/[^\d+]/g, '')
-        return <a href={`https://wa.me/${value.replace(/^\+/, '')}`} target="_blank" rel="noopener noreferrer">{contact.value}</a>
+        return (
+            <a href={`https://wa.me/${value.replace(/^\+/, '')}`} target="_blank" rel="noopener noreferrer">
+                {contact.value}
+            </a>
+        )
     }
 
     if (contact.type === 'VK' || contact.type === 'LINKEDIN' || contact.type === 'OTHER') {
         if (/^https?:\/\//i.test(contact.value)) {
-            return <a href={contact.value} target="_blank" rel="noopener noreferrer">{contact.value}</a>
+            return (
+                <a href={contact.value} target="_blank" rel="noopener noreferrer">
+                    {contact.value}
+                </a>
+            )
         }
     }
 
@@ -183,113 +214,137 @@ function detectEmployerContactType(value = '', label = '') {
     return 'OTHER'
 }
 
-async function requestJson(url, options = {}) {
-    const response = await fetch(url, {
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(options.headers || {}),
-        },
-        ...options,
-    })
-
-    if (response.status === 204) {
-        return null
-    }
-
-    const contentType = response.headers.get('content-type') || ''
-    const data = contentType.includes('application/json')
-        ? await response.json()
-        : await response.text()
-
-    if (!response.ok) {
-        const error = new Error(
-            typeof data === 'object' && data?.message
-                ? data.message
-                : 'Ошибка запроса'
-        )
-        error.status = response.status
-        error.code = typeof data === 'object' ? data?.code : undefined
-        error.details = typeof data === 'object' ? data?.details : undefined
-        throw error
-    }
-
-    return data
-}
-
-async function fetchCurrentSessionUser() {
-    const response = await requestJson('/api/auth/me')
-
-    if (!response?.user) {
-        return null
-    }
-
+function normalizeEmployerProfileState(profileData = {}, fallbackUser = null) {
     return {
-        id: response.user.id,
-        userId: response.user.id,
-        displayName: response.user.displayName || '',
-        email: response.user.email || '',
-        role: response.user.role || '',
-    }
-}
-
-async function fetchEmployerProfileByUserId(userId) {
-    return requestJson(`/api/profile/employer/${userId}?currentUserId=${userId}`)
-}
-
-async function patchEmployerProfileRequest(payload) {
-    return requestJson('/api/profile/employer', {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-    })
-}
-
-async function patchEmployerCompanyRequest(payload) {
-    return requestJson('/api/profile/employer/company', {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-    })
-}
-
-async function submitEmployerProfileForModerationRequest() {
-    return requestJson('/api/profile/employer/moderation/submit', {
-        method: 'POST',
-    })
-}
-
-async function createEmployerVerificationRequest(employerUserId, payload) {
-    return requestJson(`/api/employer/verification?employerUserId=${employerUserId}`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-    })
-}
-
-function normalizeEmployerProfile(profileData = {}) {
-    return {
-        companyName: profileData.companyName || '',
+        userId: profileData.userId ?? fallbackUser?.userId ?? fallbackUser?.id ?? null,
+        companyName: profileData.companyName || fallbackUser?.displayName || '',
         legalName: profileData.legalName || '',
         inn: profileData.inn || '',
         description: profileData.description || '',
         industry: profileData.industry || '',
         websiteUrl: profileData.websiteUrl || '',
-        cityId: profileData.city?.id ?? null,
-        cityName: profileData.city?.name || '',
-        locationId: profileData.location?.id ?? null,
+        cityId: profileData.cityId ?? profileData.city?.id ?? null,
+        cityName: profileData.cityName || profileData.city?.name || '',
+        locationId: profileData.locationId ?? profileData.location?.id ?? null,
         companySize: profileData.companySize || '',
         foundedYear: profileData.foundedYear ?? '',
         socialLinks: Array.isArray(profileData.socialLinks) ? profileData.socialLinks : [],
         publicContacts: Array.isArray(profileData.publicContacts) ? profileData.publicContacts : [],
         verificationStatus: profileData.verificationStatus || '',
         moderationStatus: profileData.moderationStatus || 'DRAFT',
+        logo: profileData.logo || null,
     }
 }
 
-function mergeEmployerProfileSafely(prev, patch) {
-    return {
-        ...prev,
-        ...normalizeEmployerProfile(patch),
+function getEmployerModerationStatusMeta(status) {
+    switch (status) {
+        case 'PENDING_MODERATION':
+            return {
+                label: 'На модерации',
+                tone: 'pending',
+                description: 'Профиль отправлен куратору и ожидает проверки.',
+            }
+        case 'APPROVED':
+            return {
+                label: 'Одобрен',
+                tone: 'approved',
+                description: 'Профиль работодателя прошёл модерацию.',
+            }
+        case 'NEEDS_REVISION':
+            return {
+                label: 'Нужны правки',
+                tone: 'revision',
+                description: 'Куратор вернул профиль на доработку. Исправьте данные и отправьте его повторно.',
+            }
+        default:
+            return {
+                label: 'Не отправлен на модерацию',
+                tone: 'draft',
+                description: 'Профиль ещё не отправлялся на проверку.',
+            }
     }
 }
+
+function firstNonEmptyString(...values) {
+    for (const value of values) {
+        if (typeof value === 'string' && value.trim()) {
+            return value.trim()
+        }
+    }
+
+    return ''
+}
+
+function normalizeFieldIssues(items = []) {
+    const seen = new Set()
+
+    return items
+        .filter((item) => item && typeof item === 'object')
+        .map((item) => ({
+            field: item.field || '',
+            message: item.message || '',
+            code: item.code || '',
+        }))
+        .filter((item) => item.message)
+        .filter((item) => {
+            const key = `${item.field}|${item.message}|${item.code}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+        })
+}
+
+function extractModerationFeedback(historyItems = [], taskDetail = null) {
+    const sortedHistory = [...historyItems].sort(
+        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    )
+
+    const latestRevisionEvent =
+        sortedHistory.find((item) => item?.action === 'REQUESTED_CHANGES') ||
+        sortedHistory.find((item) => item?.action === 'REJECTED') ||
+        null
+
+    if (!latestRevisionEvent && !taskDetail) {
+        return null
+    }
+
+    const payload = latestRevisionEvent?.payload && typeof latestRevisionEvent.payload === 'object'
+        ? latestRevisionEvent.payload
+        : {}
+
+    const taskHistoryFieldIssues = Array.isArray(taskDetail?.history)
+        ? taskDetail.history.flatMap((item) =>
+            Array.isArray(item?.payload?.fieldIssues) ? item.payload.fieldIssues : []
+        )
+        : []
+
+    const fieldIssues = normalizeFieldIssues([
+        ...(Array.isArray(payload.fieldIssues) ? payload.fieldIssues : []),
+        ...taskHistoryFieldIssues,
+    ])
+
+    const comment = firstNonEmptyString(
+        payload.comment,
+        payload.message,
+        payload.text,
+        payload.resolutionComment,
+        taskDetail?.resolutionComment
+    )
+
+    if (!comment && fieldIssues.length === 0) {
+        return null
+    }
+
+    return {
+        action: latestRevisionEvent?.action || null,
+        comment,
+        fieldIssues,
+        createdAt: latestRevisionEvent?.createdAt || taskDetail?.updatedAt || null,
+        taskId: latestRevisionEvent?.taskId || taskDetail?.id || null,
+    }
+}
+
+// FILE CONTINUES...
 
 function EmployerDashboard() {
     const { toast } = useToast()
@@ -302,6 +357,9 @@ function EmployerDashboard() {
     const [errors, setErrors] = useState({})
     const [expandedOpportunityId, setExpandedOpportunityId] = useState(null)
     const [showVerificationModal, setShowVerificationModal] = useState(false)
+    const [isLogoUploading, setIsLogoUploading] = useState(false)
+    const [moderationFeedback, setModerationFeedback] = useState(null)
+    const [isModerationFeedbackLoading, setIsModerationFeedbackLoading] = useState(false)
 
     const [opportunitySearchTerm, setOpportunitySearchTerm] = useState('')
     const [opportunityFilterStatus, setOpportunityFilterStatus] = useState('all')
@@ -319,6 +377,7 @@ function EmployerDashboard() {
     const [citySearchQuery, setCitySearchQuery] = useState('')
     const [citySuggestions, setCitySuggestions] = useState([])
     const citySearchRef = useRef(null)
+    const logoInputRef = useRef(null)
 
     const [socialRows, setSocialRows] = useState([createLinkRow()])
     const [contactRows, setContactRows] = useState([createLinkRow()])
@@ -333,6 +392,7 @@ function EmployerDashboard() {
     })
 
     const [profile, setProfile] = useState({
+        userId: null,
         companyName: '',
         legalName: '',
         inn: '',
@@ -348,6 +408,7 @@ function EmployerDashboard() {
         publicContacts: [],
         verificationStatus: '',
         moderationStatus: 'DRAFT',
+        logo: null,
     })
 
     const [opportunityForm, setOpportunityForm] = useState({
@@ -385,6 +446,11 @@ function EmployerDashboard() {
     const moderationState = profile.moderationStatus || 'DRAFT'
     const isVerified = verificationState === 'APPROVED'
     const isVerificationRejected = verificationState === 'REJECTED'
+    const moderationMeta = getEmployerModerationStatusMeta(moderationState)
+
+    const logoUrl = profile.logo?.fileId && profile.userId
+        ? getFileDownloadUrlByUserAndFile('EMPLOYER', profile.userId, profile.logo.fileId)
+        : null
 
     const linksToRows = (items = []) =>
         items.length > 0
@@ -472,8 +538,8 @@ function EmployerDashboard() {
         })
     }
 
-    const syncProfileState = useCallback((profileData) => {
-        const normalized = normalizeEmployerProfile(profileData)
+    const syncProfileState = useCallback((profileData, fallbackUser = user) => {
+        const normalized = normalizeEmployerProfileState(profileData, fallbackUser)
 
         setProfile(normalized)
         setSocialRows(linksToRows(normalized.socialLinks))
@@ -488,16 +554,56 @@ function EmployerDashboard() {
         setVerificationData((prev) => ({
             ...prev,
             inn: normalized.inn || '',
+            corporateEmail: prev.corporateEmail || fallbackUser?.email || '',
         }))
 
         return normalized
+    }, [user])
+
+    const loadModerationFeedback = useCallback(async (entityId) => {
+        if (!entityId) {
+            setModerationFeedback(null)
+            return
+        }
+
+        setIsModerationFeedbackLoading(true)
+
+        try {
+            const history = await getEntityModerationHistory('EMPLOYER_PROFILE', entityId)
+            const sortedHistory = Array.isArray(history)
+                ? [...history].sort(
+                    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+                )
+                : []
+
+            const latestRevisionEvent =
+                sortedHistory.find((item) => item?.action === 'REQUESTED_CHANGES') ||
+                sortedHistory.find((item) => item?.action === 'REJECTED') ||
+                null
+
+            let taskDetail = null
+            if (latestRevisionEvent?.taskId) {
+                try {
+                    taskDetail = await getModerationTaskDetail(latestRevisionEvent.taskId)
+                } catch {
+                    taskDetail = null
+                }
+            }
+
+            setModerationFeedback(extractModerationFeedback(sortedHistory, taskDetail))
+        } catch {
+            setModerationFeedback(null)
+        } finally {
+            setIsModerationFeedbackLoading(false)
+        }
     }, [])
 
     const reloadEmployerProfile = useCallback(async () => {
-        if (!user?.userId) return null
-        const freshProfile = await fetchEmployerProfileByUserId(user.userId)
-        return syncProfileState(freshProfile)
-    }, [syncProfileState, user])
+        const freshProfile = await getEmployerProfile()
+        const normalized = syncProfileState(freshProfile || {}, user)
+        await loadModerationFeedback(normalized.userId || user?.userId)
+        return normalized
+    }, [loadModerationFeedback, syncProfileState, user])
 
     const moderationMissingItems = useMemo(() => {
         const items = []
@@ -525,6 +631,16 @@ function EmployerDashboard() {
 
         return items
     }, [profile, socialRows, contactRows])
+
+    const canSubmitProfileToModeration =
+        moderationState !== 'PENDING_MODERATION' &&
+        moderationMissingItems.length === 0
+
+    const moderationSubmitButtonText = useMemo(() => {
+        if (moderationState === 'APPROVED') return 'Отправить обновления на модерацию'
+        if (moderationState === 'NEEDS_REVISION') return 'Отправить исправления на модерацию'
+        return 'Отправить профиль на модерацию'
+    }, [moderationState])
 
     const validatePublicProfile = () => {
         const nextErrors = {}
@@ -648,7 +764,7 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            const currentUser = await fetchCurrentSessionUser()
+            const currentUser = await getCurrentSessionUser()
             setUser(currentUser)
 
             if (!currentUser?.userId) {
@@ -657,14 +773,10 @@ function EmployerDashboard() {
                 return
             }
 
-            const profileData = await fetchEmployerProfileByUserId(currentUser.userId)
-            const normalized = syncProfileState(profileData)
+            const profileData = await getEmployerProfile()
+            const normalized = syncProfileState(profileData || {}, currentUser)
 
-            setVerificationData((prev) => ({
-                ...prev,
-                inn: normalized.inn || '',
-                corporateEmail: prev.corporateEmail || currentUser.email || '',
-            }))
+            await loadModerationFeedback(normalized.userId || currentUser.userId)
 
             try {
                 const opportunityPage = await getEmployerOpportunities()
@@ -705,7 +817,7 @@ function EmployerDashboard() {
         } finally {
             setIsLoading(false)
         }
-    }, [responseFilters, syncProfileState, toast])
+    }, [loadModerationFeedback, responseFilters, syncProfileState, toast])
 
     useEffect(() => {
         loadData()
@@ -749,6 +861,71 @@ function EmployerDashboard() {
         )
     }, [isEditingProfile, profile])
 
+    const handleLogoUpload = async (event) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml']
+        const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.svg']
+        const fileName = file.name?.toLowerCase() || ''
+        const hasAllowedExtension = allowedExtensions.some((extension) => fileName.endsWith(extension))
+        const hasAllowedType = !file.type || allowedTypes.includes(file.type)
+
+        if (!hasAllowedType || !hasAllowedExtension) {
+            toast({
+                title: 'Неверный формат логотипа',
+                description: `Можно загрузить только ${EMPLOYER_LOGO_FORMATS_HINT}.`,
+                variant: 'destructive',
+            })
+            event.target.value = ''
+            return
+        }
+
+        try {
+            setIsLogoUploading(true)
+            const updatedProfile = await uploadEmployerLogo(file)
+            syncProfileState(updatedProfile, user)
+            toast({
+                title: 'Логотип загружен',
+                description: 'Логотип компании успешно обновлён',
+            })
+        } catch (error) {
+            const fallbackMessage = error?.message || 'Не удалось загрузить логотип'
+            const detailsMessage =
+                error?.status === 400 || error?.status === 415
+                    ? `${fallbackMessage}. Допустимые форматы: ${EMPLOYER_LOGO_FORMATS_HINT}.`
+                    : fallbackMessage
+
+            toast({
+                title: 'Ошибка',
+                description: detailsMessage,
+                variant: 'destructive',
+            })
+        } finally {
+            setIsLogoUploading(false)
+            event.target.value = ''
+        }
+    }
+
+    const handleDeleteLogo = async () => {
+        if (!profile.logo?.fileId) return
+
+        try {
+            const updatedProfile = await deleteEmployerFile(profile.logo.fileId)
+            syncProfileState(updatedProfile, user)
+            toast({
+                title: 'Логотип удалён',
+                description: 'Логотип компании удалён из профиля',
+            })
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось удалить логотип',
+                variant: 'destructive',
+            })
+        }
+    }
+
     const handleSaveProfile = async () => {
         const validation = validatePublicProfile()
 
@@ -764,41 +941,25 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            const updatedProfile = await patchEmployerProfileRequest(buildEmployerProfilePayload())
-            const normalized = syncProfileState(updatedProfile)
+            const updatedProfile = await updateEmployerProfile(buildEmployerProfilePayload())
+            const normalized = syncProfileState(updatedProfile, user)
 
-            if (profile.moderationStatus === 'APPROVED' || profile.moderationStatus === 'NEEDS_REVISION') {
-                const submittedProfile = await submitEmployerProfileForModerationRequest()
-                const submittedNormalized = syncProfileState(submittedProfile)
+            toast({
+                title: 'Профиль сохранён',
+                description:
+                    moderationState === 'PENDING_MODERATION'
+                        ? 'Изменения сохранены. Профиль уже находится на модерации.'
+                        : 'Изменения сохранены. Теперь профиль можно отправить на модерацию.',
+            })
 
-                toast({
-                    title: 'Профиль сохранён',
-                    description: 'Изменения автоматически отправлены на повторную модерацию',
+            window.dispatchEvent(
+                new CustomEvent('profile-updated', {
+                    detail: {
+                        companyName: normalized.companyName,
+                        role: 'EMPLOYER',
+                    },
                 })
-
-                window.dispatchEvent(
-                    new CustomEvent('profile-updated', {
-                        detail: {
-                            companyName: submittedNormalized.companyName,
-                            role: 'EMPLOYER',
-                        },
-                    })
-                )
-            } else {
-                toast({
-                    title: 'Профиль сохранён',
-                    description: 'Изменения сохранены',
-                })
-
-                window.dispatchEvent(
-                    new CustomEvent('profile-updated', {
-                        detail: {
-                            companyName: normalized.companyName,
-                            role: 'EMPLOYER',
-                        },
-                    })
-                )
-            }
+            )
 
             setIsEditingProfile(false)
         } catch (error) {
@@ -827,7 +988,7 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            await patchEmployerCompanyRequest(buildEmployerCompanyPayload())
+            await updateEmployerCompanyData(buildEmployerCompanyPayload())
             await reloadEmployerProfile()
 
             toast({
@@ -862,14 +1023,25 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            await patchEmployerProfileRequest(buildEmployerProfilePayload())
-            const updatedAfterSubmit = await submitEmployerProfileForModerationRequest()
-            syncProfileState(updatedAfterSubmit)
+            await updateEmployerProfile(buildEmployerProfilePayload())
+            const updatedAfterSubmit = await submitEmployerProfileForModeration()
+            const normalized = syncProfileState(updatedAfterSubmit, user)
+
+            setModerationFeedback(null)
 
             toast({
                 title: 'Профиль отправлен на модерацию',
-                description: 'Профиль работодателя отправлен на проверку',
+                description: 'Профиль работодателя отправлен на проверку куратору.',
             })
+
+            window.dispatchEvent(
+                new CustomEvent('profile-updated', {
+                    detail: {
+                        companyName: normalized.companyName,
+                        role: 'EMPLOYER',
+                    },
+                })
+            )
 
             setIsEditingProfile(false)
             setIsEditingCompanyData(false)
@@ -936,7 +1108,7 @@ function EmployerDashboard() {
             if (verificationData.verificationMethod === 'TIN') {
                 const normalizedInn = (verificationData.inn || profile.inn || '').trim()
 
-                await patchEmployerCompanyRequest({
+                await updateEmployerCompanyData({
                     legalName: profile.legalName?.trim() || '',
                     inn: normalizedInn,
                 })
@@ -944,17 +1116,15 @@ function EmployerDashboard() {
                 await reloadEmployerProfile()
             }
 
-            const payload = {
+            await submitVerification({
                 verificationMethod: verificationData.verificationMethod,
+                corporateEmail:
+                    verificationData.verificationMethod === 'CORPORATE_EMAIL'
+                        ? verificationData.corporateEmail.trim()
+                        : null,
                 professionalLinks,
                 submittedComment: verificationData.submittedComment?.trim() || '',
-            }
-
-            if (verificationData.verificationMethod === 'CORPORATE_EMAIL') {
-                payload.corporateEmail = verificationData.corporateEmail.trim()
-            }
-
-            await createEmployerVerificationRequest(user.userId, payload)
+            })
 
             setProfile((prev) => ({ ...prev, verificationStatus: 'PENDING' }))
             setShowVerificationModal(false)
@@ -1237,7 +1407,10 @@ function EmployerDashboard() {
     }
 
     return (
-        <DashboardLayout title="Управление компанией" subtitle={profile.companyName || 'Компания'}>
+        <DashboardLayout
+            title="Управление компанией"
+            subtitle={profile.companyName || user?.displayName || 'Компания'}
+        >
             {!isVerified && (
                 <div className={`verification-banner ${isVerificationRejected ? 'verification-banner--warning' : ''}`}>
                     <div className="verification-banner__content">
@@ -1693,6 +1866,14 @@ function EmployerDashboard() {
 
                 {activeTab === 'profile' && (
                     <div className="employer-profile">
+                        <input
+                            ref={logoInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                            hidden
+                            onChange={handleLogoUpload}
+                        />
+
                         {!isEditingProfile && !isEditingCompanyData ? (
                             <div className="employer-profile__view">
                                 <div className="employer-profile__view-header">
@@ -1709,9 +1890,106 @@ function EmployerDashboard() {
                                     </div>
                                 </div>
 
-                                {moderationMissingItems.length > 0 && (
-                                    <div className="field-hint" style={{ marginBottom: '16px' }}>
-                                        Для отправки на модерацию заполните: {moderationMissingItems.join(', ')}.
+                                <div className="employer-profile__hero">
+                                    <div className="employer-profile__logo-card">
+                                        {logoUrl ? (
+                                            <img
+                                                src={logoUrl}
+                                                alt={profile.companyName || 'Логотип компании'}
+                                                className="employer-profile__logo-image"
+                                            />
+                                        ) : (
+                                            <div className="employer-profile__logo-placeholder">
+                                                {(profile.companyName?.trim()?.[0] || 'C').toUpperCase()}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="employer-profile__hero-info">
+                                        <div className="employer-profile__hero-title-row">
+                                            <h3>{profile.companyName || 'Компания без названия'}</h3>
+                                        </div>
+
+                                        <div className="employer-profile__hero-submeta">
+                                            <div className={`employer-profile__status-chip employer-profile__status-chip--${moderationMeta.tone}`}>
+                                                <span className="employer-profile__status-chip-label">Профиль</span>
+                                                <span className="employer-profile__status-chip-value">{moderationMeta.label}</span>
+                                            </div>
+
+                                            <div className={`employer-profile__status-chip employer-profile__status-chip--verification-${(verificationState || 'not_started').toLowerCase()}`}>
+                                                <span className="employer-profile__status-chip-label">Верификация</span>
+                                                <span className="employer-profile__status-chip-value">
+                                                    {verificationState === 'APPROVED' && 'Пройдена'}
+                                                    {verificationState === 'PENDING' && 'На проверке'}
+                                                    {verificationState === 'REJECTED' && 'Отклонена'}
+                                                    {verificationState === 'NOT_STARTED' && 'Не начата'}
+                                                    {!['APPROVED', 'PENDING', 'REJECTED', 'NOT_STARTED'].includes(verificationState) && verificationState}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p className="employer-profile__hero-text">
+                                            {moderationMeta.description}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {moderationState === 'NEEDS_REVISION' && (
+                                    <div className="employer-profile__revision-card">
+                                        <div className="employer-profile__revision-header">
+                                            <h3>Профиль требует доработки</h3>
+                                            {isModerationFeedbackLoading && (
+                                                <span className="employer-profile__revision-meta">Загружаем комментарий куратора…</span>
+                                            )}
+                                        </div>
+
+                                        <p className="employer-profile__revision-text">
+                                            Куратор вернул профиль на правки. Исправьте данные и отправьте профиль повторно.
+                                        </p>
+
+                                        {moderationFeedback?.comment && (
+                                            <div className="employer-profile__revision-block">
+                                                <span className="employer-profile__revision-label">Комментарий куратора</span>
+                                                <p>{moderationFeedback.comment}</p>
+                                            </div>
+                                        )}
+
+                                        {moderationFeedback?.fieldIssues?.length > 0 && (
+                                            <div className="employer-profile__revision-block">
+                                                <span className="employer-profile__revision-label">Что нужно исправить</span>
+                                                <ul className="employer-profile__revision-list">
+                                                    {moderationFeedback.fieldIssues.map((issue, index) => (
+                                                        <li key={`${issue.field || 'field'}-${index}`}>
+                                                            <strong>{issue.field || 'Поле'}:</strong> {issue.message}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {moderationFeedback?.createdAt && (
+                                            <p className="employer-profile__revision-meta">
+                                                Последнее замечание: {formatDate(moderationFeedback.createdAt)}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {(moderationState === 'DRAFT' || moderationState === 'APPROVED' || moderationState === 'NEEDS_REVISION') && (
+                                    <div className="employer-profile__moderation-actions">
+                                        {moderationMissingItems.length > 0 && (
+                                            <div className="employer-profile__moderation-hint">
+                                                Для отправки на модерацию заполните: {moderationMissingItems.join(', ')}.
+                                            </div>
+                                        )}
+
+                                        <Button
+                                            className="button--primary"
+                                            onClick={handleSubmitEmployerProfileForModeration}
+                                            disabled={isLoading || !canSubmitProfileToModeration}
+                                        >
+                                            {isLoading ? 'Отправка...' : moderationSubmitButtonText}
+                                        </Button>
                                     </div>
                                 )}
 
@@ -1756,7 +2034,7 @@ function EmployerDashboard() {
                                         <Label>Год основания</Label>
                                         <div className="field-value">{profile.foundedYear || '—'}</div>
                                     </div>
-                                    <div className="employer-profile__field">
+                                    <div className="employer-profile__field employer-profile__field--wide">
                                         <Label>Описание</Label>
                                         <div className="field-value">{profile.description || '—'}</div>
                                     </div>
@@ -1798,30 +2076,16 @@ function EmployerDashboard() {
                                             {verificationState === 'PENDING' && 'На проверке'}
                                             {verificationState === 'REJECTED' && 'Отклонён'}
                                             {verificationState === 'NOT_STARTED' && 'Не начата'}
+                                            {!['APPROVED', 'PENDING', 'REJECTED', 'NOT_STARTED'].includes(verificationState) && verificationState}
                                         </div>
                                     </div>
                                     <div className="employer-profile__field">
                                         <Label>Статус модерации профиля</Label>
-                                        <div className="field-value">
-                                            {moderationState === 'DRAFT' && 'Не отправлен на модерацию'}
-                                            {moderationState === 'PENDING_MODERATION' && 'На модерации'}
-                                            {moderationState === 'APPROVED' && 'Одобрен'}
-                                            {moderationState === 'NEEDS_REVISION' && 'Нужны правки'}
+                                        <div className={`field-value employer-profile__moderation-state employer-profile__moderation-state--${moderationMeta.tone}`}>
+                                            {moderationMeta.label}
                                         </div>
                                     </div>
                                 </div>
-
-                                {(moderationState === 'DRAFT' || moderationState === 'NEEDS_REVISION') && (
-                                    <div className="employer-profile__edit-actions">
-                                        <Button
-                                            className="button--primary"
-                                            onClick={handleSubmitEmployerProfileForModeration}
-                                            disabled={isLoading || moderationMissingItems.length > 0}
-                                        >
-                                            {isLoading ? 'Отправка...' : 'Отправить профиль на модерацию'}
-                                        </Button>
-                                    </div>
-                                )}
                             </div>
                         ) : isEditingCompanyData ? (
                             <div className="employer-profile__edit">
@@ -1888,123 +2152,209 @@ function EmployerDashboard() {
                                     </button>
                                 </div>
 
-                                <div className="employer-profile__edit-field">
-                                    <Label>Название компании <span className="required-star">*</span></Label>
-                                    <Input
-                                        value={profile.companyName}
-                                        onChange={(e) => setProfile((prev) => ({
-                                            ...prev,
-                                            companyName: e.target.value,
-                                        }))}
-                                        placeholder="Как компания будет отображаться на платформе"
-                                    />
-                                    {errors.companyName && <p className="field-error">{errors.companyName}</p>}
-                                </div>
-
-                                <div className="employer-profile__edit-grid">
-                                    <div className="employer-profile__edit-field">
-                                        <Label>Сфера деятельности <span className="required-star">*</span></Label>
-                                        <Input
-                                            value={profile.industry}
-                                            onChange={(e) => setProfile((prev) => ({
-                                                ...prev,
-                                                industry: e.target.value,
-                                            }))}
-                                        />
-                                        {errors.industry && <p className="field-error">{errors.industry}</p>}
+                                <div className="employer-profile__edit-section employer-profile__edit-section--accent">
+                                    <div className="employer-profile__edit-section-header">
+                                        <h3 className="employer-profile__edit-section-title">Брендинг</h3>
+                                        <p className="employer-profile__edit-section-text">
+                                            Загрузите логотип, который будет отображаться в публичном профиле компании.
+                                        </p>
                                     </div>
 
-                                    <div className="employer-profile__edit-field">
-                                        <Label>Сайт компании</Label>
-                                        <Input
-                                            value={profile.websiteUrl}
-                                            onChange={(e) => setProfile((prev) => ({
-                                                ...prev,
-                                                websiteUrl: e.target.value,
-                                            }))}
-                                        />
-                                    </div>
-                                </div>
+                                    <div className="employer-profile__logo-manager">
+                                        <div className="employer-profile__logo-manager-card">
+                                            <div className="employer-profile__logo-manager-preview">
+                                                {logoUrl ? (
+                                                    <img
+                                                        src={logoUrl}
+                                                        alt={profile.companyName || 'Логотип компании'}
+                                                        className="employer-profile__logo-image"
+                                                    />
+                                                ) : (
+                                                    <div className="employer-profile__logo-placeholder">
+                                                        {(profile.companyName?.trim()?.[0] || 'C').toUpperCase()}
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                <div className="employer-profile__edit-grid">
-                                    <div className="employer-profile__edit-field" ref={citySearchRef}>
-                                        <Label>Город <span className="required-star">*</span></Label>
-                                        <div className="autocomplete">
-                                            <Input
-                                                value={citySearchQuery}
-                                                onChange={(e) => handleCitySearch(e.target.value)}
-                                                onFocus={() => citySearchQuery.length >= 2 && citySuggestions.length > 0 && setIsCitySearchOpen(true)}
-                                                placeholder="Начните вводить город"
-                                            />
-                                            {isCitySearchOpen && citySuggestions.length > 0 && (
-                                                <div className="autocomplete__list" role="listbox">
-                                                    {citySuggestions.map((city) => (
-                                                        <button
-                                                            key={city.id}
-                                                            type="button"
-                                                            className="autocomplete__item"
-                                                            onMouseDown={(e) => e.preventDefault()}
-                                                            onClick={() => handleSelectCity(city)}
+                                            <div className="employer-profile__logo-manager-body">
+                                                <div className="employer-profile__logo-manager-actions">
+                                                    <Button
+                                                        className="button--outline"
+                                                        onClick={() => logoInputRef.current?.click()}
+                                                        disabled={isLogoUploading}
+                                                    >
+                                                        {isLogoUploading
+                                                            ? 'Загрузка...'
+                                                            : profile.logo
+                                                                ? 'Заменить логотип'
+                                                                : 'Загрузить логотип'}
+                                                    </Button>
+
+                                                    {profile.logo && (
+                                                        <Button
+                                                            className="button--ghost employer-profile__danger-button"
+                                                            onClick={handleDeleteLogo}
+                                                            disabled={isLogoUploading}
                                                         >
-                                                            {city.name}
-                                                        </button>
-                                                    ))}
+                                                            Удалить
+                                                        </Button>
+                                                    )}
                                                 </div>
-                                            )}
+
+                                                <p className="employer-profile__upload-hint">
+                                                    Поддерживаются форматы: {EMPLOYER_LOGO_FORMATS_HINT}.
+                                                </p>
+                                            </div>
                                         </div>
-                                        {errors.city && <p className="field-error">{errors.city}</p>}
+                                    </div>
+                                </div>
+
+                                <div className="employer-profile__edit-section">
+                                    <div className="employer-profile__edit-section-header">
+                                        <h3 className="employer-profile__edit-section-title">Основная информация</h3>
+                                        <p className="employer-profile__edit-section-text">
+                                            Эти данные увидят соискатели в карточке и в публичном профиле компании.
+                                        </p>
                                     </div>
 
-                                    <CustomSelect
-                                        label="Размер компании"
-                                        value={profile.companySize}
-                                        onChange={(val) => setProfile((prev) => ({ ...prev, companySize: val }))}
-                                        options={COMPANY_SIZE_OPTIONS}
-                                    />
+                                    <div className="employer-profile__edit-field">
+                                        <Label>Название компании <span className="required-star">*</span></Label>
+                                        <Input
+                                            value={profile.companyName}
+                                            onChange={(e) => setProfile((prev) => ({
+                                                ...prev,
+                                                companyName: e.target.value,
+                                            }))}
+                                            placeholder="Как компания будет отображаться на платформе"
+                                        />
+                                        {errors.companyName && <p className="field-error">{errors.companyName}</p>}
+                                    </div>
+
+                                    <div className="employer-profile__edit-grid">
+                                        <div className="employer-profile__edit-field">
+                                            <Label>Сфера деятельности <span className="required-star">*</span></Label>
+                                            <Input
+                                                value={profile.industry}
+                                                onChange={(e) => setProfile((prev) => ({
+                                                    ...prev,
+                                                    industry: e.target.value,
+                                                }))}
+                                            />
+                                            {errors.industry && <p className="field-error">{errors.industry}</p>}
+                                        </div>
+
+                                        <div className="employer-profile__edit-field">
+                                            <Label>Сайт компании</Label>
+                                            <Input
+                                                value={profile.websiteUrl}
+                                                onChange={(e) => setProfile((prev) => ({
+                                                    ...prev,
+                                                    websiteUrl: e.target.value,
+                                                }))}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="employer-profile__edit-field">
-                                    <Label>Год основания</Label>
-                                    <Input
-                                        value={profile.foundedYear || ''}
-                                        onChange={(e) => setProfile((prev) => ({
-                                            ...prev,
-                                            foundedYear: e.target.value.replace(/[^\d]/g, '').slice(0, 4),
-                                        }))}
-                                    />
+                                <div className="employer-profile__edit-section">
+                                    <div className="employer-profile__edit-section-header">
+                                        <h3 className="employer-profile__edit-section-title">Локация и параметры</h3>
+                                        <p className="employer-profile__edit-section-text">
+                                            Укажите город, размер компании и дополнительные сведения для карточки работодателя.
+                                        </p>
+                                    </div>
+
+                                    <div className="employer-profile__edit-grid">
+                                        <div className="employer-profile__edit-field" ref={citySearchRef}>
+                                            <Label>Город <span className="required-star">*</span></Label>
+                                            <div className="autocomplete">
+                                                <Input
+                                                    value={citySearchQuery}
+                                                    onChange={(e) => handleCitySearch(e.target.value)}
+                                                    onFocus={() => citySearchQuery.length >= 2 && citySuggestions.length > 0 && setIsCitySearchOpen(true)}
+                                                    placeholder="Начните вводить город"
+                                                />
+                                                {isCitySearchOpen && citySuggestions.length > 0 && (
+                                                    <div className="autocomplete__list" role="listbox">
+                                                        {citySuggestions.map((city) => (
+                                                            <button
+                                                                key={city.id}
+                                                                type="button"
+                                                                className="autocomplete__item"
+                                                                onMouseDown={(e) => e.preventDefault()}
+                                                                onClick={() => handleSelectCity(city)}
+                                                            >
+                                                                {city.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {errors.city && <p className="field-error">{errors.city}</p>}
+                                        </div>
+
+                                        <CustomSelect
+                                            label="Размер компании"
+                                            value={profile.companySize}
+                                            onChange={(val) => setProfile((prev) => ({ ...prev, companySize: val }))}
+                                            options={COMPANY_SIZE_OPTIONS}
+                                        />
+                                    </div>
+
+                                    <div className="employer-profile__edit-field">
+                                        <Label>Год основания</Label>
+                                        <Input
+                                            value={profile.foundedYear || ''}
+                                            onChange={(e) => setProfile((prev) => ({
+                                                ...prev,
+                                                foundedYear: e.target.value.replace(/[^\d]/g, '').slice(0, 4),
+                                            }))}
+                                        />
+                                    </div>
                                 </div>
 
-                                <div className="employer-profile__edit-field">
-                                    <Label>Описание компании</Label>
-                                    <Textarea
-                                        rows={4}
-                                        value={profile.description}
-                                        onChange={(e) => setProfile((prev) => ({
-                                            ...prev,
-                                            description: e.target.value,
-                                        }))}
-                                    />
+                                <div className="employer-profile__edit-section">
+                                    <div className="employer-profile__edit-section-header">
+                                        <h3 className="employer-profile__edit-section-title">Описание и публичные каналы</h3>
+                                        <p className="employer-profile__edit-section-text">
+                                            Добавьте описание, ссылки на сайт и способы связи, чтобы профиль выглядел завершённым и вызывал доверие.
+                                        </p>
+                                    </div>
+
+                                    <div className="employer-profile__edit-field">
+                                        <Label>Описание компании</Label>
+                                        <Textarea
+                                            rows={4}
+                                            value={profile.description}
+                                            onChange={(e) => setProfile((prev) => ({
+                                                ...prev,
+                                                description: e.target.value,
+                                            }))}
+                                        />
+                                    </div>
+
+                                    <div className="employer-profile__edit-stack">
+                                        <LinksEditor
+                                            label="Социальные сети"
+                                            rows={socialRows}
+                                            setRows={setSocialRows}
+                                            placeholderTitle="Название"
+                                            placeholderUrl="https://..."
+                                        />
+
+                                        <div className="employer-profile__contacts-block">
+                                            <LinksEditor
+                                                label="Контакты для связи"
+                                                rows={contactRows}
+                                                setRows={setContactRows}
+                                                placeholderTitle="Тип контакта"
+                                                placeholderUrl="mailto: / tel: / https://..."
+                                            />
+                                        </div>
+
+                                        {errors.publicContacts && <p className="field-error">{errors.publicContacts}</p>}
+                                    </div>
                                 </div>
-
-                                <LinksEditor
-                                    label="Социальные сети"
-                                    rows={socialRows}
-                                    setRows={setSocialRows}
-                                    placeholderTitle="Название"
-                                    placeholderUrl="https://..."
-                                />
-
-                                <div className="employer-profile__contacts-block">
-                                    <LinksEditor
-                                        label="Контакты для связи"
-                                        rows={contactRows}
-                                        setRows={setContactRows}
-                                        placeholderTitle="Тип контакта"
-                                        placeholderUrl="mailto: / tel: / https://..."
-                                    />
-                                </div>
-
-                                {errors.publicContacts && <p className="field-error">{errors.publicContacts}</p>}
 
                                 <div className="employer-profile__edit-actions">
                                     <Button className="button--primary" onClick={handleSaveProfile} disabled={isLoading}>
