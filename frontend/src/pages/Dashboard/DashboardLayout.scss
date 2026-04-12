@@ -29,8 +29,15 @@
   color: var(--color-text-muted);
 }
 
-.dashboard-layout__action {
+.dashboard-layout__actions {
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.dashboard-layout__action {
   min-height: 44px;
   padding: 0 16px;
   display: inline-flex;
@@ -56,6 +63,11 @@
   .dashboard-layout__header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .dashboard-layout__actions {
+    width: 100%;
+    justify-content: stretch;
   }
 
   .dashboard-layout__action {
