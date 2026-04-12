@@ -17,8 +17,8 @@ import {
     addToSaved,
     removeFromSaved,
     applyToOpportunity,
-    getSeekerSaved,
 } from '../../../api/profile'
+import { getSavedFavorites } from '../../../api/favorites'
 import {
     getSessionUser,
     subscribeSessionChange,
@@ -256,8 +256,8 @@ function OpportunitiesPage() {
         }
 
         try {
-            const saved = await getSeekerSaved()
-            const next = new Set(saved.map((item) => item.id))
+            const saved = await getSavedFavorites()
+            const next = new Set((saved.opportunities || []).map((item) => item.id))
             setFavoriteOpportunities(next)
             setStorageSet('favorite_opportunities', next, currentUser)
         } catch (syncError) {
