@@ -96,6 +96,19 @@ export default function ApplicantSearchPage() {
 
     const currentUser = useMemo(() => getSessionUser(), [])
     const backHref = getDashboardPathByRole(currentUser?.role)
+    const isApplicantViewer = currentUser?.role === 'APPLICANT'
+
+    const pageTitle = isApplicantViewer
+        ? 'Профессиональное сообщество'
+        : 'Каталог соискателей'
+
+    const pageSubtitle = isApplicantViewer
+        ? 'Ищите людей по профилю, навыкам и интересам для нетворкинга и карьерного общения'
+        : 'Поиск студентов и выпускников по профилю, городу и карьерным интересам'
+
+    const searchPlaceholder = isApplicantViewer
+        ? 'Имя, вуз, факультет, программа или ключевое слово'
+        : 'Имя, вуз, факультет, программа или описание'
 
     const [filters, setFilters] = useState(createDefaultFilters)
     const [appliedFilters, setAppliedFilters] = useState(createDefaultFilters)
@@ -317,8 +330,8 @@ export default function ApplicantSearchPage() {
 
     return (
         <DashboardLayout
-            title="Каталог соискателей"
-            subtitle="Поиск студентов и выпускников по профилю, городу и карьерным интересам"
+            title={pageTitle}
+            subtitle={pageSubtitle}
             hideHeaderActions
         >
             <div className="applicant-search">
@@ -355,7 +368,7 @@ export default function ApplicantSearchPage() {
                                     }))
                                     setPageNumber(1)
                                 }}
-                                placeholder="Имя, вуз, факультет, программа, описание"
+                                placeholder={searchPlaceholder}
                             />
                         </div>
 
