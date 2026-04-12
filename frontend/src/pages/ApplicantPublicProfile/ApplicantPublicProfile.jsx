@@ -20,6 +20,7 @@ function formatDate(dateString) {
     if (!dateString) return '—'
     const date = new Date(dateString)
     if (Number.isNaN(date.getTime())) return '—'
+
     return date.toLocaleDateString('ru-RU', {
         day: 'numeric',
         month: 'long',
@@ -89,11 +90,20 @@ async function getApplicantPublicContacts(userId, currentUserId) {
     return apiRequest(`/api/profile/applicant/${userId}/contacts${query}`)
 }
 
-function canShowBlock(visibility, isOwner, isAuthenticated) {
+function canShowBlock(
+    visibility,
+    {
+        isOwner = false,
+        isAuthenticated = false,
+        isAcceptedContact = false,
+        allowServerOverride = false,
+    } = {}
+) {
     if (isOwner) return true
+    if (allowServerOverride) return true
     if (visibility === 'PUBLIC') return true
     if (visibility === 'AUTHENTICATED') return isAuthenticated
-    if (visibility === 'CONTACTS_ONLY') return false
+    if (visibility === 'CONTACTS_ONLY') return isAcceptedContact
     return false
 }
 
@@ -167,6 +177,46 @@ function renderContactValue(contact) {
     return <span className="applicant-public-profile__contact-text">{value}</span>
 }
 
+function findViewerRelationship(contacts, applicantId) {
+    if (!Array.isArray(contacts) || !applicantId) return null
+    return contacts.find((item) => Number(item.id) === Number(applicantId)) || null
+}
+
+function isAcceptedRelationship(relationship) {
+    return relationship?.status === 'ACCEPTED'
+}
+
+function hasProfileBlockAccessFromResponse(profile) {
+    if (!profile) return false
+
+    return Boolean(
+        profile.firstName ||
+        profile.lastName ||
+        profile.middleName ||
+        profile.universityName ||
+        profile.facultyName ||
+        profile.studyProgram ||
+        profile.course ||
+        profile.graduationYear ||
+        profile.city?.name ||
+        profile.about ||
+        profile.avatar
+    )
+}
+
+function hasResumeBlockAccessFromResponse(profile) {
+    if (!profile) return false
+
+    return Boolean(
+        profile.resumeText ||
+        profile.resumeFile ||
+        (Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0) ||
+        (Array.isArray(profile.portfolioFiles) && profile.portfolioFiles.length > 0) ||
+        (Array.isArray(profile.skills) && profile.skills.length > 0) ||
+        (Array.isArray(profile.interests) && profile.interests.length > 0)
+    )
+}
+
 export default function ApplicantPublicProfile() {
     const [, navigate] = useLocation()
     const [match, params] = useRoute('/seekers/:id')
@@ -192,7 +242,7 @@ export default function ApplicantPublicProfile() {
     })
 
     const applicantId = params?.id ? Number(params.id) : null
-    const isOwner = currentUserId && applicantId && currentUserId === applicantId
+    const isOwner = Boolean(currentUserId && applicantId && currentUserId === applicantId)
 
     useEffect(() => {
         if (!match) return
@@ -211,6 +261,8 @@ export default function ApplicantPublicProfile() {
 
         async function loadProfile() {
             setIsLoading(true)
+            setApplications([])
+            setContacts([])
             setErrorState({
                 title: '',
                 message: '',
@@ -219,59 +271,68 @@ export default function ApplicantPublicProfile() {
 
             try {
                 const profileData = await getApplicantPublicProfile(applicantId, currentUserId)
-
                 if (!isMounted) return
+
                 setProfile(profileData)
 
-                const profileVisibility = profileData?.profileVisibility || 'AUTHENTICATED'
-                const applicationsVisibility = profileData?.applicationsVisibility || 'PRIVATE'
-                const contactsVisibility = profileData?.contactsVisibility || 'AUTHENTICATED'
+                let loadedViewerContacts = []
 
-                if (
-                    canShowBlock(profileVisibility, isOwner, isAuthenticated) &&
-                    canShowBlock(applicationsVisibility, isOwner, isAuthenticated)
-                ) {
+                if (isApplicantViewer && !isOwner) {
+                    try {
+                        const myContacts = await getSeekerContacts()
+                        loadedViewerContacts = Array.isArray(myContacts) ? myContacts : []
+
+                        if (isMounted) {
+                            setViewerContacts(loadedViewerContacts)
+                        }
+                    } catch {
+                        if (isMounted) {
+                            setViewerContacts([])
+                        }
+                    }
+                } else if (isMounted) {
+                    setViewerContacts([])
+                }
+
+                const viewerRelationship = findViewerRelationship(loadedViewerContacts, applicantId)
+                const isAcceptedContactViewer = isAcceptedRelationship(viewerRelationship)
+
+                const canViewApplications = canShowBlock(profileData?.applicationsVisibility || 'PRIVATE', {
+                    isOwner,
+                    isAuthenticated,
+                    isAcceptedContact: isAcceptedContactViewer,
+                })
+
+                const canViewContacts = canShowBlock(profileData?.contactsVisibility || 'PRIVATE', {
+                    isOwner,
+                    isAuthenticated,
+                    isAcceptedContact: isAcceptedContactViewer,
+                })
+
+                if (canViewApplications) {
                     try {
                         const applicationsData = await getApplicantPublicApplications(applicantId, currentUserId)
                         if (isMounted) {
                             setApplications(Array.isArray(applicationsData) ? applicationsData : [])
                         }
                     } catch {
-                        if (isMounted) setApplications([])
+                        if (isMounted) {
+                            setApplications([])
+                        }
                     }
                 }
 
-                if (
-                    canShowBlock(profileVisibility, isOwner, isAuthenticated) &&
-                    canShowBlock(contactsVisibility, isOwner, isAuthenticated)
-                ) {
+                if (canViewContacts) {
                     try {
                         const contactsData = await getApplicantPublicContacts(applicantId, currentUserId)
                         if (isMounted) {
                             setContacts(Array.isArray(contactsData) ? contactsData : [])
                         }
                     } catch {
-                        if (isMounted) setContacts([])
-                    }
-                }
-
-                if (isApplicantViewer && !isOwner) {
-                    try {
-                        const myContacts = await getSeekerContacts()
                         if (isMounted) {
-                            setViewerContacts(Array.isArray(myContacts) ? myContacts : [])
+                            setContacts([])
                         }
-                    } catch {
-                        if (isMounted) setViewerContacts([])
                     }
-                }
-
-                if (!canShowBlock(profileVisibility, isOwner, isAuthenticated) && !isOwner) {
-                    setErrorState({
-                        title: 'Профиль скрыт',
-                        message: 'Этот профиль скрыт настройками приватности и пока недоступен для просмотра.',
-                        kind: 'hidden',
-                    })
                 }
             } catch (loadError) {
                 if (!isMounted) return
@@ -317,32 +378,57 @@ export default function ApplicantPublicProfile() {
         return () => {
             isMounted = false
         }
-    }, [applicantId, currentUserId, isAuthenticated, isOwner, isApplicantViewer, match, toast])
+    }, [
+        applicantId,
+        currentUserId,
+        isApplicantViewer,
+        isAuthenticated,
+        isOwner,
+        match,
+        toast,
+    ])
 
     const relationship = useMemo(() => {
         if (!applicantId) return optimisticContactState
 
-        const serverRelationship = Array.isArray(viewerContacts)
-            ? viewerContacts.find((item) => Number(item.id) === Number(applicantId)) || null
-            : null
-
+        const serverRelationship = findViewerRelationship(viewerContacts, applicantId)
         return optimisticContactState || serverRelationship
     }, [viewerContacts, applicantId, optimisticContactState])
 
+    const isAcceptedContactViewer = isAcceptedRelationship(relationship)
+
     const profileVisible = profile
-        ? canShowBlock(profile.profileVisibility, isOwner, isAuthenticated)
+        ? canShowBlock(profile.profileVisibility, {
+            isOwner,
+            isAuthenticated,
+            isAcceptedContact: isAcceptedContactViewer,
+            allowServerOverride: hasProfileBlockAccessFromResponse(profile),
+        })
         : false
 
     const resumeVisible = profile
-        ? canShowBlock(profile.resumeVisibility, isOwner, isAuthenticated)
+        ? canShowBlock(profile.resumeVisibility, {
+            isOwner,
+            isAuthenticated,
+            isAcceptedContact: isAcceptedContactViewer,
+            allowServerOverride: hasResumeBlockAccessFromResponse(profile),
+        })
         : false
 
     const applicationsVisible = profile
-        ? canShowBlock(profile.applicationsVisibility, isOwner, isAuthenticated)
+        ? canShowBlock(profile.applicationsVisibility, {
+            isOwner,
+            isAuthenticated,
+            isAcceptedContact: isAcceptedContactViewer,
+        })
         : false
 
     const contactsVisible = profile
-        ? canShowBlock(profile.contactsVisibility, isOwner, isAuthenticated)
+        ? canShowBlock(profile.contactsVisibility, {
+            isOwner,
+            isAuthenticated,
+            isAcceptedContact: isAcceptedContactViewer,
+        })
         : false
 
     const handleAddContact = async () => {
@@ -378,9 +464,7 @@ export default function ApplicantPublicProfile() {
                 myContacts = []
             }
 
-            const relationshipAfterError = Array.isArray(myContacts)
-                ? myContacts.find((item) => Number(item.id) === Number(applicantId))
-                : null
+            const relationshipAfterError = findViewerRelationship(myContacts, applicantId)
 
             if (
                 relationshipAfterError?.status === 'PENDING' ||
@@ -393,12 +477,14 @@ export default function ApplicantPublicProfile() {
                 })
 
                 toast({
-                    title: relationshipAfterError.status === 'ACCEPTED'
-                        ? 'Контакт уже подтверждён'
-                        : 'Запрос уже отправлен',
-                    description: relationshipAfterError.status === 'ACCEPTED'
-                        ? 'Пользователь уже есть в ваших профессиональных контактах'
-                        : 'Сейчас он ожидает подтверждения',
+                    title:
+                        relationshipAfterError.status === 'ACCEPTED'
+                            ? 'Контакт уже подтверждён'
+                            : 'Запрос уже отправлен',
+                    description:
+                        relationshipAfterError.status === 'ACCEPTED'
+                            ? 'Пользователь уже есть в ваших профессиональных контактах'
+                            : 'Сейчас он ожидает подтверждения',
                 })
                 return
             }
@@ -519,9 +605,10 @@ export default function ApplicantPublicProfile() {
 
             toast({
                 title: relationship?.direction === 'outgoing' ? 'Запрос отменён' : 'Контакт удалён',
-                description: relationship?.direction === 'outgoing'
-                    ? 'Исходящий запрос отменён'
-                    : 'Контакт удалён из списка',
+                description:
+                    relationship?.direction === 'outgoing'
+                        ? 'Исходящий запрос отменён'
+                        : 'Контакт удалён из списка',
             })
         } catch (error) {
             toast({
@@ -542,7 +629,9 @@ export default function ApplicantPublicProfile() {
                 <div className="applicant-public-profile__contact-panel">
                     <div className="applicant-public-profile__contact-panel-text">
                         <span className="applicant-public-profile__contact-kicker">Нетворкинг</span>
-                        <span className="applicant-public-profile__contact-title">Профессиональный контакт</span>
+                        <span className="applicant-public-profile__contact-title">
+                            Профессиональный контакт
+                        </span>
                         <span className="applicant-public-profile__contact-subtitle">
                             Войдите в аккаунт, чтобы добавить этого соискателя в свою сеть контактов
                         </span>
@@ -560,7 +649,9 @@ export default function ApplicantPublicProfile() {
                 <div className="applicant-public-profile__contact-panel applicant-public-profile__contact-panel--default">
                     <div className="applicant-public-profile__contact-panel-text">
                         <span className="applicant-public-profile__contact-kicker">Нетворкинг</span>
-                        <span className="applicant-public-profile__contact-title">Добавить в профессиональные контакты</span>
+                        <span className="applicant-public-profile__contact-title">
+                            Добавить в профессиональные контакты
+                        </span>
                         <span className="applicant-public-profile__contact-subtitle">
                             Контакты помогают развивать карьерные связи и рекомендации внутри платформы
                         </span>
@@ -661,8 +752,12 @@ export default function ApplicantPublicProfile() {
         ? getApplicantFileUrl(profile.userId || applicantId, profile.avatar.fileId)
         : null
 
+    const resumeFileUrl = profile?.resumeFile?.fileId
+        ? getApplicantFileUrl(profile.userId || applicantId, profile.resumeFile.fileId)
+        : null
+
     const shouldShowError = !isLoading && errorState.message
-    const shouldShowContent = !isLoading && profile && profileVisible && !errorState.message
+    const shouldShowContent = !isLoading && profile && !errorState.message
 
     return (
         <div className="applicant-public-profile">
@@ -674,10 +769,12 @@ export default function ApplicantPublicProfile() {
                     className="applicant-public-profile__back"
                     onClick={(event) => {
                         event.preventDefault()
+
                         if (window.history.length > 1) {
                             window.history.back()
                             return
                         }
+
                         navigate('/')
                     }}
                 >
@@ -756,7 +853,17 @@ export default function ApplicantPublicProfile() {
 
                             <div className="applicant-public-profile__hero-content">
                                 <div className="applicant-public-profile__hero-top">
-                                    <h1>{getFullName(profile) || 'Соискатель'}</h1>
+                                    <div>
+                                        <h1>{profileVisible ? getFullName(profile) || 'Соискатель' : 'Соискатель'}</h1>
+
+                                        {!profileVisible && (
+                                            <p className="text-muted">
+                                                Основной профиль скрыт настройками приватности. Доступные разделы ниже
+                                                показаны по текущим правам просмотра.
+                                            </p>
+                                        )}
+                                    </div>
+
                                     {isOwner && (
                                         <Link href="/seeker">
                                             <Button className="button--outline">Вернуться в кабинет</Button>
@@ -764,38 +871,40 @@ export default function ApplicantPublicProfile() {
                                     )}
                                 </div>
 
-                                <div className="applicant-public-profile__meta">
-                                    {profile.universityName && (
-                                        <div className="meta-item">
-                                            <strong>Вуз:</strong> <span>{profile.universityName}</span>
-                                        </div>
-                                    )}
-                                    {profile.facultyName && (
-                                        <div className="meta-item">
-                                            <strong>Факультет:</strong> <span>{profile.facultyName}</span>
-                                        </div>
-                                    )}
-                                    {profile.studyProgram && (
-                                        <div className="meta-item">
-                                            <strong>Программа:</strong> <span>{profile.studyProgram}</span>
-                                        </div>
-                                    )}
-                                    {profile.course && (
-                                        <div className="meta-item">
-                                            <strong>Курс:</strong> <span>{profile.course}</span>
-                                        </div>
-                                    )}
-                                    {profile.graduationYear && (
-                                        <div className="meta-item">
-                                            <strong>Год выпуска:</strong> <span>{profile.graduationYear}</span>
-                                        </div>
-                                    )}
-                                    {(profile.city?.name || profile.cityName) && (
-                                        <div className="meta-item">
-                                            <strong>Город:</strong> <span>{profile.city?.name || profile.cityName}</span>
-                                        </div>
-                                    )}
-                                </div>
+                                {profileVisible && (
+                                    <div className="applicant-public-profile__meta">
+                                        {profile.universityName && (
+                                            <div className="meta-item">
+                                                <strong>Вуз:</strong> <span>{profile.universityName}</span>
+                                            </div>
+                                        )}
+                                        {profile.facultyName && (
+                                            <div className="meta-item">
+                                                <strong>Факультет:</strong> <span>{profile.facultyName}</span>
+                                            </div>
+                                        )}
+                                        {profile.studyProgram && (
+                                            <div className="meta-item">
+                                                <strong>Программа:</strong> <span>{profile.studyProgram}</span>
+                                            </div>
+                                        )}
+                                        {profile.course && (
+                                            <div className="meta-item">
+                                                <strong>Курс:</strong> <span>{profile.course}</span>
+                                            </div>
+                                        )}
+                                        {profile.graduationYear && (
+                                            <div className="meta-item">
+                                                <strong>Год выпуска:</strong> <span>{profile.graduationYear}</span>
+                                            </div>
+                                        )}
+                                        {profile.city?.name && (
+                                            <div className="meta-item">
+                                                <strong>Город:</strong> <span>{profile.city.name}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="applicant-public-profile__badges">
                                     {profile.openToWork && <span className="badge badge--success">Открыт к работе</span>}
@@ -808,115 +917,190 @@ export default function ApplicantPublicProfile() {
                             </div>
                         </section>
 
-                        {profile.about && (
+                        {profileVisible && profile.about && (
                             <section className="applicant-public-profile__section-card">
                                 <h2>О соискателе</h2>
                                 <p>{profile.about}</p>
                             </section>
                         )}
 
-                        {resumeVisible && (
-                            <section className="applicant-public-profile__section-card">
-                                <h2>Резюме и опыт</h2>
+                        <section className="applicant-public-profile__section-card">
+                            <h2>Резюме и опыт</h2>
 
-                                {profile.resumeText ? (
-                                    <p>{profile.resumeText}</p>
-                                ) : (
-                                    <p className="text-muted">Резюме не заполнено</p>
-                                )}
+                            {resumeVisible ? (
+                                <>
+                                    {profile.resumeText ? (
+                                        <p>{profile.resumeText}</p>
+                                    ) : (
+                                        <p className="text-muted">Текст резюме не заполнен</p>
+                                    )}
 
-                                {Array.isArray(profile.skills) && profile.skills.length > 0 && (
-                                    <div className="applicant-public-profile__subsection">
-                                        <h3>Навыки</h3>
-                                        <div className="tags-list">
-                                            {profile.skills.map((skill) => (
-                                                <span key={skill.id} className="tag">
-                                                    #{skill.name}
-                                                </span>
-                                            ))}
+                                    {resumeFileUrl && (
+                                        <div className="applicant-public-profile__subsection">
+                                            <h3>Прикреплённое резюме</h3>
+
+                                            <div className="links-list">
+                                                <a
+                                                    href={resumeFileUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="profile-link"
+                                                >
+                                                    <div className="profile-link__main">
+                                                        <img src={linkIcon} alt="" className="profile-link__icon" />
+                                                        <span>{profile.resumeFile?.originalFileName || 'Открыть резюме'}</span>
+                                                    </div>
+
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M7 17L17 7" />
+                                                        <path d="M7 7H17V17" />
+                                                    </svg>
+                                                </a>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {Array.isArray(profile.interests) && profile.interests.length > 0 && (
-                                    <div className="applicant-public-profile__subsection">
-                                        <h3>Карьерные интересы</h3>
-                                        <div className="tags-list">
-                                            {profile.interests.map((interest) => (
-                                                <span key={interest.id} className="tag">
-                                                    #{interest.name}
-                                                </span>
-                                            ))}
+                                    {Array.isArray(profile.skills) && profile.skills.length > 0 && (
+                                        <div className="applicant-public-profile__subsection">
+                                            <h3>Навыки</h3>
+                                            <div className="tags-list">
+                                                {profile.skills.map((skill) => (
+                                                    <span key={skill.id} className="tag">
+                                                        #{skill.name}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </section>
-                        )}
+                                    )}
 
-                        {resumeVisible && (
-                            <section className="applicant-public-profile__section-card">
-                                <h2>Ссылки и проекты</h2>
+                                    {Array.isArray(profile.interests) && profile.interests.length > 0 && (
+                                        <div className="applicant-public-profile__subsection">
+                                            <h3>Карьерные интересы</h3>
+                                            <div className="tags-list">
+                                                {profile.interests.map((interest) => (
+                                                    <span key={interest.id} className="tag">
+                                                        #{interest.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="text-muted">Раздел скрыт настройками приватности.</p>
+                            )}
+                        </section>
 
-                                {Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0 ? (
-                                    <div className="links-list">
-                                        {profile.portfolioLinks.map((link, index) => (
-                                            <a
-                                                key={`${link.url}-${index}`}
-                                                href={link.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="profile-link"
-                                            >
-                                                <div className="profile-link__main">
-                                                    <img src={linkIcon} alt="" className="profile-link__icon" />
-                                                    <span>{link.label || link.url}</span>
-                                                </div>
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                    <path d="M7 17L17 7" />
-                                                    <path d="M7 7H17V17" />
-                                                </svg>
-                                            </a>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-muted">Ссылки пока не добавлены</p>
-                                )}
+                        <section className="applicant-public-profile__section-card">
+                            <h2>Портфолио и проекты</h2>
 
-                                {Array.isArray(profile.contactLinks) && profile.contactLinks.length > 0 && (
-                                    <div className="applicant-public-profile__subsection">
-                                        <h3>Контакты</h3>
+                            {resumeVisible ? (
+                                <>
+                                    {Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0 ? (
                                         <div className="links-list">
-                                            {profile.contactLinks.map((contact, index) => (
-                                                <div key={`${contact.value}-${index}`} className="profile-contact">
-                                                    <div className="profile-contact__left">
-                                                        <img src={linkIcon} alt="" className="profile-contact__icon" />
-                                                        <div className="profile-contact__content">
-                                                            <span className="profile-contact__label">
-                                                                {contact.label || contact.type}
-                                                            </span>
-                                                            <div className="profile-contact__value">
-                                                                {renderContactValue(contact)}
+                                            {profile.portfolioLinks.map((link, index) => (
+                                                <a
+                                                    key={`${link.url}-${index}`}
+                                                    href={link.url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="profile-link"
+                                                >
+                                                    <div className="profile-link__main">
+                                                        <img src={linkIcon} alt="" className="profile-link__icon" />
+                                                        <span>{link.label || link.url}</span>
+                                                    </div>
+
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M7 17L17 7" />
+                                                        <path d="M7 7H17V17" />
+                                                    </svg>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted">Ссылки на проекты пока не добавлены</p>
+                                    )}
+
+                                    {Array.isArray(profile.portfolioFiles) && profile.portfolioFiles.length > 0 && (
+                                        <div className="applicant-public-profile__subsection">
+                                            <h3>Файлы портфолио</h3>
+
+                                            <div className="links-list">
+                                                {profile.portfolioFiles.map((file) => {
+                                                    const fileUrl = getApplicantFileUrl(profile.userId || applicantId, file.fileId)
+
+                                                    return (
+                                                        <a
+                                                            key={file.fileId}
+                                                            href={fileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="profile-link"
+                                                        >
+                                                            <div className="profile-link__main">
+                                                                <img src={linkIcon} alt="" className="profile-link__icon" />
+                                                                <span>{file.originalFileName}</span>
                                                             </div>
+
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <path d="M7 17L17 7" />
+                                                                <path d="M7 7H17V17" />
+                                                            </svg>
+                                                        </a>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="text-muted">Раздел скрыт настройками приватности.</p>
+                            )}
+                        </section>
+
+                        <section className="applicant-public-profile__section-card">
+                            <h2>Контакты для связи</h2>
+
+                            {contactsVisible ? (
+                                Array.isArray(profile.contactLinks) && profile.contactLinks.length > 0 ? (
+                                    <div className="links-list">
+                                        {profile.contactLinks.map((contact, index) => (
+                                            <div key={`${contact.value}-${index}`} className="profile-contact">
+                                                <div className="profile-contact__left">
+                                                    <img src={linkIcon} alt="" className="profile-contact__icon" />
+                                                    <div className="profile-contact__content">
+                                                        <span className="profile-contact__label">
+                                                            {contact.label || contact.type}
+                                                        </span>
+                                                        <div className="profile-contact__value">
+                                                            {renderContactValue(contact)}
                                                         </div>
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                )}
-                            </section>
-                        )}
+                                ) : (
+                                    <p className="text-muted">Контакты для связи не добавлены</p>
+                                )
+                            ) : (
+                                <p className="text-muted">Раздел скрыт настройками приватности.</p>
+                            )}
+                        </section>
 
-                        {applicationsVisible && (
-                            <section className="applicant-public-profile__section-card">
-                                <h2>История откликов</h2>
+                        <section className="applicant-public-profile__section-card">
+                            <h2>История откликов</h2>
 
-                                {applications.length > 0 ? (
+                            {applicationsVisible ? (
+                                applications.length > 0 ? (
                                     <div className="simple-list">
                                         {applications.map((application) => (
                                             <div key={application.id} className="simple-list__item">
                                                 <div>
-                                                    <strong>{application.opportunityTitle || `Возможность #${application.opportunityId}`}</strong>
+                                                    <strong>
+                                                        {application.opportunityTitle || `Возможность #${application.opportunityId}`}
+                                                    </strong>
                                                     <p>Дата отклика: {formatDate(application.createdAt)}</p>
                                                 </div>
                                                 <span className={`status-badge status-${getApplicationStatusClass(application.status)}`}>
@@ -927,15 +1111,17 @@ export default function ApplicantPublicProfile() {
                                     </div>
                                 ) : (
                                     <p className="text-muted">Нет доступных откликов</p>
-                                )}
-                            </section>
-                        )}
+                                )
+                            ) : (
+                                <p className="text-muted">Раздел скрыт настройками приватности.</p>
+                            )}
+                        </section>
 
-                        {contactsVisible && (
-                            <section className="applicant-public-profile__section-card">
-                                <h2>Профессиональные контакты</h2>
+                        <section className="applicant-public-profile__section-card">
+                            <h2>Профессиональные контакты</h2>
 
-                                {contacts.length > 0 ? (
+                            {contactsVisible ? (
+                                contacts.length > 0 ? (
                                     <div className="simple-list">
                                         {contacts.map((contact) => (
                                             <div key={contact.contactUserId} className="simple-list__item">
@@ -947,10 +1133,12 @@ export default function ApplicantPublicProfile() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-muted">Контакты скрыты или отсутствуют</p>
-                                )}
-                            </section>
-                        )}
+                                    <p className="text-muted">Подтверждённые контакты пока не отображаются</p>
+                                )
+                            ) : (
+                                <p className="text-muted">Раздел скрыт настройками приватности.</p>
+                            )}
+                        </section>
                     </div>
                 )}
             </main>
