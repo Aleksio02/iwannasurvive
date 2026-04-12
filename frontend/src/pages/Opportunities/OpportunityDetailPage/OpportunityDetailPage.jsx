@@ -13,8 +13,12 @@ import {
     removeGuestFavoriteOpportunity,
     isGuestFavoriteOpportunity,
     migrateGuestFavoritesToAccount,
-    getSeekerSaved,
 } from '../../../api/profile'
+import {
+    addEmployerToSaved,
+    getSavedFavorites,
+    removeEmployerFromSaved,
+} from '../../../api/favorites'
 import { getSessionUser, subscribeSessionChange } from '../../../utils/sessionStore'
 import './OpportunityDetailPage.scss'
 
@@ -71,6 +75,34 @@ function normalizeResourceLinks(links) {
         .filter(Boolean)
 }
 
+const employerFavoriteButtonBaseStyle = {
+    width: 'auto',
+    minHeight: '34px',
+    padding: '8px 12px',
+    borderRadius: '999px',
+    fontSize: '13px',
+    fontWeight: 700,
+    lineHeight: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 6px 14px rgba(31, 182, 170, 0.10)',
+}
+
+function getEmployerFavoriteButtonStyle(isFavorite, isLoading) {
+    return {
+        ...employerFavoriteButtonBaseStyle,
+        border: `1px solid ${isFavorite ? '#fcd34d' : '#99f6e4'}`,
+        background: isFavorite ? '#fffbeb' : '#ecfeff',
+        color: isFavorite ? '#b45309' : '#0f766e',
+        opacity: isLoading ? 0.72 : 1,
+        pointerEvents: isLoading ? 'none' : 'auto',
+    }
+}
+
 export default function OpportunityDetailPage() {
     const [, navigate] = useLocation()
     const [, params] = useRoute('/opportunities/:id')
@@ -83,6 +115,8 @@ export default function OpportunityDetailPage() {
     const [currentUser, setCurrentUser] = useState(getSessionUser())
     const [isFavorite, setIsFavorite] = useState(false)
     const [isFavoriteLoading, setIsFavoriteLoading] = useState(false)
+    const [isEmployerFavorite, setIsEmployerFavorite] = useState(false)
+    const [isEmployerFavoriteLoading, setIsEmployerFavoriteLoading] = useState(false)
 
     useEffect(() => {
         const unsubscribe = subscribeSessionChange(async (nextUser) => {
@@ -98,6 +132,10 @@ export default function OpportunityDetailPage() {
                         ? false
                         : isGuestFavoriteOpportunity(Number(params.id))
                 )
+            }
+
+            if (!nextUser) {
+                setIsEmployerFavorite(false)
             }
         })
 
@@ -141,21 +179,28 @@ export default function OpportunityDetailPage() {
 
                 if (!currentUser) {
                     setIsFavorite(isGuestFavoriteOpportunity(Number(params.id)))
+                    setIsEmployerFavorite(false)
                     return
                 }
 
                 try {
-                    const savedItems = await getSeekerSaved()
+                    const favorites = await getSavedFavorites()
                     if (!isMounted) return
 
-                    const existsInSaved = Array.isArray(savedItems)
-                        ? savedItems.some((saved) => Number(saved.id) === Number(params.id))
+                    const existsInSaved = Array.isArray(favorites?.opportunities)
+                        ? favorites.opportunities.some((saved) => Number(saved.id) === Number(params.id))
+                        : false
+
+                    const existsEmployerInSaved = Array.isArray(favorites?.employers) && data?.employerUserId
+                        ? favorites.employers.some((saved) => Number(saved.id) === Number(data.employerUserId))
                         : false
 
                     setIsFavorite(existsInSaved)
+                    setIsEmployerFavorite(existsEmployerInSaved)
                 } catch {
                     if (!isMounted) return
                     setIsFavorite(false)
+                    setIsEmployerFavorite(false)
                 }
             } catch (err) {
                 if (!isMounted) return
@@ -305,6 +350,40 @@ export default function OpportunityDetailPage() {
         }
     }
 
+    const handleToggleEmployerFavorite = async () => {
+        if (!item?.employerUserId || isEmployerFavoriteLoading || !isApplicant) return
+
+        const nextFavoriteState = !isEmployerFavorite
+        setIsEmployerFavorite(nextFavoriteState)
+        setIsEmployerFavoriteLoading(true)
+
+        try {
+            if (nextFavoriteState) {
+                await addEmployerToSaved(item.employerUserId)
+                toast({
+                    title: 'Работодатель добавлен в избранное',
+                    description: `«${item.companyName}» сохранён в избранных работодателях`,
+                })
+            } else {
+                await removeEmployerFromSaved(item.employerUserId)
+                toast({
+                    title: 'Работодатель удалён из избранного',
+                    description: `«${item.companyName}» удалён из избранных работодателей`,
+                })
+            }
+        } catch (toggleError) {
+            setIsEmployerFavorite(!nextFavoriteState)
+
+            toast({
+                title: 'Ошибка',
+                description: toggleError.message || 'Не удалось изменить избранных работодателей',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsEmployerFavoriteLoading(false)
+        }
+    }
+
     return (
         <div className="opportunity-detail-page">
             <Navbar />
@@ -344,16 +423,16 @@ export default function OpportunityDetailPage() {
                     <div className="opportunity-detail-page__grid">
                         <div className="opportunity-detail-page__content">
                             <div className="opportunity-detail-page__badges">
-                <span className="badge badge--type">
-                    {OPPORTUNITY_LABELS.type[item.type] || 'Возможность'}
-                </span>
+                                <span className="badge badge--type">
+                                    {OPPORTUNITY_LABELS.type[item.type] || 'Возможность'}
+                                </span>
                                 <span className="badge badge--format">
-                    {OPPORTUNITY_LABELS.workFormat[item.workFormat] || item.workFormat || 'Формат не указан'}
-                </span>
+                                    {OPPORTUNITY_LABELS.workFormat[item.workFormat] || item.workFormat || 'Формат не указан'}
+                                </span>
                                 {item.grade && (
                                     <span className="badge badge--grade">
-                        {OPPORTUNITY_LABELS.grade[item.grade] || item.grade}
-                    </span>
+                                        {OPPORTUNITY_LABELS.grade[item.grade] || item.grade}
+                                    </span>
                                 )}
                             </div>
 
@@ -377,8 +456,24 @@ export default function OpportunityDetailPage() {
                             </div>
 
                             <div className="opportunity-detail-page__company-row">
-                                <img src={companyIcon} alt="" className="icon" />
-                                <span>{item.companyName}</span>
+                                <div className="opportunity-detail-page__company-row-main">
+                                    <img src={companyIcon} alt="" className="icon" />
+                                    <span>{item.companyName}</span>
+                                </div>
+
+                                {isApplicant && item.employerUserId && (
+                                    <button
+                                        type="button"
+                                        onClick={handleToggleEmployerFavorite}
+                                        disabled={isEmployerFavoriteLoading}
+                                        style={getEmployerFavoriteButtonStyle(isEmployerFavorite, isEmployerFavoriteLoading)}
+                                        aria-label={isEmployerFavorite ? 'Удалить работодателя из избранного' : 'Добавить работодателя в избранное'}
+                                        title={isEmployerFavorite ? 'Удалить работодателя из избранного' : 'Добавить работодателя в избранное'}
+                                    >
+                                        <span aria-hidden="true">{isEmployerFavorite ? '★' : '☆'}</span>
+                                        <span>{isEmployerFavorite ? 'В избранном' : 'В избранное'}</span>
+                                    </button>
+                                )}
                             </div>
 
                             <div className="opportunity-detail-page__location-row">
