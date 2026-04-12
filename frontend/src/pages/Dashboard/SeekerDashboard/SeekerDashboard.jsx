@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useLocation } from 'wouter'
 import { useToast } from '../../../hooks/use-toast'
@@ -16,7 +15,6 @@ import {
     updateApplicantProfile,
     submitApplicantProfileForModeration,
     getSeekerApplications,
-    getSeekerSaved,
     getSeekerContacts,
     removeFromSaved,
     removeContact,
@@ -32,6 +30,8 @@ import {
     deleteApplicantFile,
     getFileDownloadUrlByUserAndFile,
 } from '../../../api/profile'
+import { getSavedFavorites, removeEmployerFromSaved } from '../../../api/favorites'
+import SavedFavoritesSection from './components/SavedFavoritesSection'
 import '../DashboardBase.scss'
 import './SeekerDashboard.scss'
 
@@ -157,7 +157,10 @@ function SeekerDashboard() {
     const [tempContactLinks, setTempContactLinks] = useState([])
 
     const [applications, setApplications] = useState([])
-    const [savedOpportunities, setSavedOpportunities] = useState([])
+    const [savedFavorites, setSavedFavorites] = useState({
+        opportunities: [],
+        employers: [],
+    })
     const [contacts, setContacts] = useState([])
     const [recommendations, setRecommendations] = useState({ incoming: [], outgoing: [] })
 
@@ -329,7 +332,10 @@ function SeekerDashboard() {
 
                 if (!currentUser) {
                     setApplications([])
-                    setSavedOpportunities([])
+                    setSavedFavorites({
+                        opportunities: [],
+                        employers: [],
+                    })
                     setContacts([])
                     setRecommendations({ incoming: [], outgoing: [] })
                     setNetworkingBlockedMessage('')
@@ -349,11 +355,11 @@ function SeekerDashboard() {
 
                 const [apps, saved] = await Promise.all([
                     getSeekerApplications(),
-                    getSeekerSaved(),
+                    getSavedFavorites(),
                 ])
 
                 setApplications(apps)
-                setSavedOpportunities(saved)
+                setSavedFavorites(saved)
 
                 setNetworkingBlockedMessage('')
                 setHasLoadedNetworking(false)
@@ -383,7 +389,10 @@ function SeekerDashboard() {
                 if (error?.status === 401) {
                     setUser(null)
                     setApplications([])
-                    setSavedOpportunities([])
+                    setSavedFavorites({
+                        opportunities: [],
+                        employers: [],
+                    })
                     setContacts([])
                     setRecommendations({ incoming: [], outgoing: [] })
                     setNetworkingBlockedMessage('')
@@ -634,7 +643,10 @@ function SeekerDashboard() {
     const handleRemoveSaved = async (id, title) => {
         try {
             await removeFromSaved(id)
-            setSavedOpportunities((prev) => prev.filter((opp) => opp.id !== id))
+            setSavedFavorites((prev) => ({
+                ...prev,
+                opportunities: prev.opportunities.filter((opp) => opp.id !== id),
+            }))
             toast({
                 title: 'Удалено из избранного',
                 description: `«${title}» удалено из избранного`,
@@ -643,6 +655,26 @@ function SeekerDashboard() {
             toast({
                 title: 'Ошибка',
                 description: 'Не удалось удалить из избранного',
+                variant: 'destructive',
+            })
+        }
+    }
+
+    const handleRemoveSavedEmployer = async (id, title) => {
+        try {
+            await removeEmployerFromSaved(id)
+            setSavedFavorites((prev) => ({
+                ...prev,
+                employers: prev.employers.filter((employer) => employer.id !== id),
+            }))
+            toast({
+                title: 'Удалено из избранного',
+                description: `«${title}» удалён из избранных работодателей`,
+            })
+        } catch {
+            toast({
+                title: 'Ошибка',
+                description: 'Не удалось удалить работодателя из избранного',
                 variant: 'destructive',
             })
         }
@@ -1014,7 +1046,7 @@ function SeekerDashboard() {
     }, [confirmedContacts])
 
     const recommendationOpportunityOptions = useMemo(() => {
-        const fromSaved = savedOpportunities
+        const fromSaved = savedFavorites.opportunities
             .filter((item) => item.id)
             .map((item) => ({
                 value: String(item.id),
@@ -1037,7 +1069,7 @@ function SeekerDashboard() {
         }
 
         return Array.from(unique.values())
-    }, [savedOpportunities, applications])
+    }, [savedFavorites.opportunities, applications])
 
     const canSendRecommendation =
         !networkingBlockedMessage &&
@@ -1707,48 +1739,12 @@ function SeekerDashboard() {
                 )}
 
                 {activeTab === 'saved' && (
-                    <div className="seeker-saved">
-                        <div className="section-header">
-                            <h2>Избранные вакансии</h2>
-                            <span className="section-count">{savedOpportunities.length}</span>
-                        </div>
-                        {savedOpportunities.length === 0 ? (
-                            <div className="empty-state">
-                                <p>У вас пока нет избранных вакансий</p>
-                                <span>Добавляйте вакансии в избранное на главной странице</span>
-                            </div>
-                        ) : (
-                            <div className="saved-list">
-                                {savedOpportunities.map((opp, index) => {
-                                    const oppKey = opp.id ?? `${opp.title ?? 'saved'}-${opp.savedAt ?? index}`
-                                    const canOpenOpportunity = opp.id !== null && opp.id !== undefined
-
-                                    return (
-                                        <div
-                                            key={oppKey}
-                                            className="saved-card"
-                                            onClick={() => canOpenOpportunity && navigate(`/opportunities/${opp.id}`)}
-                                        >
-                                            <div className="saved-card__content">
-                                                <h3>{opp.title || 'Вакансия'}</h3>
-                                                <p className="saved-card__company">{opp.companyName}</p>
-                                                <p className="saved-card__description">{opp.shortDescription}</p>
-                                            </div>
-                                            <button
-                                                className="saved-card__remove"
-                                                onClick={(event) => {
-                                                    event.stopPropagation()
-                                                    handleRemoveSaved(opp.id, opp.title)
-                                                }}
-                                            >
-                                                Удалить
-                                            </button>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        )}
-                    </div>
+                    <SavedFavoritesSection
+                        favorites={savedFavorites}
+                        onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
+                        onRemoveOpportunity={handleRemoveSaved}
+                        onRemoveEmployer={handleRemoveSavedEmployer}
+                    />
                 )}
 
                 {activeTab === 'contacts' && (

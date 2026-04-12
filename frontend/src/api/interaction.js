@@ -1,4 +1,3 @@
-
 import { httpJson, toQuery, getSessionUserFromApi, getSessionUserIdFromApi, getRequiredCurrentUserPayload } from './http'
 
 const API_BASE = '/api/interaction'
@@ -173,6 +172,20 @@ export async function removeFromFavorites(opportunityId) {
     const userId = await getRequiredUserId()
 
     return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
+        method: 'DELETE',
+    })
+}
+
+export async function addEmployerToFavorites(employerUserId) {
+    const userId = await getRequiredUserId()
+    return httpJson(`${API_BASE}/favorites/employers/${employerUserId}?${toQuery({ userId })}`, {
+        method: 'POST',
+    })
+}
+
+export async function removeEmployerFromFavorites(employerUserId) {
+    const userId = await getRequiredUserId()
+    return httpJson(`${API_BASE}/favorites/employers/${employerUserId}?${toQuery({ userId })}`, {
         method: 'DELETE',
     })
 }
