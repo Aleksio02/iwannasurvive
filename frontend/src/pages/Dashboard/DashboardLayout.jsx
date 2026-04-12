@@ -24,15 +24,25 @@ function DashboardLayout({
     const isSecurityPage = location.startsWith('/settings/security')
     const isApplicantCatalogPage = location === '/seekers'
 
-    const canOpenApplicantCatalog = ['EMPLOYER', 'CURATOR', 'ADMIN'].includes(
-        currentUser?.role || ''
-    )
+    const applicantCatalogAction = (() => {
+        const role = currentUser?.role || ''
+
+        if (role === 'APPLICANT') {
+            return { href: '/seekers', label: 'Сообщество' }
+        }
+
+        if (['EMPLOYER', 'CURATOR', 'ADMIN'].includes(role)) {
+            return { href: '/seekers', label: 'Каталог соискателей' }
+        }
+
+        return null
+    })()
 
     const actions = hideHeaderActions
         ? []
         : [
-            ...(canOpenApplicantCatalog && !isApplicantCatalogPage
-                ? [{ href: '/seekers', label: 'Каталог соискателей' }]
+            ...(applicantCatalogAction && !isApplicantCatalogPage
+                ? [applicantCatalogAction]
                 : []),
             ...(!isSecurityPage
                 ? [{ href: '/settings/security', label: 'Настройки безопасности' }]
