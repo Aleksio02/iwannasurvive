@@ -1284,3 +1284,9 @@ export async function submitApplicantProfileForModeration() {
 
     return normalizeApplicantProfile(data)
 }
+
+export async function getEmployerProfileWorkspace(userId) {
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    return apiRequest(`${API_BASE}/profile/employer/${userId}/workspace?currentUser=${currentUser}`)
+}

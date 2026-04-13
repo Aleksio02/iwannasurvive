@@ -4,7 +4,7 @@ import DashboardLayout from '@/pages/Dashboard/DashboardLayout'
 
 import {
     getCurrentSessionUser,
-    getEmployerProfile,
+    getEmployerProfileWorkspace,
     updateEmployerProfile,
     updateEmployerCompanyData,
     submitEmployerProfileForModeration,
@@ -115,6 +115,9 @@ function EmployerDashboard() {
         logo: null,
     })
 
+    const [publicProfile, setPublicProfile] = useState(null)
+    const [hasApprovedPublicVersion, setHasApprovedPublicVersion] = useState(false)
+
     const [opportunityForm, setOpportunityForm] = useState({
         title: '',
         shortDescription: '',
@@ -189,10 +192,28 @@ function EmployerDashboard() {
                 url: row.url.trim(),
             }))
 
-    const syncProfileState = useCallback((profileData, fallbackUser = user) => {
-        const normalized = normalizeEmployerProfileState(profileData, fallbackUser)
+    const normalizeEmployerWorkspaceResponse = (workspaceData = {}, fallbackUser = null) => {
+        const current = normalizeEmployerProfileState(workspaceData.currentProfile || {}, fallbackUser)
+        const publicVersion = workspaceData.publicProfile
+            ? normalizeEmployerProfileState(workspaceData.publicProfile, fallbackUser)
+            : null
+
+        return {
+            current,
+            publicProfile: publicVersion,
+            moderationStatus: workspaceData.moderationStatus || current.moderationStatus || 'DRAFT',
+            hasApprovedPublicVersion: Boolean(workspaceData.hasApprovedPublicVersion),
+        }
+    }
+
+    const syncWorkspaceProfileState = useCallback((workspaceData, fallbackUser = user) => {
+        const normalizedWorkspace = normalizeEmployerWorkspaceResponse(workspaceData, fallbackUser)
+        const normalized = normalizedWorkspace.current
 
         setProfile(normalized)
+        setPublicProfile(normalizedWorkspace.publicProfile)
+        setHasApprovedPublicVersion(normalizedWorkspace.hasApprovedPublicVersion)
+
         setSocialRows(linksToRows(normalized.socialLinks))
         setContactRows(
             normalized.publicContacts.length > 0
@@ -201,13 +222,14 @@ function EmployerDashboard() {
                 )
                 : [createLinkRow()]
         )
+
         setVerificationData((prev) => ({
             ...prev,
             inn: normalized.inn || '',
             corporateEmail: prev.corporateEmail || fallbackUser?.email || '',
         }))
 
-        return normalized
+        return normalizedWorkspace
     }, [user])
 
     const loadEmployerLocationsData = useCallback(async () => {
@@ -260,12 +282,15 @@ function EmployerDashboard() {
     }, [])
 
     const reloadEmployerProfile = useCallback(async () => {
-        const [freshProfile, freshLocations] = await Promise.all([
-            getEmployerProfile(),
+        if (!user?.userId) return null
+
+        const [workspaceData, freshLocations] = await Promise.all([
+            getEmployerProfileWorkspace(user.userId),
             loadEmployerLocationsData(),
         ])
 
-        const normalized = syncProfileState(freshProfile || {}, user)
+        const normalizedWorkspace = syncWorkspaceProfileState(workspaceData || {}, user)
+        const normalized = normalizedWorkspace.current
 
         const matchedLocation =
             freshLocations.find((item) => Number(item.id) === Number(normalized.locationId)) || null
@@ -280,9 +305,55 @@ function EmployerDashboard() {
             }))
         }
 
-        await loadModerationFeedback(normalized.userId || user?.userId)
+        if (normalizedWorkspace.publicProfile?.locationId) {
+            const publicMatchedLocation =
+                freshLocations.find((item) => Number(item.id) === Number(normalizedWorkspace.publicProfile.locationId)) || null
+
+            if (publicMatchedLocation) {
+                setPublicProfile((prev) => prev ? ({
+                    ...prev,
+                    locationId: publicMatchedLocation.id,
+                    locationPreview: publicMatchedLocation,
+                    cityId: publicMatchedLocation.cityId ?? prev.cityId,
+                    cityName: publicMatchedLocation.cityName || publicMatchedLocation.city?.name || prev.cityName,
+                }) : prev)
+            }
+        }
+
+        await loadModerationFeedback(normalized.userId || user.userId)
         return normalized
-    }, [loadEmployerLocationsData, loadModerationFeedback, syncProfileState, user])
+    }, [loadEmployerLocationsData, loadModerationFeedback, syncWorkspaceProfileState, user])
+
+    const moderationMissingItems = useMemo(() => {
+        const items = []
+
+        if (!profile.companyName?.trim()) {
+            items.push('название компании')
+        }
+
+        if (!profile.industry?.trim()) {
+            items.push('сфера деятельности')
+        }
+
+        if (!profile.locationId) {
+            items.push('основная локация')
+        }
+
+        const hasPublicChannel =
+            Boolean(profile.websiteUrl?.trim()) ||
+            (Array.isArray(socialRows) && socialRows.some((item) => item.url?.trim())) ||
+            (Array.isArray(contactRows) && contactRows.some((item) => item.url?.trim()))
+
+        if (!hasPublicChannel) {
+            items.push('сайт, соцсеть или контакт')
+        }
+
+        return items
+    }, [profile, socialRows, contactRows])
+
+    const canSubmitProfileToModeration =
+        moderationState !== 'PENDING_MODERATION' &&
+        moderationMissingItems.length === 0
 
     const buildEmployerProfilePayload = () => {
         const payload = {
@@ -676,12 +747,13 @@ function EmployerDashboard() {
                 return
             }
 
-            const [profileData, locations] = await Promise.all([
-                getEmployerProfile(),
+            const [workspaceData, locations] = await Promise.all([
+                getEmployerProfileWorkspace(currentUser.userId),
                 loadEmployerLocationsData(),
             ])
 
-            const normalized = syncProfileState(profileData || {}, currentUser)
+            const normalizedWorkspace = syncWorkspaceProfileState(workspaceData || {}, currentUser)
+            const normalized = normalizedWorkspace.current
 
             const matchedLocation =
                 locations.find((item) => Number(item.id) === Number(normalized.locationId)) || null
@@ -693,6 +765,20 @@ function EmployerDashboard() {
                     cityId: matchedLocation.cityId,
                     cityName: matchedLocation.cityName || matchedLocation.city?.name || '',
                 }))
+            }
+
+            if (normalizedWorkspace.publicProfile?.locationId) {
+                const publicMatchedLocation =
+                    locations.find((item) => Number(item.id) === Number(normalizedWorkspace.publicProfile.locationId)) || null
+
+                if (publicMatchedLocation) {
+                    setPublicProfile((prev) => prev ? ({
+                        ...prev,
+                        locationPreview: publicMatchedLocation,
+                        cityId: publicMatchedLocation.cityId,
+                        cityName: publicMatchedLocation.cityName || publicMatchedLocation.city?.name || prev.cityName,
+                    }) : prev)
+                }
             }
 
             await loadModerationFeedback(normalized.userId || currentUser.userId)
@@ -733,7 +819,7 @@ function EmployerDashboard() {
         } finally {
             setIsLoading(false)
         }
-    }, [loadEmployerLocationsData, loadModerationFeedback, responseFilters, syncProfileState, toast])
+    }, [loadEmployerLocationsData, loadModerationFeedback, responseFilters, syncWorkspaceProfileState, toast])
 
     useEffect(() => {
         loadData()
@@ -800,8 +886,8 @@ function EmployerDashboard() {
 
         try {
             setIsLogoUploading(true)
-            const updatedProfile = await uploadEmployerLogo(file)
-            syncProfileState(updatedProfile, user)
+            await uploadEmployerLogo(file)
+            await reloadEmployerProfile()
             toast({
                 title: 'Логотип загружен',
                 description: 'Логотип компании успешно обновлён',
@@ -822,8 +908,8 @@ function EmployerDashboard() {
         if (!profile.logo?.fileId) return
 
         try {
-            const updatedProfile = await deleteEmployerFile(profile.logo.fileId)
-            syncProfileState(updatedProfile, user)
+            await deleteEmployerFile(profile.logo.fileId)
+            await reloadEmployerProfile()
             toast({
                 title: 'Логотип удалён',
                 description: 'Логотип компании удалён из профиля',
@@ -857,10 +943,7 @@ function EmployerDashboard() {
 
             toast({
                 title: 'Изменения сохранены',
-                description:
-                    moderationState === 'PENDING_MODERATION'
-                        ? 'Изменения сохранены. Профиль уже находится на модерации.'
-                        : 'Данные компании успешно обновлены.',
+                description: 'Чтобы обновить публичную версию профиля, отправьте его на модерацию.',
             })
 
             setIsEditingProfile(false)
@@ -868,6 +951,41 @@ function EmployerDashboard() {
             toast({
                 title: 'Ошибка',
                 description: error?.message || 'Не удалось сохранить профиль',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    const handleSubmitEmployerProfileForModeration = async () => {
+        const validation = validatePublicProfile()
+
+        if (!validation.isValid) {
+            toast({
+                title: 'Ошибка',
+                description: Object.values(validation.nextErrors)[0] || 'Заполните обязательные поля перед отправкой на модерацию',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        setIsLoading(true)
+
+        try {
+            await submitEmployerProfileForModeration()
+            await reloadEmployerProfile()
+
+            toast({
+                title: 'Профиль отправлен',
+                description: 'Ваш профиль отправлен на модерацию.',
+            })
+
+            setIsEditingProfile(false)
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось отправить профиль на модерацию',
                 variant: 'destructive',
             })
         } finally {
@@ -1225,6 +1343,8 @@ function EmployerDashboard() {
                     <EmployerProfileSection
                         user={user}
                         profile={profile}
+                        publicProfile={publicProfile}
+                        hasApprovedPublicVersion={hasApprovedPublicVersion}
                         errors={errors}
                         isLoading={isLoading}
                         isEditingProfile={isEditingProfile}
@@ -1247,6 +1367,9 @@ function EmployerDashboard() {
                         onHandleDeleteLogo={handleDeleteLogo}
                         onHandleSaveProfile={handleSaveProfile}
                         onHandleSaveCompanyData={handleSaveCompanyData}
+                        onHandleSubmitEmployerProfileForModeration={handleSubmitEmployerProfileForModeration}
+                        canSubmitProfileToModeration={canSubmitProfileToModeration}
+                        moderationMissingItems={moderationMissingItems}
                         employerLocations={employerLocations}
                         selectedEmployerLocation={selectedEmployerLocation}
                         onOpenCreateLocation={handleOpenCreateLocation}

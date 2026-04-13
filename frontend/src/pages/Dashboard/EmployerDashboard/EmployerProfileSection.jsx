@@ -1,3 +1,5 @@
+import { useMemo, useState, useEffect } from 'react'
+
 import Button from '@/components/Button'
 import Input from '@/components/Input'
 import Label from '@/components/Label'
@@ -21,6 +23,8 @@ import EmployerLocationsSection from './EmployerLocationsSection'
 function EmployerProfileSection({
                                     user,
                                     profile,
+                                    publicProfile,
+                                    hasApprovedPublicVersion,
                                     errors,
                                     isLoading,
                                     isEditingProfile,
@@ -49,9 +53,58 @@ function EmployerProfileSection({
                                     onOpenEditLocation,
                                     onDeleteLocation,
                                 }) {
-    const logoUrl = profile.logo?.fileId && profile.userId
+    const [profileVersionView, setProfileVersionView] = useState('current')
+
+    const shouldShowVersionSwitch = Boolean(
+        hasApprovedPublicVersion &&
+        publicProfile &&
+        moderationState === 'PENDING_MODERATION'
+    )
+
+    useEffect(() => {
+        if (!shouldShowVersionSwitch) {
+            setProfileVersionView('current')
+        }
+    }, [shouldShowVersionSwitch])
+
+    const currentLogoUrl = profile.logo?.fileId && profile.userId
         ? getFileDownloadUrlByUserAndFile('EMPLOYER', profile.userId, profile.logo.fileId)
         : null
+
+    const publicLogoUrl = publicProfile?.logo?.fileId && publicProfile?.userId
+        ? getFileDownloadUrlByUserAndFile('EMPLOYER', publicProfile.userId, publicProfile.logo.fileId)
+        : null
+
+    const publicSelectedLocation = useMemo(() => {
+        if (!publicProfile?.locationId) return null
+        return employerLocations.find((item) => Number(item.id) === Number(publicProfile.locationId)) || null
+    }, [employerLocations, publicProfile?.locationId])
+
+    const displayedProfile = shouldShowVersionSwitch && profileVersionView === 'public'
+        ? publicProfile
+        : profile
+
+    const displayedLogoUrl = shouldShowVersionSwitch && profileVersionView === 'public'
+        ? publicLogoUrl
+        : currentLogoUrl
+
+    const displayedLocation = shouldShowVersionSwitch && profileVersionView === 'public'
+        ? publicSelectedLocation
+        : selectedEmployerLocation
+
+    const displayedModerationTone = shouldShowVersionSwitch && profileVersionView === 'public'
+        ? 'approved'
+        : moderationMeta.tone
+
+    const displayedModerationLabel = shouldShowVersionSwitch && profileVersionView === 'public'
+        ? 'Одобрен'
+        : moderationMeta.label
+
+    const displayedHeroText = shouldShowVersionSwitch && profileVersionView === 'public'
+        ? 'Это версия профиля, которую сейчас видят другие пользователи платформы.'
+        : shouldShowVersionSwitch
+            ? 'Это текущая версия профиля в вашем кабинете. После одобрения модератором она заменит публичную.'
+            : moderationMeta.description
 
     return (
         <div className="employer-profile">
@@ -79,57 +132,32 @@ function EmployerProfileSection({
                         </div>
                     </div>
 
-                    <div className="employer-profile__hero">
-                        <div className="employer-profile__logo-card">
-                            {logoUrl ? (
-                                <img
-                                    src={logoUrl}
-                                    alt={profile.companyName || 'Логотип компании'}
-                                    className="employer-profile__logo-image"
-                                />
-                            ) : (
-                                <div className="employer-profile__logo-placeholder">
-                                    {(profile.companyName?.trim()?.[0] || 'C').toUpperCase()}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="employer-profile__hero-info">
-                            <div className="employer-profile__hero-title-row">
-                                <h3>{profile.companyName || 'Компания без названия'}</h3>
-                            </div>
-
-                            <div className="employer-profile__hero-submeta">
-                                <div className={`employer-profile__status-chip employer-profile__status-chip--${moderationMeta.tone}`}>
-                                    <span className="employer-profile__status-chip-label">Профиль</span>
-                                    <span className="employer-profile__status-chip-value">{moderationMeta.label}</span>
-                                </div>
-
-                                <div className={`employer-profile__status-chip employer-profile__status-chip--verification-${(verificationState || 'not_started').toLowerCase()}`}>
-                                    <span className="employer-profile__status-chip-label">Верификация</span>
-                                    <span className="employer-profile__status-chip-value">
-                    {verificationState === 'APPROVED' && 'Пройдена'}
-                                        {verificationState === 'PENDING' && 'На проверке'}
-                                        {verificationState === 'REJECTED' && 'Отклонена'}
-                                        {verificationState === 'NOT_STARTED' && 'Не начата'}
-                                        {!['APPROVED', 'PENDING', 'REJECTED', 'NOT_STARTED'].includes(verificationState) && verificationState}
-                  </span>
-                                </div>
-                            </div>
-
-                            <p className="employer-profile__hero-text">
-                                {moderationMeta.description}
-                            </p>
-                        </div>
-                    </div>
-
-                    {moderationState === 'PENDING_MODERATION' && (
+                    {shouldShowVersionSwitch && (
                         <div className="employer-profile__moderation-hint">
-                            Профиль находится на модерации. В этот период он недоступен другим пользователям до одобрения куратором.
+                            У вас есть изменения, которые еще не одобрены модератором. Переключайтесь между текущей версией профиля и публичной версией, которую сейчас видят пользователи.
                         </div>
                     )}
 
-                    {moderationState === 'NEEDS_REVISION' && (
+                    {shouldShowVersionSwitch && (
+                        <div className="employer-profile__version-switch">
+                            <button
+                                type="button"
+                                className={`employer-profile__version-switch-btn ${profileVersionView === 'current' ? 'is-active' : ''}`}
+                                onClick={() => setProfileVersionView('current')}
+                            >
+                                Текущая версия
+                            </button>
+                            <button
+                                type="button"
+                                className={`employer-profile__version-switch-btn ${profileVersionView === 'public' ? 'is-active' : ''}`}
+                                onClick={() => setProfileVersionView('public')}
+                            >
+                                Публичная версия
+                            </button>
+                        </div>
+                    )}
+
+                    {moderationState === 'NEEDS_REVISION' && !shouldShowVersionSwitch && (
                         <div className="employer-profile__revision-card">
                             <div className="employer-profile__revision-header">
                                 <h3>Профиль требует доработки</h3>
@@ -139,7 +167,7 @@ function EmployerProfileSection({
                             </div>
 
                             <p className="employer-profile__revision-text">
-                                Куратор вернул профиль на правки. Исправьте данные и отправьте профиль повторно.
+                                Куратор вернул профиль на правки. Исправьте данные и сохраните изменения.
                             </p>
 
                             {moderationFeedback?.comment && (
@@ -164,57 +192,111 @@ function EmployerProfileSection({
                         </div>
                     )}
 
+                    <div className="employer-profile__hero">
+                        <div className="employer-profile__logo-card">
+                            {displayedLogoUrl ? (
+                                <img
+                                    src={displayedLogoUrl}
+                                    alt={displayedProfile.companyName || 'Логотип компании'}
+                                    className="employer-profile__logo-image"
+                                />
+                            ) : (
+                                <div className="employer-profile__logo-placeholder">
+                                    {(displayedProfile.companyName?.trim()?.[0] || 'C').toUpperCase()}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="employer-profile__hero-info">
+                            <div className="employer-profile__hero-title-row">
+                                <h3>{displayedProfile.companyName || 'Компания без названия'}</h3>
+                            </div>
+
+                            <div className="employer-profile__hero-submeta">
+                                <div className={`employer-profile__status-chip employer-profile__status-chip--${displayedModerationTone}`}>
+                                    <span className="employer-profile__status-chip-label">
+                                        {shouldShowVersionSwitch
+                                            ? profileVersionView === 'public'
+                                                ? 'Публичная версия'
+                                                : 'Текущая версия'
+                                            : 'Профиль'}
+                                    </span>
+                                    <span className="employer-profile__status-chip-value">
+                                        {displayedModerationLabel}
+                                    </span>
+                                </div>
+
+                                <div className={`employer-profile__status-chip employer-profile__status-chip--verification-${(verificationState || 'not_started').toLowerCase()}`}>
+                                    <span className="employer-profile__status-chip-label">Верификация</span>
+                                    <span className="employer-profile__status-chip-value">
+                                        {verificationState === 'APPROVED' && 'Пройдена'}
+                                        {verificationState === 'PENDING' && 'На проверке'}
+                                        {verificationState === 'REJECTED' && 'Отклонена'}
+                                        {verificationState === 'NOT_STARTED' && 'Не начата'}
+                                        {!['APPROVED', 'PENDING', 'REJECTED', 'NOT_STARTED'].includes(verificationState) && verificationState}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <p className="employer-profile__hero-text">
+                                {displayedHeroText}
+                            </p>
+                        </div>
+                    </div>
+
                     <div className="employer-profile__grid">
                         <div className="employer-profile__field">
                             <Label>Название</Label>
-                            <div className="field-value">{profile.companyName || '—'}</div>
+                            <div className="field-value">{displayedProfile.companyName || '—'}</div>
                         </div>
                         <div className="employer-profile__field">
                             <Label>ИНН</Label>
-                            <div className="field-value">{profile.inn || '—'}</div>
+                            <div className="field-value">{displayedProfile.inn || '—'}</div>
                         </div>
                         <div className="employer-profile__field">
                             <Label>Юр. название</Label>
-                            <div className="field-value">{profile.legalName || '—'}</div>
+                            <div className="field-value">{displayedProfile.legalName || '—'}</div>
                         </div>
                         <div className="employer-profile__field">
                             <Label>Сфера</Label>
-                            <div className="field-value">{profile.industry || '—'}</div>
+                            <div className="field-value">{displayedProfile.industry || '—'}</div>
                         </div>
                         <div className="employer-profile__field">
                             <Label>Сайт</Label>
                             <div className="field-value">
-                                {profile.websiteUrl ? (
-                                    <a href={profile.websiteUrl} target="_blank" rel="noopener noreferrer">
-                                        {profile.websiteUrl}
+                                {displayedProfile.websiteUrl ? (
+                                    <a href={displayedProfile.websiteUrl} target="_blank" rel="noopener noreferrer">
+                                        {displayedProfile.websiteUrl}
                                     </a>
                                 ) : '—'}
                             </div>
                         </div>
                         <div className="employer-profile__field">
-                            <Label>Основная локация</Label>
-                            <div className="field-value">{selectedEmployerLocation ? getLocationLabel(selectedEmployerLocation) : '—'}</div>
+                            <Label>Локация</Label>
+                            <div className="field-value">
+                                {displayedLocation ? getLocationLabel(displayedLocation) : displayedProfile.cityName || '—'}
+                            </div>
                         </div>
                         <div className="employer-profile__field">
                             <Label>Размер</Label>
                             <div className="field-value">
-                                {COMPANY_SIZE_OPTIONS.find((item) => item.value === profile.companySize)?.label || '—'}
+                                {COMPANY_SIZE_OPTIONS.find((item) => item.value === displayedProfile.companySize)?.label || '—'}
                             </div>
                         </div>
                         <div className="employer-profile__field">
                             <Label>Год основания</Label>
-                            <div className="field-value">{profile.foundedYear || '—'}</div>
+                            <div className="field-value">{displayedProfile.foundedYear || '—'}</div>
                         </div>
                         <div className="employer-profile__field employer-profile__field--wide">
                             <Label>Описание</Label>
-                            <div className="field-value">{profile.description || '—'}</div>
+                            <div className="field-value">{displayedProfile.description || '—'}</div>
                         </div>
                         <div className="employer-profile__field">
                             <Label>Социальные сети</Label>
                             <div className="field-value">
-                                {profile.socialLinks?.length > 0 ? (
+                                {displayedProfile.socialLinks?.length > 0 ? (
                                     <div className="links-list">
-                                        {profile.socialLinks.map((item, index) => (
+                                        {displayedProfile.socialLinks.map((item, index) => (
                                             <a key={`${item.url}-${index}`} href={item.url} target="_blank" rel="noopener noreferrer" className="link-item">
                                                 <img src={linkIcon} alt="" className="icon-small" />
                                                 <span>{item.label || item.url}</span>
@@ -227,9 +309,9 @@ function EmployerProfileSection({
                         <div className="employer-profile__field">
                             <Label>Контакты для связи</Label>
                             <div className="field-value">
-                                {profile.publicContacts?.length > 0 ? (
+                                {displayedProfile.publicContacts?.length > 0 ? (
                                     <div className="links-list">
-                                        {profile.publicContacts.map((item, index) => (
+                                        {displayedProfile.publicContacts.map((item, index) => (
                                             <div key={`${item.value}-${index}`} className="link-item">
                                                 <img src={linkIcon} alt="" className="icon-small" />
                                                 <span>{item.label ? `${item.label}: ` : ''}</span>
@@ -252,8 +334,8 @@ function EmployerProfileSection({
                         </div>
                         <div className="employer-profile__field">
                             <Label>Статус модерации</Label>
-                            <div className={`field-value employer-profile__moderation-state employer-profile__moderation-state--${moderationMeta.tone}`}>
-                                {moderationMeta.label}
+                            <div className={`field-value employer-profile__moderation-state employer-profile__moderation-state--${displayedModerationTone}`}>
+                                {displayedModerationLabel}
                             </div>
                         </div>
                     </div>
@@ -274,7 +356,7 @@ function EmployerProfileSection({
                     </div>
 
                     <p className="employer-profile__section-hint">
-                        Здесь хранятся юридическое название и ИНН. Название компании для карточки и модерации редактируется в публичном профиле.
+                        Здесь хранятся юридическое название и ИНН. Название компании для карточки редактируется в публичном профиле.
                     </p>
 
                     <div className="employer-profile__edit-field">
@@ -323,6 +405,10 @@ function EmployerProfileSection({
                         </button>
                     </div>
 
+                    <p className="employer-profile__section-hint">
+                        Сохранение обновляет текущую версию профиля. Если профиль уже был одобрен, изменения после сохранения отправятся на модерацию автоматически.
+                    </p>
+
                     <div className="employer-profile__edit-section employer-profile__edit-section--accent">
                         <div className="employer-profile__edit-section-header">
                             <h3 className="employer-profile__edit-section-title">Брендинг</h3>
@@ -334,9 +420,9 @@ function EmployerProfileSection({
                         <div className="employer-profile__logo-manager">
                             <div className="employer-profile__logo-manager-card">
                                 <div className="employer-profile__logo-manager-preview">
-                                    {logoUrl ? (
+                                    {currentLogoUrl ? (
                                         <img
-                                            src={logoUrl}
+                                            src={currentLogoUrl}
                                             alt={profile.companyName || 'Логотип компании'}
                                             className="employer-profile__logo-image"
                                         />
