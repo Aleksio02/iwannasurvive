@@ -237,6 +237,20 @@ export function normalizeLocationState(location = {}) {
     }
 }
 
+const normalizeEmployerWorkspaceResponse = (workspaceData = {}, fallbackUser = null) => {
+    const current = normalizeEmployerProfileState(workspaceData.currentProfile || {}, fallbackUser)
+    const publicVersion = workspaceData.publicProfile
+        ? normalizeEmployerProfileState(workspaceData.publicProfile, fallbackUser)
+        : null
+
+    return {
+        current,
+        publicProfile: publicVersion,
+        moderationStatus: workspaceData.moderationStatus || current.moderationStatus || 'DRAFT',
+        hasApprovedPublicVersion: Boolean(workspaceData.hasApprovedPublicVersion),
+    }
+}
+
 export function createEmptyLocationForm() {
     return {
         id: null,
