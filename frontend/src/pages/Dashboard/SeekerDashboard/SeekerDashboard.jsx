@@ -32,6 +32,7 @@ import {
 } from '../../../api/profile'
 import { getSavedFavorites, removeEmployerFromSaved } from '../../../api/favorites'
 import SavedFavoritesSection from './components/SavedFavoritesSection'
+import RecommendationsSection from './components/RecommendationsSection'
 import '../DashboardBase.scss'
 import './SeekerDashboard.scss'
 
@@ -1912,103 +1913,25 @@ function SeekerDashboard() {
                 )}
 
                 {activeTab === 'recommendations' && (
-                    <div className="seeker-recommendations">
-                        <div className="section-header">
-                            <h2>Рекомендации</h2>
-                            <button
-                                className="btn-primary-small"
-                                onClick={() =>
-                                    setRecommendationModal({
-                                        isOpen: true,
-                                        selectedOpportunityId: '',
-                                        selectedContactId: '',
-                                        message: '',
-                                    })
-                                }
-                                disabled={Boolean(networkingBlockedMessage)}
-                            >
-                                Новая рекомендация
-                            </button>
-                        </div>
-
-                        <div className="dashboard-tabs dashboard-tabs--inner dashboard-tabs--stats">
-                            <button
-                                type="button"
-                                className={`dashboard-tabs__btn ${recommendationsTab === 'incoming' ? 'is-active' : ''}`}
-                                onClick={() => setRecommendationsTab('incoming')}
-                            >
-                                <span className="dashboard-tabs__label">Входящие</span>
-                                <span className="dashboard-tabs__badge">{recommendations.incoming.length}</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                className={`dashboard-tabs__btn ${recommendationsTab === 'outgoing' ? 'is-active' : ''}`}
-                                onClick={() => setRecommendationsTab('outgoing')}
-                            >
-                                <span className="dashboard-tabs__label">Исходящие</span>
-                                <span className="dashboard-tabs__badge">{recommendations.outgoing.length}</span>
-                            </button>
-                        </div>
-
-                        {networkingBlockedMessage ? (
-                            <div className="empty-state">
-                                <p>Рекомендации пока недоступны</p>
-                                <span>{networkingBlockedMessage}</span>
-                            </div>
-                        ) : isRecommendationsLoading ? (
-                            <div className="dashboard-loading dashboard-loading--inner">
-                                <div className="loading-spinner"></div>
-                                <p>Загрузка рекомендаций...</p>
-                            </div>
-                        ) : currentRecommendations.length === 0 ? (
-                            <div className="empty-state">
-                                <p>Пока нет рекомендаций</p>
-                                <span>
-                                    {recommendationsTab === 'incoming'
-                                        ? 'Входящие рекомендации появятся здесь'
-                                        : 'Отправленные рекомендации появятся здесь'}
-                                </span>
-                            </div>
-                        ) : (
-                            <div className="applications-list">
-                                {currentRecommendations.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        className="application-card"
-                                        onClick={() => navigate(`/opportunities/${item.opportunityId}`)}
-                                    >
-                                        <div className="application-card__content">
-                                            <h3>{item.opportunityTitle}</h3>
-                                            <p className="application-card__company">{item.companyName}</p>
-                                            <p className="application-card__description">
-                                                {recommendationsTab === 'incoming'
-                                                    ? `От: ${item.fromApplicantName}`
-                                                    : `Кому: ${item.toApplicantName}`}
-                                            </p>
-                                            {item.message && (
-                                                <p className="application-card__description">{item.message}</p>
-                                            )}
-                                            <div className="application-card__footer">
-                                                <span className="application-card__date">{formatDate(item.createdAt)}</span>
-                                                {recommendationsTab === 'outgoing' && (
-                                                    <button
-                                                        className="saved-card__remove"
-                                                        onClick={(event) => {
-                                                            event.stopPropagation()
-                                                            handleDeleteRecommendation(item.id)
-                                                        }}
-                                                    >
-                                                        Удалить
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    <RecommendationsSection
+                        recommendations={recommendations}
+                        recommendationsTab={recommendationsTab}
+                        setRecommendationsTab={setRecommendationsTab}
+                        currentRecommendations={currentRecommendations}
+                        networkingBlockedMessage={networkingBlockedMessage}
+                        isRecommendationsLoading={isRecommendationsLoading}
+                        onOpenCreateModal={() =>
+                            setRecommendationModal({
+                                isOpen: true,
+                                selectedOpportunityId: '',
+                                selectedContactId: '',
+                                message: '',
+                            })
+                        }
+                        onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
+                        onDeleteRecommendation={handleDeleteRecommendation}
+                        onRefreshRecommendations={loadRecommendations}
+                    />
                 )}
             </div>
 
