@@ -217,6 +217,15 @@ export async function getOutgoingRecommendations() {
     return httpJson(`${API_BASE}/recommendations/outgoing?${toQuery({ currentUser })}`)
 }
 
+export async function updateRecommendationStatus(recommendationId, status) {
+    const currentUser = await getRequiredCurrentUser()
+
+    return httpJson(`${API_BASE}/recommendations/${recommendationId}/status?${toQuery({ currentUser })}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+    })
+}
+
 export async function deleteRecommendation(recommendationId) {
     const currentUser = await getRequiredCurrentUser()
 
