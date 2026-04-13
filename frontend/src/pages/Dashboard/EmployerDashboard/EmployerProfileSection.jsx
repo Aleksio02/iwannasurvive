@@ -17,6 +17,7 @@ import {
 } from './employerDashboard.helpers'
 
 import EmployerLocationsSection from './EmployerLocationsSection'
+
 function EmployerProfileSection({
                                     user,
                                     profile,
@@ -35,9 +36,6 @@ function EmployerProfileSection({
                                     moderationState,
                                     moderationFeedback,
                                     isModerationFeedbackLoading,
-                                    moderationMissingItems,
-                                    canSubmitProfileToModeration,
-                                    moderationSubmitButtonText,
                                     verificationState,
                                     logoInputRef,
                                     isLogoUploading,
@@ -45,7 +43,6 @@ function EmployerProfileSection({
                                     onHandleDeleteLogo,
                                     onHandleSaveProfile,
                                     onHandleSaveCompanyData,
-                                    onHandleSubmitEmployerProfileForModeration,
                                     employerLocations,
                                     selectedEmployerLocation,
                                     onOpenCreateLocation,
@@ -111,12 +108,12 @@ function EmployerProfileSection({
                                 <div className={`employer-profile__status-chip employer-profile__status-chip--verification-${(verificationState || 'not_started').toLowerCase()}`}>
                                     <span className="employer-profile__status-chip-label">Верификация</span>
                                     <span className="employer-profile__status-chip-value">
-                                        {verificationState === 'APPROVED' && 'Пройдена'}
+                    {verificationState === 'APPROVED' && 'Пройдена'}
                                         {verificationState === 'PENDING' && 'На проверке'}
                                         {verificationState === 'REJECTED' && 'Отклонена'}
                                         {verificationState === 'NOT_STARTED' && 'Не начата'}
                                         {!['APPROVED', 'PENDING', 'REJECTED', 'NOT_STARTED'].includes(verificationState) && verificationState}
-                                    </span>
+                  </span>
                                 </div>
                             </div>
 
@@ -125,6 +122,12 @@ function EmployerProfileSection({
                             </p>
                         </div>
                     </div>
+
+                    {moderationState === 'PENDING_MODERATION' && (
+                        <div className="employer-profile__moderation-hint">
+                            Профиль находится на модерации. В этот период он недоступен другим пользователям до одобрения куратором.
+                        </div>
+                    )}
 
                     {moderationState === 'NEEDS_REVISION' && (
                         <div className="employer-profile__revision-card">
@@ -158,24 +161,6 @@ function EmployerProfileSection({
                                     </ul>
                                 </div>
                             )}
-                        </div>
-                    )}
-
-                    {(moderationState === 'DRAFT' || moderationState === 'APPROVED' || moderationState === 'NEEDS_REVISION') && (
-                        <div className="employer-profile__moderation-actions">
-                            {moderationMissingItems.length > 0 && (
-                                <div className="employer-profile__moderation-hint">
-                                    Для отправки на модерацию заполните: {moderationMissingItems.join(', ')}.
-                                </div>
-                            )}
-
-                            <Button
-                                className="button--primary"
-                                onClick={onHandleSubmitEmployerProfileForModeration}
-                                disabled={isLoading || !canSubmitProfileToModeration}
-                            >
-                                {isLoading ? 'Отправка...' : moderationSubmitButtonText}
-                            </Button>
                         </div>
                     )}
 
@@ -266,7 +251,7 @@ function EmployerProfileSection({
                             </div>
                         </div>
                         <div className="employer-profile__field">
-                            <Label>Статус модерации профиля</Label>
+                            <Label>Статус модерации</Label>
                             <div className={`field-value employer-profile__moderation-state employer-profile__moderation-state--${moderationMeta.tone}`}>
                                 {moderationMeta.label}
                             </div>
