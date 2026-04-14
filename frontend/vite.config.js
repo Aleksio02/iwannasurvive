@@ -71,6 +71,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/api/employer/tags': {
+          target: opportunityTarget,
+          changeOrigin: true,
+          secure: false,
+        },
         '/api/employer/opportunities': {
           target: opportunityTarget,
           changeOrigin: true,
