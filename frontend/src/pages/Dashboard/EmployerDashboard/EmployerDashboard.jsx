@@ -152,7 +152,6 @@ function EmployerDashboard() {
     const [publicProfile, setPublicProfile] = useState(null)
     const [hasApprovedPublicVersion, setHasApprovedPublicVersion] = useState(false)
 
-    // Снапшоты для сравнения изменений
     const [initialProfileSnapshot, setInitialProfileSnapshot] = useState(null)
     const [initialCompanySnapshot, setInitialCompanySnapshot] = useState(null)
 
@@ -254,38 +253,42 @@ function EmployerDashboard() {
         const normalizedWorkspace = normalizeEmployerWorkspaceResponse(workspaceData, fallbackUser)
         const normalized = normalizedWorkspace.current
 
-        setProfile(normalized)
+        const nextProfile = {
+            ...normalized,
+            moderationStatus: normalizedWorkspace.moderationStatus || normalized.moderationStatus || 'DRAFT',
+        }
+
+        setProfile(nextProfile)
         setPublicProfile(normalizedWorkspace.publicProfile)
         setHasApprovedPublicVersion(normalizedWorkspace.hasApprovedPublicVersion)
 
-        // Сохраняем снапшоты для сравнения
         setInitialProfileSnapshot({
-            companyName: normalized.companyName || '',
-            description: normalized.description || '',
-            industry: normalized.industry || '',
-            websiteUrl: normalized.websiteUrl || '',
-            socialLinks: normalized.socialLinks || [],
-            publicContacts: normalized.publicContacts || [],
-            companySize: normalized.companySize || '',
-            foundedYear: normalized.foundedYear || null,
-            cityId: normalized.cityId || null,
-            locationId: normalized.locationId || null,
+            companyName: nextProfile.companyName || '',
+            description: nextProfile.description || '',
+            industry: nextProfile.industry || '',
+            websiteUrl: nextProfile.websiteUrl || '',
+            socialLinks: nextProfile.socialLinks || [],
+            publicContacts: nextProfile.publicContacts || [],
+            companySize: nextProfile.companySize || '',
+            foundedYear: nextProfile.foundedYear || null,
+            cityId: nextProfile.cityId || null,
+            locationId: nextProfile.locationId || null,
         })
 
         setInitialCompanySnapshot({
-            legalName: normalized.legalName || '',
-            inn: normalized.inn || '',
+            legalName: nextProfile.legalName || '',
+            inn: nextProfile.inn || '',
         })
 
         setVerificationData((prev) => ({
             ...prev,
-            inn: normalized.inn || '',
+            inn: nextProfile.inn || '',
         }))
 
-        setSocialRows(linksToRows(normalized.socialLinks))
+        setSocialRows(linksToRows(nextProfile.socialLinks))
         setContactRows(
-            normalized.publicContacts.length > 0
-                ? normalized.publicContacts.map((item) =>
+            nextProfile.publicContacts.length > 0
+                ? nextProfile.publicContacts.map((item) =>
                     createLinkRow(item.label || item.type || 'Контакт', item.value || '')
                 )
                 : [createLinkRow()]
@@ -841,7 +844,7 @@ function EmployerDashboard() {
             }
 
             if (method === 'PROFESSIONAL_LINKS') {
-                payload.professionalLinks = rowsToLinks(verificationLinkRows)
+                payload.professionalLinks = rowsToLinks(verificationLinkRows).map((item) => item.url)
             }
 
             await createEmployerVerification(payload, user.userId)
@@ -1130,23 +1133,13 @@ function EmployerDashboard() {
             }
 
             await updateEmployerProfile(profilePayload)
-
-            const isAfterFirstApproval = hasApprovedPublicVersion || profile.moderationStatus !== 'DRAFT'
-
-            if (isAfterFirstApproval && !isProfileAlreadyOnModeration(profile.moderationStatus)) {
-                await submitEmployerProfileForModeration()
-                toast({
-                    title: 'Изменения сохранены',
-                    description: 'Изменения сохранены и отправлены на модерацию',
-                })
-            } else {
-                toast({
-                    title: 'Изменения сохранены',
-                    description: 'Публичный профиль сохранён',
-                })
-            }
-
             await reloadEmployerProfile()
+
+            toast({
+                title: 'Изменения сохранены',
+                description: 'Публичный профиль сохранён',
+            })
+
             setIsEditingProfile(false)
         } catch (error) {
             console.error('Save profile error:', error)
@@ -1188,35 +1181,13 @@ function EmployerDashboard() {
             }
 
             await updateEmployerCompanyData(companyPayload)
-
-            const publicValidation = validatePublicProfile()
-
-            if (!publicValidation.isValid) {
-                toast({
-                    title: 'Реквизиты сохранены',
-                    description: `Заполните публичный профиль: ${Object.values(publicValidation.nextErrors).join(', ')}`,
-                    variant: 'warning',
-                })
-                setIsEditingCompanyData(false)
-                return
-            }
-
-            const isAfterFirstApproval = hasApprovedPublicVersion || profile.moderationStatus !== 'DRAFT'
-
-            if (isAfterFirstApproval && !isProfileAlreadyOnModeration(profile.moderationStatus)) {
-                await submitEmployerProfileForModeration()
-                toast({
-                    title: 'Реквизиты сохранены',
-                    description: 'Изменения сохранены и отправлены на модерацию',
-                })
-            } else {
-                toast({
-                    title: 'Реквизиты сохранены',
-                    description: 'Юридические данные компании обновлены',
-                })
-            }
-
             await reloadEmployerProfile()
+
+            toast({
+                title: 'Реквизиты сохранены',
+                description: 'Юридические данные компании обновлены',
+            })
+
             setIsEditingCompanyData(false)
         } catch (error) {
             console.error('Save company data error:', error)
@@ -1274,11 +1245,18 @@ function EmployerDashboard() {
                 await updateEmployerCompanyData(companyPayload)
             }
 
-            // Если изменений не было, но пользователь нажал кнопку - всё равно отправляем
-            if (!hasPublicChanges && !hasCompanyChanges) {
-                await submitEmployerProfileForModeration()
+            if (isProfileAlreadyOnModeration(profile.moderationStatus)) {
+                toast({
+                    title: 'Профиль уже на модерации',
+                    description: 'Повторная отправка сейчас не требуется',
+                })
+                await reloadEmployerProfile()
+                setIsEditingProfile(false)
+                setIsEditingCompanyData(false)
+                return
             }
 
+            await submitEmployerProfileForModeration()
             await reloadEmployerProfile()
 
             toast({
