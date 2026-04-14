@@ -14,6 +14,7 @@ import {
 
 function EmployerOpportunityForm({
                                      isVerified,
+                                     verificationState,
                                      isLoading,
                                      opportunityMode,
                                      opportunityForm,
@@ -26,8 +27,10 @@ function EmployerOpportunityForm({
                                      onSaveOpportunity,
                                      onChangeOpportunityForm,
                                  }) {
-
     const isOfficeBasedWorkFormat = ['OFFICE', 'HYBRID'].includes(opportunityForm.workFormat)
+    const isVerificationPending = verificationState === 'PENDING'
+    const isVerificationRejected = verificationState === 'REJECTED'
+    const isVerificationApproved = verificationState === 'APPROVED'
 
     return (
         <div className="employer-create-form">
@@ -40,9 +43,21 @@ function EmployerOpportunityForm({
                 )}
             </div>
 
-            {!isVerified && (
+            {!isVerificationApproved && (
                 <p className="field-hint">
                     Создание и редактирование публикаций доступно после верификации компании.
+                </p>
+            )}
+
+            {isVerificationPending && (
+                <p className="field-hint field-hint--warning">
+                    Верификация компании на проверке. Публикация новых карточек временно ограничена.
+                </p>
+            )}
+
+            {isVerificationRejected && (
+                <p className="field-hint field-hint--error">
+                    Верификация компании отклонена. Для публикации новых карточек отправьте заявку повторно.
                 </p>
             )}
 
@@ -50,7 +65,7 @@ function EmployerOpportunityForm({
                 <Label>Название <span className="required-star">*</span></Label>
                 <Input
                     value={opportunityForm.title}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, title: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, title: e.target.value }))}
                     placeholder="Например, Junior Java Developer"
                 />
                 {errors.title && <p className="field-error">{errors.title}</p>}
@@ -60,7 +75,7 @@ function EmployerOpportunityForm({
                 <CustomSelect
                     label="Тип"
                     value={opportunityForm.type}
-                    onChange={(val) => onChangeOpportunityForm((prev) => ({...prev, type: val}))}
+                    onChange={(val) => onChangeOpportunityForm((prev) => ({ ...prev, type: val }))}
                     options={OPPORTUNITY_TYPES}
                 />
                 <CustomSelect
@@ -142,7 +157,7 @@ function EmployerOpportunityForm({
                 <Textarea
                     rows={3}
                     value={opportunityForm.shortDescription}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, shortDescription: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, shortDescription: e.target.value }))}
                     placeholder="Кратко: формат, аудитория, ключевая польза"
                 />
                 {errors.shortDescription && <p className="field-error">{errors.shortDescription}</p>}
@@ -153,7 +168,7 @@ function EmployerOpportunityForm({
                 <Textarea
                     rows={5}
                     value={opportunityForm.fullDescription}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, fullDescription: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, fullDescription: e.target.value }))}
                     placeholder="Подробности о вакансии, стажировке, мероприятии или менторской программе"
                 />
             </div>
@@ -163,7 +178,7 @@ function EmployerOpportunityForm({
                 <Textarea
                     rows={4}
                     value={opportunityForm.requirements}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, requirements: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, requirements: e.target.value }))}
                     placeholder="Навыки, стек, ожидания к кандидату"
                 />
             </div>
@@ -172,13 +187,13 @@ function EmployerOpportunityForm({
                 <CustomSelect
                     label="Уровень"
                     value={opportunityForm.grade}
-                    onChange={(val) => onChangeOpportunityForm((prev) => ({...prev, grade: val}))}
+                    onChange={(val) => onChangeOpportunityForm((prev) => ({ ...prev, grade: val }))}
                     options={EXPERIENCE_LEVELS}
                 />
                 <CustomSelect
                     label="Занятость"
                     value={opportunityForm.employmentType}
-                    onChange={(val) => onChangeOpportunityForm((prev) => ({...prev, employmentType: val}))}
+                    onChange={(val) => onChangeOpportunityForm((prev) => ({ ...prev, employmentType: val }))}
                     options={EMPLOYMENT_TYPES}
                 />
                 {opportunityForm.type === 'EVENT' ? (
@@ -187,7 +202,7 @@ function EmployerOpportunityForm({
                         <Input
                             type="date"
                             value={opportunityForm.eventDate}
-                            onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, eventDate: e.target.value}))}
+                            onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, eventDate: e.target.value }))}
                         />
                         {errors.eventDate && <p className="field-error">{errors.eventDate}</p>}
                     </div>
@@ -197,7 +212,7 @@ function EmployerOpportunityForm({
                         <Input
                             type="date"
                             value={opportunityForm.expiresAt}
-                            onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, expiresAt: e.target.value}))}
+                            onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, expiresAt: e.target.value }))}
                         />
                         {errors.expiresAt && <p className="field-error">{errors.expiresAt}</p>}
                     </div>
@@ -208,18 +223,18 @@ function EmployerOpportunityForm({
                 <Input
                     type="number"
                     value={opportunityForm.salaryFrom}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, salaryFrom: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryFrom: e.target.value }))}
                     placeholder="Зарплата от"
                 />
                 <Input
                     type="number"
                     value={opportunityForm.salaryTo}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, salaryTo: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryTo: e.target.value }))}
                     placeholder="Зарплата до"
                 />
                 <Input
                     value={opportunityForm.contactEmail}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, contactEmail: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
                     placeholder="Контактный email"
                 />
             </div>
@@ -227,17 +242,17 @@ function EmployerOpportunityForm({
             <div className="employer-create-form__grid-3">
                 <Input
                     value={opportunityForm.contactPhone}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, contactPhone: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
                     placeholder="Телефон"
                 />
                 <Input
                     value={opportunityForm.contactTelegram}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, contactTelegram: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, contactTelegram: e.target.value }))}
                     placeholder="Telegram"
                 />
                 <Input
                     value={opportunityForm.contactPerson}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({...prev, contactPerson: e.target.value}))}
+                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, contactPerson: e.target.value }))}
                     placeholder="Контактное лицо"
                 />
             </div>

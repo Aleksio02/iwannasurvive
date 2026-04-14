@@ -15,6 +15,7 @@ function EmployerVerificationModal({
                                        setVerificationLinkRows,
                                        onSubmit,
                                        onClose,
+                                       userEmail = '',
                                    }) {
     if (!isOpen) return null
 
@@ -39,10 +40,13 @@ function EmployerVerificationModal({
                     <div className="modal__field">
                         <Label>Корпоративная почта</Label>
                         <Input
-                            value={verificationData.corporateEmail}
+                            value={verificationData.corporateEmail || userEmail}
                             onChange={(e) => setVerificationData((prev) => ({ ...prev, corporateEmail: e.target.value }))}
                             placeholder="name@company.com"
                         />
+                        <p className="field-hint">
+                            Укажите корпоративную почту, привязанную к домену вашей компании. Если оставить пустым, будет использована почта из аккаунта.
+                        </p>
                     </div>
                 )}
 

@@ -25,6 +25,7 @@ import {
     setSessionUser,
     subscribeSessionChange,
 } from '../../utils/sessionStore'
+import { createEmployerVerification } from '../../api/profile'
 import {
     Card,
     CardContent,
@@ -863,6 +864,7 @@ function ProfileEdit() {
 
         try {
             if (isEmployer) {
+                // Сохраняем профиль работодателя
                 await updateEmployerProfile({
                     companyName: companyName.trim(),
                     description: description.trim() || null,
@@ -894,10 +896,32 @@ function ProfileEdit() {
                     inn: inn.trim(),
                 })
 
-                toast({
-                    title: 'Профиль компании сохранён',
-                    description: 'Основная локация привязана корректно.',
-                })
+                // Отправляем на верификацию
+                try {
+                    await createEmployerVerification({
+                        verificationMethod: 'TIN',
+                        inn: inn.trim(),
+                        submittedComment: 'Автоматически создано при регистрации компании',
+                    })
+                    toast({
+                        title: 'Профиль сохранён',
+                        description: 'Заявка на верификацию отправлена. Вы будете перенаправлены в личный кабинет.',
+                    })
+                } catch (verifError) {
+                    const code = String(verifError?.code || '').toLowerCase()
+                    if (code === 'employer_verification_already_exists' || code === 'verification_already_exists') {
+                        toast({
+                            title: 'Профиль сохранён',
+                            description: 'Заявка на верификацию уже существует.',
+                        })
+                    } else {
+                        toast({
+                            title: 'Профиль сохранён',
+                            description: 'Не удалось отправить заявку на верификацию. Вы сможете отправить её позже в кабинете.',
+                            variant: 'destructive',
+                        })
+                    }
+                }
 
                 navigate('/employer')
             } else {
