@@ -43,6 +43,7 @@ import EmployerOpportunityForm from './EmployerOpportunityForm'
 import EmployerOpportunitiesSection from './EmployerOpportunitiesSection'
 import EmployerApplicantsSection from './EmployerApplicantsSection'
 import ApplicantPreviewModal from './ApplicantPreviewModal'
+import EmployerTagsPage from './EmployerTagsPage';
 
 import {
     createLinkRow,
@@ -1451,14 +1452,16 @@ function EmployerDashboard() {
 
             <div className="dashboard-tabs">
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'opportunities' ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab
+                    === 'opportunities' ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('opportunities')}
                 >
                     Вакансии
                 </button>
 
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'create' ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'create'
+                        ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('create')}
                     disabled={!isVerified}
                 >
@@ -1466,17 +1469,26 @@ function EmployerDashboard() {
                 </button>
 
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'applicants' ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'applicants'
+                        ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('applicants')}
                 >
                     Отклики
                 </button>
 
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'profile' ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'profile'
+                        ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('profile')}
                 >
                     О компании
+                </button>
+                <button
+                    className={`dashboard-tabs__btn ${activeTab === 'tags'
+                        ? 'is-active' : ''}`}
+                    onClick={() => setActiveTab('tags')}
+                >
+                    Мои теги
                 </button>
             </div>
 
@@ -1635,6 +1647,7 @@ function EmployerDashboard() {
                         onDeleteLocation={handleDeleteLocation}
                     />
                 )}
+                {activeTab === 'tags' && <EmployerTagsPage />}
             </div>
 
             <EmployerVerificationModal
