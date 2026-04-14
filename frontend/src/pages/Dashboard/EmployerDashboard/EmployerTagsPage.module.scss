@@ -1,0 +1,96 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.createBtn {
+  background: #2c3e50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.filters {
+  margin-bottom: 20px;
+}
+
+.filters label {
+  margin-right: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th, .table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: left;
+}
+
+.table th {
+  background: #f2f2f2;
+}
+
+.detailBtn, .cancelBtn {
+  padding: 4px 8px;
+  margin-right: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+}
+
+.detailBtn {
+  background: #2196f3;
+  color: white;
+}
+
+.cancelBtn {
+  background: #f44336;
+  color: white;
+}
+
+.empty {
+  text-align: center;
+  color: #777;
+}
+
+.error {
+  color: #c62828;
+  margin-bottom: 16px;
+}
+
+.btnApprove,
+.btnReject {
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  margin-right: 8px;
+}
+
+.btnApprove {
+  background: #e3f7e5;
+  border-color: #a5d6a7;
+  color: #2e7d32;
+}
+
+.btnReject {
+  background: #ffe5e5;
+  border-color: #ffcdd2;
+  color: #c62828;
+}

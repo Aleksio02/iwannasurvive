@@ -3,6 +3,7 @@ package ru.itplanet.trampline.opportunity.service
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import ru.itplanet.trampline.commons.model.enums.TagCategory
 import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTaskRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
@@ -115,6 +116,7 @@ class EmployerAndCuratorTagServiceImpl(
         val saved = tagDao.save(
             TagDto().apply {
                 name = normalizedName
+                this.normalizedName = normalizedName
                 category = request.category
                 this.createdByType = createdByType
                 createdByUserId = currentUserId
@@ -130,6 +132,126 @@ class EmployerAndCuratorTagServiceImpl(
         )
 
         return toResponse(saved)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getEmployerTags(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        status: TagModerationStatus?,
+        category: TagCategory?,
+        search: String?,
+    ): List<EmployerTagResponse> {
+        ensureSupportedCreatedByType(createdByType)
+
+        val tags = when {
+            status != null && category != null ->
+                tagDao.findAllByCreatedByTypeAndCreatedByUserIdAndCategoryAndModerationStatusOrderByIdDesc(
+                    createdByType, currentUserId, category, status
+                )
+            status != null ->
+                tagDao.findAllByCreatedByTypeAndCreatedByUserIdAndModerationStatusOrderByIdDesc(
+                    createdByType, currentUserId, status
+                )
+            category != null ->
+                tagDao.findAllByCreatedByTypeAndCreatedByUserIdAndCategoryOrderByIdDesc(
+                    createdByType, currentUserId, category
+                )
+            !search.isNullOrBlank() ->
+                tagDao.findAllByCreatedByTypeAndCreatedByUserIdAndNameContainingIgnoreCaseOrderByIdDesc(
+                    createdByType, currentUserId, search!!
+                )
+            else ->
+                tagDao.findAllByCreatedByTypeAndCreatedByUserIdOrderByIdDesc(
+                    createdByType, currentUserId
+                )
+        }
+        return tags.map(::toResponse)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getEmployerTagById(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    ): EmployerTagResponse {
+        val tag = getOwnedTag(currentUserId, createdByType, tagId)
+        return toResponse(tag)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getCuratorTags(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        status: TagModerationStatus?,
+        category: TagCategory?,
+        search: String?,
+    ): List<EmployerTagResponse> {
+        ensureSupportedCreatedByType(createdByType)
+
+        val tags = when {
+            status != null && category != null ->
+                tagDao.findAllByCreatedByTypeAndCategoryAndModerationStatusOrderByIdDesc(
+                    createdByType, category, status
+                )
+            status != null ->
+                tagDao.findAllByCreatedByTypeAndModerationStatusOrderByIdDesc(createdByType, status)
+            category != null ->
+                tagDao.findAllByCreatedByTypeAndCategoryOrderByIdDesc(createdByType, category)
+            !search.isNullOrBlank() ->
+                tagDao.findAllByCreatedByTypeAndNameContainingIgnoreCaseOrderByIdDesc(createdByType, search!!)
+            else ->
+                tagDao.findAllByCreatedByTypeOrderByIdDesc(createdByType)
+        }
+        return tags.map(::toResponse)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getCuratorTagById(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    ): EmployerTagResponse {
+        ensureSupportedCreatedByType(createdByType)
+        val tag = tagDao.findById(tagId).orElseThrow {
+            OpportunityNotFoundDomainException("Тег не найден", "tag_not_found")
+        }
+        if (tag.createdByType != createdByType) {
+            throw OpportunityForbiddenException("Доступ запрещён", "not_owner")
+        }
+        return toResponse(tag)
+    }
+
+    @Transactional
+    override fun approveModerationTag(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    ) {
+        val tag = getOwnedTag(currentUserId, createdByType, tagId)
+        if (tag.moderationStatus != TagModerationStatus.PENDING) {
+            throw OpportunityConflictException(
+                "Можно одобрить только тег в статусе PENDING",
+                "wrong_status"
+            )
+        }
+        tag.moderationStatus = TagModerationStatus.APPROVED
+        tag.isActive = true
+
+        val taskLookup = moderationServiceClient.getTaskByEntity(
+            entityType = ModerationEntityType.TAG,
+            entityId = requireNotNull(tag.id),
+            taskType = ModerationTaskType.TAG_REVIEW,
+        )
+        if (taskLookup.exists && taskLookup.taskId != null) {
+            try {
+                moderationServiceClient.cancelTask(taskLookup.taskId!!)
+            } catch (e: Exception) {
+                // Do nothing
+            }
+        }
+
+        tagDao.save(tag)
     }
 
     @Transactional(readOnly = true)

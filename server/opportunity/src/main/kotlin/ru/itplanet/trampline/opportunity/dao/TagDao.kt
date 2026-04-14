@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import ru.itplanet.trampline.commons.model.enums.TagCategory
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
+import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 
 interface TagDao : JpaRepository<TagDto, Long> {
@@ -28,6 +29,42 @@ interface TagDao : JpaRepository<TagDto, Long> {
         ids: Collection<Long>,
         moderationStatus: TagModerationStatus,
     ): List<TagDto>
+
+    fun findAllByCreatedByTypeAndCreatedByUserIdOrderByIdDesc(
+        createdByType: CreatedByType,
+        createdByUserId: Long,
+    ): List<TagDto>
+
+    fun findAllByCreatedByTypeAndCreatedByUserIdAndModerationStatusOrderByIdDesc(
+        createdByType: CreatedByType,
+        createdByUserId: Long,
+        moderationStatus: TagModerationStatus,
+    ): List<TagDto>
+
+    fun findAllByCreatedByTypeAndCreatedByUserIdAndCategoryOrderByIdDesc(
+        createdByType: CreatedByType,
+        createdByUserId: Long,
+        category: TagCategory,
+    ): List<TagDto>
+
+    fun findAllByCreatedByTypeAndCreatedByUserIdAndNameContainingIgnoreCaseOrderByIdDesc(
+        createdByType: CreatedByType,
+        createdByUserId: Long,
+        name: String,
+    ): List<TagDto>
+
+    fun findAllByCreatedByTypeAndCreatedByUserIdAndCategoryAndModerationStatusOrderByIdDesc(
+        createdByType: CreatedByType,
+        createdByUserId: Long,
+        category: TagCategory,
+        moderationStatus: TagModerationStatus,
+    ): List<TagDto>
+
+    fun findAllByCreatedByTypeOrderByIdDesc(createdByType: CreatedByType): List<TagDto>
+    fun findAllByCreatedByTypeAndModerationStatusOrderByIdDesc(createdByType: CreatedByType, moderationStatus: TagModerationStatus): List<TagDto>
+    fun findAllByCreatedByTypeAndCategoryOrderByIdDesc(createdByType: CreatedByType, category: TagCategory): List<TagDto>
+    fun findAllByCreatedByTypeAndCategoryAndModerationStatusOrderByIdDesc(createdByType: CreatedByType, category: TagCategory, moderationStatus: TagModerationStatus): List<TagDto>
+    fun findAllByCreatedByTypeAndNameContainingIgnoreCaseOrderByIdDesc(createdByType: CreatedByType, name: String): List<TagDto>
 
     fun findByNormalizedName(normalizedName: String): TagDto?
 
