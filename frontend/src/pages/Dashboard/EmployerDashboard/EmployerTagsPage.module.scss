@@ -70,3 +70,27 @@
   color: #c62828;
   margin-bottom: 16px;
 }
+
+.btnApprove,
+.btnReject {
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  margin-right: 8px;
+}
+
+.btnApprove {
+  background: #e3f7e5;
+  border-color: #a5d6a7;
+  color: #2e7d32;
+}
+
+.btnReject {
+  background: #ffe5e5;
+  border-color: #ffcdd2;
+  color: #c62828;
+}

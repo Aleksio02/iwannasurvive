@@ -60,6 +60,12 @@ interface TagDao : JpaRepository<TagDto, Long> {
         moderationStatus: TagModerationStatus,
     ): List<TagDto>
 
+    fun findAllByCreatedByTypeOrderByIdDesc(createdByType: CreatedByType): List<TagDto>
+    fun findAllByCreatedByTypeAndModerationStatusOrderByIdDesc(createdByType: CreatedByType, moderationStatus: TagModerationStatus): List<TagDto>
+    fun findAllByCreatedByTypeAndCategoryOrderByIdDesc(createdByType: CreatedByType, category: TagCategory): List<TagDto>
+    fun findAllByCreatedByTypeAndCategoryAndModerationStatusOrderByIdDesc(createdByType: CreatedByType, category: TagCategory, moderationStatus: TagModerationStatus): List<TagDto>
+    fun findAllByCreatedByTypeAndNameContainingIgnoreCaseOrderByIdDesc(createdByType: CreatedByType, name: String): List<TagDto>
+
     fun findByNormalizedName(normalizedName: String): TagDto?
 
     @Modifying

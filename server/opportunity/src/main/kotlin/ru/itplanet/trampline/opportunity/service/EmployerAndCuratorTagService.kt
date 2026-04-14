@@ -29,6 +29,26 @@ interface EmployerAndCuratorTagService {
         tagId: Long,
     ): EmployerTagResponse
 
+    fun getCuratorTags(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        status: TagModerationStatus?,
+        category: TagCategory?,
+        search: String?,
+    ): List<EmployerTagResponse>
+
+    fun getCuratorTagById(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    ): EmployerTagResponse
+
+    fun approveModerationTag(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    )
+
     fun getModerationTask(
         currentUserId: Long,
         createdByType: CreatedByType,
