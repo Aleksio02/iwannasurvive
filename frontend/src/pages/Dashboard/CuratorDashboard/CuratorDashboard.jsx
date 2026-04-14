@@ -39,6 +39,7 @@ import {
 } from '../../../utils/moderationHelpers'
 import '../DashboardBase.scss'
 import './CuratorDashboard.scss'
+import CuratorTagsPage from './CuratorTagsPage';
 
 import eyeIcon from '../../../assets/icons/eye.svg'
 
@@ -644,28 +645,52 @@ function CuratorDashboard() {
             )}
 
             <div className="dashboard-tabs">
-                <button className={`dashboard-tabs__btn ${activeTab === 'tasks' ? 'is-active' : ''}`} onClick={() => setActiveTab('tasks')}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M9 12H15M9 16H15M17 21H7C5.9 21 5 20.1 5 19V5C5 3.9 5.9 3 7 3H12.6C12.8 3 13 3.1 13.1 3.2L18.8 8.9C18.9 9 19 9.2 19 9.4V19C19 20.1 18.1 21 17 21Z"/>
+                <button className={`dashboard-tabs__btn ${activeTab === 'tasks'
+                    ? 'is-active' : ''}`} onClick={() => setActiveTab('tasks')}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" strokeWidth="1.5">
+                        <path
+                            d="M9 12H15M9 16H15M17 21H7C5.9 21 5 20.1 5 19V5C5 3.9 5.9 3 7 3H12.6C12.8 3 13 3.1 13.1 3.2L18.8 8.9C18.9 9 19 9.2 19 9.4V19C19 20.1 18.1 21 17 21Z"/>
                         <path d="M13 3V9H19"/>
                     </svg>
                     Задачи
                 </button>
-                <button className={`dashboard-tabs__btn ${activeTab === 'history' ? 'is-active' : ''}`} onClick={() => setActiveTab('history')}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <button
+                    className={`dashboard-tabs__btn ${activeTab === 'history'
+                        ? 'is-active' : ''}`}
+                    onClick={() => setActiveTab('history')}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" strokeWidth="1.5">
                         <circle cx="12" cy="12" r="10"/>
                         <polyline points="12 6 12 12 16 14"/>
                     </svg>
                     История
                 </button>
                 {isAdmin && (
-                    <button className={`dashboard-tabs__btn ${activeTab === 'create' ? 'is-active' : ''}`} onClick={() => setActiveTab('create')}>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <button
+                        className={`dashboard-tabs__btn ${activeTab === 'create'
+                            ? 'is-active' : ''}`}
+                        onClick={() => setActiveTab('create')}>
+                        <svg width="18" height="18" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor"
+                             strokeWidth="1.5">
                             <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
                         </svg>
                         Создать куратора
                     </button>
                 )}
+                <button
+                    className={`dashboard-tabs__btn ${activeTab === 'tags'
+                        ? 'is-active' : ''}`}
+                    onClick={() => setActiveTab('tags')}
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" strokeWidth="1.5">
+                        <path
+                            d="M7 8h10M7 12h10M7 16h6M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/>
+                    </svg>
+                    Теги
+                </button>
             </div>
 
             <div className="dashboard-panel">
@@ -674,7 +699,8 @@ function CuratorDashboard() {
                         <div className="moderation-filters">
                             <CustomSelect
                                 value={filters.status}
-                                onChange={(val) => setFilters(prev => ({ ...prev, status: val }))}
+                                onChange={(val) => setFilters(
+                                    prev => ({...prev, status: val}))}
                                 options={STATUS_OPTIONS}
                                 placeholder="Статус"
                             />
@@ -918,6 +944,7 @@ function CuratorDashboard() {
                         </div>
                     </div>
                 )}
+                {activeTab === 'tags' && <CuratorTagsPage />}
             </div>
 
             {isDetailOpen && selectedTask && (

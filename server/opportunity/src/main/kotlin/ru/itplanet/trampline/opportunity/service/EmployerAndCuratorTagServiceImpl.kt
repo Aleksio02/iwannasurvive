@@ -179,6 +179,80 @@ class EmployerAndCuratorTagServiceImpl(
         return toResponse(tag)
     }
 
+    @Transactional(readOnly = true)
+    override fun getCuratorTags(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        status: TagModerationStatus?,
+        category: TagCategory?,
+        search: String?,
+    ): List<EmployerTagResponse> {
+        ensureSupportedCreatedByType(createdByType)
+
+        val tags = when {
+            status != null && category != null ->
+                tagDao.findAllByCreatedByTypeAndCategoryAndModerationStatusOrderByIdDesc(
+                    createdByType, category, status
+                )
+            status != null ->
+                tagDao.findAllByCreatedByTypeAndModerationStatusOrderByIdDesc(createdByType, status)
+            category != null ->
+                tagDao.findAllByCreatedByTypeAndCategoryOrderByIdDesc(createdByType, category)
+            !search.isNullOrBlank() ->
+                tagDao.findAllByCreatedByTypeAndNameContainingIgnoreCaseOrderByIdDesc(createdByType, search!!)
+            else ->
+                tagDao.findAllByCreatedByTypeOrderByIdDesc(createdByType)
+        }
+        return tags.map(::toResponse)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getCuratorTagById(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    ): EmployerTagResponse {
+        ensureSupportedCreatedByType(createdByType)
+        val tag = tagDao.findById(tagId).orElseThrow {
+            OpportunityNotFoundDomainException("Тег не найден", "tag_not_found")
+        }
+        if (tag.createdByType != createdByType) {
+            throw OpportunityForbiddenException("Доступ запрещён", "not_owner")
+        }
+        return toResponse(tag)
+    }
+
+    @Transactional
+    override fun approveModerationTag(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    ) {
+        val tag = getOwnedTag(currentUserId, createdByType, tagId)
+        if (tag.moderationStatus != TagModerationStatus.PENDING) {
+            throw OpportunityConflictException(
+                "Можно одобрить только тег в статусе PENDING",
+                "wrong_status"
+            )
+        }
+        tag.moderationStatus = TagModerationStatus.APPROVED
+        tag.isActive = true
+
+        val taskLookup = moderationServiceClient.getTaskByEntity(
+            entityType = ModerationEntityType.TAG,
+            entityId = requireNotNull(tag.id),
+            taskType = ModerationTaskType.TAG_REVIEW,
+        )
+        if (taskLookup.exists && taskLookup.taskId != null) {
+            try {
+                moderationServiceClient.cancelTask(taskLookup.taskId!!)
+            } catch (e: Exception) {
+                // Do nothing
+            }
+        }
+
+        tagDao.save(tag)
+    }
 
     @Transactional(readOnly = true)
     override fun getModerationTask(
