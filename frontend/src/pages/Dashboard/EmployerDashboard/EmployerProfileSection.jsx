@@ -109,6 +109,10 @@ function EmployerProfileSection({
 
     const showInitialModerationAction = moderationState === 'DRAFT'
 
+    // Определяем, показывать ли ИНН и юридическое название
+    const isPublicView = shouldShowVersionSwitch && profileVersionView === 'public'
+    const showSensitiveFields = !isPublicView
+
     return (
         <div className="employer-profile">
             <input
@@ -244,7 +248,8 @@ function EmployerProfileSection({
                             </div>
 
                             <div className="employer-profile__hero-submeta">
-                                <div className={`employer-profile__status-chip employer-profile__status-chip--${displayedModerationTone}`}>
+                                <div
+                                    className={`employer-profile__status-chip employer-profile__status-chip--${displayedModerationTone}`}>
                                     <span className="employer-profile__status-chip-label">
                                         {shouldShowVersionSwitch
                                             ? profileVersionView === 'public'
@@ -257,14 +262,16 @@ function EmployerProfileSection({
                                     </span>
                                 </div>
 
-                                <div className={`employer-profile__status-chip employer-profile__status-chip--verification-${(verificationState || 'not_started').toLowerCase()}`}>
+                                <div
+                                    className={`employer-profile__status-chip employer-profile__status-chip--verification-${(verificationState || 'not_started').toLowerCase()}`}>
                                     <span className="employer-profile__status-chip-label">Верификация</span>
                                     <span className="employer-profile__status-chip-value">
                                         {verificationState === 'APPROVED' && 'Пройдена'}
                                         {verificationState === 'PENDING' && 'На проверке'}
                                         {verificationState === 'REJECTED' && 'Отклонена'}
+                                        {verificationState === 'REVOKED' && 'Отозвана'}
                                         {verificationState === 'NOT_STARTED' && 'Не начата'}
-                                        {!['APPROVED', 'PENDING', 'REJECTED', 'NOT_STARTED'].includes(verificationState) && verificationState}
+                                        {!['APPROVED', 'PENDING', 'REJECTED', 'REVOKED', 'NOT_STARTED'].includes(verificationState) && verificationState}
                                     </span>
                                 </div>
                             </div>
@@ -281,15 +288,19 @@ function EmployerProfileSection({
                             <div className="field-value">{displayedProfile.companyName || '—'}</div>
                         </div>
 
-                        <div className="employer-profile__field">
-                            <Label>ИНН</Label>
-                            <div className="field-value">{displayedProfile.inn || '—'}</div>
-                        </div>
+                        {showSensitiveFields && (
+                            <>
+                                <div className="employer-profile__field">
+                                    <Label>ИНН</Label>
+                                    <div className="field-value">{displayedProfile.inn || '—'}</div>
+                                </div>
 
-                        <div className="employer-profile__field">
-                            <Label>Юр. название</Label>
-                            <div className="field-value">{displayedProfile.legalName || '—'}</div>
-                        </div>
+                                <div className="employer-profile__field">
+                                    <Label>Юр. название</Label>
+                                    <div className="field-value">{displayedProfile.legalName || '—'}</div>
+                                </div>
+                            </>
+                        )}
 
                         <div className="employer-profile__field">
                             <Label>Сфера</Label>
@@ -344,7 +355,7 @@ function EmployerProfileSection({
                                                 rel="noopener noreferrer"
                                                 className="link-item"
                                             >
-                                                <img src={linkIcon} alt="" className="icon-small" />
+                                                <img src={linkIcon} alt="" className="icon-small"/>
                                                 <span>{item.label || item.url}</span>
                                             </a>
                                         ))}
@@ -360,7 +371,7 @@ function EmployerProfileSection({
                                     <div className="links-list">
                                         {displayedProfile.publicContacts.map((item, index) => (
                                             <div key={`${item.value}-${index}`} className="link-item">
-                                                <img src={linkIcon} alt="" className="icon-small" />
+                                                <img src={linkIcon} alt="" className="icon-small"/>
                                                 <span>{item.label ? `${item.label}: ` : ''}</span>
                                                 {renderContactMethod(item)}
                                             </div>
@@ -372,18 +383,21 @@ function EmployerProfileSection({
 
                         <div className="employer-profile__field">
                             <Label>Статус верификации</Label>
-                            <div className={`field-value verification-status status-${(verificationState || 'not_started').toLowerCase()}`}>
+                            <div
+                                className={`field-value verification-status status-${(verificationState || 'not_started').toLowerCase()}`}>
                                 {verificationState === 'APPROVED' && 'Верифицирован'}
                                 {verificationState === 'PENDING' && 'На проверке'}
                                 {verificationState === 'REJECTED' && 'Отклонён'}
+                                {verificationState === 'REVOKED' && 'Отозвана'}
                                 {verificationState === 'NOT_STARTED' && 'Не начата'}
-                                {!['APPROVED', 'PENDING', 'REJECTED', 'NOT_STARTED'].includes(verificationState) && verificationState}
+                                {!['APPROVED', 'PENDING', 'REJECTED', 'REVOKED', 'NOT_STARTED'].includes(verificationState) && verificationState}
                             </div>
                         </div>
 
                         <div className="employer-profile__field">
                             <Label>Статус модерации</Label>
-                            <div className={`field-value employer-profile__moderation-state employer-profile__moderation-state--${displayedModerationTone}`}>
+                            <div
+                                className={`field-value employer-profile__moderation-state employer-profile__moderation-state--${displayedModerationTone}`}>
                                 {displayedModerationLabel}
                             </div>
                         </div>
@@ -513,7 +527,7 @@ function EmployerProfileSection({
                                     </div>
 
                                     <p className="employer-profile__upload-hint">
-                                        Поддерживаются форматы: JPG, PNG, WEBP или SVG.
+                                        Поддерживаются форматы: JPG, PNG, WEBP.
                                     </p>
                                 </div>
                             </div>

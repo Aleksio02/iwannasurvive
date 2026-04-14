@@ -23,6 +23,7 @@ import {
     deleteEmployerLocation,
     searchGeoCities,
     suggestGeoAddress,
+    createEmployerVerification,
 } from '@/api/profile'
 
 import {
@@ -35,6 +36,7 @@ import { listTags } from '@/api/opportunities'
 import '@/pages/Dashboard/DashboardBase.scss'
 import './EmployerDashboard.scss'
 
+import EmployerVerificationModal from './EmployerVerificationModal'
 import EmployerLocationModal from './EmployerLocationModal'
 import EmployerProfileSection from './EmployerProfileSection'
 import EmployerOpportunityForm from './EmployerOpportunityForm'
@@ -52,6 +54,40 @@ import {
     normalizeLocationState,
     statusBucket,
 } from './employerDashboard.helpers'
+
+// ========== ХЕЛПЕРЫ ДЛЯ СРАВНЕНИЯ ==========
+const areProfilePayloadsEqual = (a = {}, b = {}) => {
+    return JSON.stringify({
+        companyName: a.companyName || '',
+        description: a.description || '',
+        industry: a.industry || '',
+        websiteUrl: a.websiteUrl || '',
+        socialLinks: a.socialLinks || [],
+        publicContacts: a.publicContacts || [],
+        companySize: a.companySize || '',
+        foundedYear: a.foundedYear || null,
+        cityId: a.cityId || null,
+        locationId: a.locationId || null,
+    }) === JSON.stringify({
+        companyName: b.companyName || '',
+        description: b.description || '',
+        industry: b.industry || '',
+        websiteUrl: b.websiteUrl || '',
+        socialLinks: b.socialLinks || [],
+        publicContacts: b.publicContacts || [],
+        companySize: b.companySize || '',
+        foundedYear: b.foundedYear || null,
+        cityId: b.cityId || null,
+        locationId: b.locationId || null,
+    })
+}
+
+const areCompanyPayloadsEqual = (a = {}, b = {}) => {
+    return (
+        String(a.legalName || '').trim() === String(b.legalName || '').trim() &&
+        String(a.inn || '').trim() === String(b.inn || '').trim()
+    )
+}
 
 function EmployerDashboard() {
     const { toast } = useToast()
@@ -83,6 +119,15 @@ function EmployerDashboard() {
     const [contactRows, setContactRows] = useState([createLinkRow()])
     const [resourceRows, setResourceRows] = useState([createLinkRow()])
 
+    const [verificationLinkRows, setVerificationLinkRows] = useState([createLinkRow()])
+    const [showVerificationModal, setShowVerificationModal] = useState(false)
+    const [verificationData, setVerificationData] = useState({
+        verificationMethod: 'TIN',
+        corporateEmail: '',
+        inn: '',
+        submittedComment: '',
+    })
+
     const [profile, setProfile] = useState({
         userId: null,
         companyName: '',
@@ -106,6 +151,10 @@ function EmployerDashboard() {
 
     const [publicProfile, setPublicProfile] = useState(null)
     const [hasApprovedPublicVersion, setHasApprovedPublicVersion] = useState(false)
+
+    // Снапшоты для сравнения изменений
+    const [initialProfileSnapshot, setInitialProfileSnapshot] = useState(null)
+    const [initialCompanySnapshot, setInitialCompanySnapshot] = useState(null)
 
     const [opportunityForm, setOpportunityForm] = useState({
         title: '',
@@ -160,6 +209,7 @@ function EmployerDashboard() {
     const verificationState = profile.verificationStatus || 'NOT_STARTED'
     const moderationState = profile.moderationStatus || 'DRAFT'
     const isVerified = verificationState === 'APPROVED'
+    const isVerificationRejected = verificationState === 'REJECTED'
     const moderationMeta = getEmployerModerationStatusMeta(moderationState)
 
     const selectedEmployerLocation = useMemo(
@@ -207,6 +257,30 @@ function EmployerDashboard() {
         setProfile(normalized)
         setPublicProfile(normalizedWorkspace.publicProfile)
         setHasApprovedPublicVersion(normalizedWorkspace.hasApprovedPublicVersion)
+
+        // Сохраняем снапшоты для сравнения
+        setInitialProfileSnapshot({
+            companyName: normalized.companyName || '',
+            description: normalized.description || '',
+            industry: normalized.industry || '',
+            websiteUrl: normalized.websiteUrl || '',
+            socialLinks: normalized.socialLinks || [],
+            publicContacts: normalized.publicContacts || [],
+            companySize: normalized.companySize || '',
+            foundedYear: normalized.foundedYear || null,
+            cityId: normalized.cityId || null,
+            locationId: normalized.locationId || null,
+        })
+
+        setInitialCompanySnapshot({
+            legalName: normalized.legalName || '',
+            inn: normalized.inn || '',
+        })
+
+        setVerificationData((prev) => ({
+            ...prev,
+            inn: normalized.inn || '',
+        }))
 
         setSocialRows(linksToRows(normalized.socialLinks))
         setContactRows(
@@ -685,6 +759,111 @@ function EmployerDashboard() {
         }
     }
 
+    const handleSubmitVerification = async () => {
+        const method = String(verificationData.verificationMethod || 'TIN').toUpperCase()
+
+        if (!user?.userId) {
+            toast({
+                title: 'Ошибка',
+                description: 'Не удалось определить пользователя',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        if (method === 'CORPORATE_EMAIL') {
+            const email = String(verificationData.corporateEmail || user?.email || '').trim()
+            if (!email) {
+                toast({
+                    title: 'Ошибка',
+                    description: 'Укажите корпоративную почту',
+                    variant: 'destructive',
+                })
+                return
+            }
+            if (!verificationData.corporateEmail && user?.email) {
+                setVerificationData(prev => ({ ...prev, corporateEmail: user.email }))
+            }
+        }
+
+        if (method === 'TIN') {
+            const normalizedInn = String(verificationData.inn || profile.inn || '').trim()
+            if (!normalizedInn || !/^\d{10}(\d{2})?$/.test(normalizedInn)) {
+                toast({
+                    title: 'Ошибка',
+                    description: 'Укажите корректный ИНН из 10 или 12 цифр',
+                    variant: 'destructive',
+                })
+                return
+            }
+        }
+
+        if (method === 'PROFESSIONAL_LINKS') {
+            const hasLinks = verificationLinkRows.some((row) => row.url?.trim())
+            if (!hasLinks) {
+                toast({
+                    title: 'Ошибка',
+                    description: 'Добавьте хотя бы одну профессиональную ссылку',
+                    variant: 'destructive',
+                })
+                return
+            }
+        }
+
+        setIsLoading(true)
+
+        try {
+            const normalizedInn = String(verificationData.inn || profile.inn || '').trim()
+
+            if (method === 'TIN' && normalizedInn !== String(profile.inn || '').trim()) {
+                await updateEmployerCompanyData({
+                    legalName: profile.legalName?.trim() || '',
+                    inn: normalizedInn,
+                })
+
+                setProfile((prev) => ({
+                    ...prev,
+                    inn: normalizedInn,
+                }))
+            }
+
+            const payload = {
+                verificationMethod: method,
+                submittedComment: verificationData.submittedComment?.trim() || '',
+            }
+
+            if (method === 'TIN') {
+                payload.inn = normalizedInn
+            }
+
+            if (method === 'CORPORATE_EMAIL') {
+                payload.corporateEmail = String(verificationData.corporateEmail || user?.email || '').trim()
+            }
+
+            if (method === 'PROFESSIONAL_LINKS') {
+                payload.professionalLinks = rowsToLinks(verificationLinkRows)
+            }
+
+            await createEmployerVerification(payload, user.userId)
+            await reloadEmployerProfile()
+
+            toast({
+                title: 'Заявка отправлена',
+                description: 'Заявка на верификацию компании успешно отправлена',
+            })
+
+            setShowVerificationModal(false)
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось отправить заявку на верификацию',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
     const loadEmployerResponsesData = useCallback(async () => {
         try {
             const page = await getEmployerApplications({
@@ -847,6 +1026,24 @@ function EmployerDashboard() {
         )
     }, [isEditingProfile, profile])
 
+    useEffect(() => {
+        setVerificationData((prev) => ({
+            ...prev,
+            inn: profile.inn || '',
+        }))
+    }, [profile.inn])
+
+    useEffect(() => {
+        if (showVerificationModal && verificationData.verificationMethod === 'CORPORATE_EMAIL') {
+            if (user?.email && !verificationData.corporateEmail) {
+                setVerificationData(prev => ({
+                    ...prev,
+                    corporateEmail: user.email
+                }))
+            }
+        }
+    }, [showVerificationModal, verificationData.verificationMethod, user?.email])
+
     const filteredOpportunities = useMemo(() => {
         return opportunities.filter((opp) => {
             const matchesSearch =
@@ -920,16 +1117,39 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            await updateEmployerProfile(buildEmployerProfilePayload())
+            const profilePayload = buildEmployerProfilePayload()
+            const hasPublicChanges = !areProfilePayloadsEqual(profilePayload, initialProfileSnapshot)
+
+            if (!hasPublicChanges) {
+                toast({
+                    title: 'Без изменений',
+                    description: 'Публичный профиль не изменился',
+                })
+                setIsEditingProfile(false)
+                return
+            }
+
+            await updateEmployerProfile(profilePayload)
+
+            const isAfterFirstApproval = hasApprovedPublicVersion || profile.moderationStatus !== 'DRAFT'
+
+            if (isAfterFirstApproval && !isProfileAlreadyOnModeration(profile.moderationStatus)) {
+                await submitEmployerProfileForModeration()
+                toast({
+                    title: 'Изменения сохранены',
+                    description: 'Изменения сохранены и отправлены на модерацию',
+                })
+            } else {
+                toast({
+                    title: 'Изменения сохранены',
+                    description: 'Публичный профиль сохранён',
+                })
+            }
+
             await reloadEmployerProfile()
-
-            toast({
-                title: 'Изменения сохранены',
-                description: 'Публичный профиль обновлён.',
-            })
-
             setIsEditingProfile(false)
         } catch (error) {
+            console.error('Save profile error:', error)
             toast({
                 title: 'Ошибка',
                 description: error?.message || 'Не удалось сохранить профиль',
@@ -955,19 +1175,54 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            await updateEmployerCompanyData(buildEmployerCompanyPayload())
+            const companyPayload = buildEmployerCompanyPayload()
+            const hasCompanyChanges = !areCompanyPayloadsEqual(companyPayload, initialCompanySnapshot)
+
+            if (!hasCompanyChanges) {
+                toast({
+                    title: 'Без изменений',
+                    description: 'Реквизиты компании не изменились',
+                })
+                setIsEditingCompanyData(false)
+                return
+            }
+
+            await updateEmployerCompanyData(companyPayload)
+
+            const publicValidation = validatePublicProfile()
+
+            if (!publicValidation.isValid) {
+                toast({
+                    title: 'Реквизиты сохранены',
+                    description: `Заполните публичный профиль: ${Object.values(publicValidation.nextErrors).join(', ')}`,
+                    variant: 'warning',
+                })
+                setIsEditingCompanyData(false)
+                return
+            }
+
+            const isAfterFirstApproval = hasApprovedPublicVersion || profile.moderationStatus !== 'DRAFT'
+
+            if (isAfterFirstApproval && !isProfileAlreadyOnModeration(profile.moderationStatus)) {
+                await submitEmployerProfileForModeration()
+                toast({
+                    title: 'Реквизиты сохранены',
+                    description: 'Изменения сохранены и отправлены на модерацию',
+                })
+            } else {
+                toast({
+                    title: 'Реквизиты сохранены',
+                    description: 'Юридические данные компании обновлены',
+                })
+            }
+
             await reloadEmployerProfile()
-
-            toast({
-                title: 'Реквизиты сохранены',
-                description: 'Юридические данные компании обновлены.',
-            })
-
             setIsEditingCompanyData(false)
         } catch (error) {
+            console.error('Save company data error:', error)
             toast({
                 title: 'Ошибка',
-                description: error?.message || 'Не удалось сохранить данные компании',
+                description: error?.message || 'Не удалось сохранить реквизиты компании',
                 variant: 'destructive',
             })
         } finally {
@@ -976,12 +1231,27 @@ function EmployerDashboard() {
     }
 
     const handleSubmitEmployerProfileForModeration = async () => {
-        const validation = validatePublicProfile()
+        const publicValidation = validatePublicProfile()
 
-        if (!validation.isValid) {
+        if (!publicValidation.isValid) {
             toast({
                 title: 'Ошибка',
-                description: Object.values(validation.nextErrors)[0] || 'Заполните обязательные поля профиля',
+                description:
+                    Object.values(publicValidation.nextErrors)[0] ||
+                    'Заполните обязательные поля профиля',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        const companyValidation = validateCompanyData()
+
+        if (!companyValidation.isValid) {
+            toast({
+                title: 'Ошибка',
+                description:
+                    Object.values(companyValidation.nextErrors)[0] ||
+                    'Проверьте юридические данные компании',
                 variant: 'destructive',
             })
             return
@@ -990,12 +1260,22 @@ function EmployerDashboard() {
         setIsLoading(true)
 
         try {
-            const freshModerationState =
-                profile.moderationStatus || 'DRAFT'
+            const profilePayload = buildEmployerProfilePayload()
+            const companyPayload = buildEmployerCompanyPayload()
 
-            await updateEmployerProfile(buildEmployerProfilePayload())
+            const hasPublicChanges = !areProfilePayloadsEqual(profilePayload, initialProfileSnapshot)
+            const hasCompanyChanges = !areCompanyPayloadsEqual(companyPayload, initialCompanySnapshot)
 
-            if (!isProfileAlreadyOnModeration(freshModerationState)) {
+            if (hasPublicChanges) {
+                await updateEmployerProfile(profilePayload)
+            }
+
+            if (hasCompanyChanges) {
+                await updateEmployerCompanyData(companyPayload)
+            }
+
+            // Если изменений не было, но пользователь нажал кнопку - всё равно отправляем
+            if (!hasPublicChanges && !hasCompanyChanges) {
                 await submitEmployerProfileForModeration()
             }
 
@@ -1003,10 +1283,11 @@ function EmployerDashboard() {
 
             toast({
                 title: 'Профиль отправлен',
-                description: 'Публичный профиль отправлен на модерацию',
+                description: 'Профиль отправлен на модерацию',
             })
 
             setIsEditingProfile(false)
+            setIsEditingCompanyData(false)
         } catch (error) {
             toast({
                 title: 'Ошибка',
@@ -1157,6 +1438,34 @@ function EmployerDashboard() {
             title="Управление компанией"
             subtitle={profile.companyName || user?.displayName || 'Компания'}
         >
+            {!isVerified && (
+                <div className={`verification-banner ${isVerificationRejected ? 'verification-banner--warning' : ''}`}>
+                    <div className="verification-banner__content">
+                        <svg className="verification-banner__icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <path
+                                d="M12 8V12M12 16H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                        <span>
+                            {verificationState === 'NOT_STARTED' && 'Пройдите верификацию компании, чтобы публиковать вакансии и мероприятия.'}
+                            {verificationState === 'PENDING' && 'Верификация компании на проверке. Публикация новых карточек временно ограничена.'}
+                            {verificationState === 'REJECTED' && 'Верификация отклонена. Проверьте данные и отправьте заявку повторно.'}
+                            {verificationState === 'REVOKED' && 'Верификация отозвана. Пройдите верификацию заново.'}
+                            {verificationState === 'IN_PROGRESS' && 'Заявка на верификацию обрабатывается. Публикация новых карточек временно ограничена.'}
+                            {verificationState === 'UNDER_REVIEW' && 'Верификация компании находится на рассмотрении. Публикация новых карточек временно ограничена.'}
+                        </span>
+                    </div>
+                    <button className="verification-banner__button" onClick={() => setShowVerificationModal(true)}>
+                        {verificationState === 'PENDING' || verificationState === 'IN_PROGRESS' || verificationState === 'UNDER_REVIEW'
+                            ? 'Проверить статус'
+                            : 'Пройти верификацию'}
+                    </button>
+                </div>
+            )}
+
             <div className="dashboard-tabs">
                 <button
                     className={`dashboard-tabs__btn ${activeTab === 'opportunities' ? 'is-active' : ''}`}
@@ -1344,6 +1653,17 @@ function EmployerDashboard() {
                     />
                 )}
             </div>
+
+            <EmployerVerificationModal
+                isOpen={showVerificationModal}
+                verificationData={verificationData}
+                setVerificationData={setVerificationData}
+                verificationLinkRows={verificationLinkRows}
+                setVerificationLinkRows={setVerificationLinkRows}
+                onSubmit={handleSubmitVerification}
+                onClose={() => setShowVerificationModal(false)}
+                userEmail={user?.email || ''}
+            />
 
             <EmployerLocationModal
                 isOpen={isLocationModalOpen}

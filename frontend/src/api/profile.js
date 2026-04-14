@@ -624,21 +624,13 @@ export async function deleteEmployerFile(fileId) {
 
 export async function createEmployerVerification(payload) {
     const userId = await getSessionUserIdFromApi()
-
     if (!userId) {
         throw createApiError('Пользователь не авторизован', 401)
     }
 
     return apiRequest(`${API_BASE}/employer/verification?employerUserId=${userId}`, {
         method: 'POST',
-        body: JSON.stringify({
-            verificationMethod: payload.verificationMethod,
-            corporateEmail: payload.corporateEmail || null,
-            professionalLinks: Array.isArray(payload.professionalLinks)
-                ? payload.professionalLinks.filter(Boolean)
-                : [],
-            submittedComment: payload.submittedComment || null,
-        }),
+        body: JSON.stringify(payload),
     })
 }
 
@@ -944,12 +936,9 @@ export async function updateEmployerCompanyData(companyData) {
 
 export async function submitEmployerProfileForModeration() {
     const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
-
-    const data = await apiRequest(`${API_BASE}/profile/employer/moderation/submit?currentUser=${currentUser}`, {
+    return apiRequest(`${API_BASE}/profile/employer/moderation/submit?currentUser=${currentUser}`, {
         method: 'POST',
     })
-
-    return normalizeEmployerProfile(data)
 }
 
 export async function submitVerification(payload) {
