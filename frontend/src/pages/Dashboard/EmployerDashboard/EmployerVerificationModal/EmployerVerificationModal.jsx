@@ -1,0 +1,311 @@
+import { useEffect, useMemo, useRef } from 'react'
+import TrashIcon from '@/assets/icons/trash.svg'
+import { createLinkRow } from '../employerDashboard.helpers'
+import Textarea from '@/components/Textarea'
+import './EmployerVerificationModal.scss'
+
+const METHOD_META = {
+    CORPORATE_EMAIL: {
+        title: 'Корпоративная почта',
+        badge: 'Быстро',
+        description:
+            'Подойдет, если у вас есть корпоративная почта на домене компании. Это самый простой способ для большинства работодателей.',
+    },
+    TIN: {
+        title: 'ИНН',
+        badge: 'Надежно',
+        description:
+            'Используется ИНН из реквизитов компании. Удобно, если реквизиты уже заполнены и не требуется вручную добавлять данные.',
+    },
+    PROFESSIONAL_LINKS: {
+        title: 'Профессиональные ссылки',
+        badge: 'Альтернатива',
+        description:
+            'Добавьте ссылки на официальный сайт, страницу компании, соцсети или карьерные площадки, где можно подтвердить принадлежность к организации.',
+    },
+}
+
+function EmployerVerificationModal({
+                                       isOpen,
+                                       verificationData,
+                                       setVerificationData,
+                                       verificationLinkRows,
+                                       setVerificationLinkRows,
+                                       onSubmit,
+                                       onClose,
+                                       userEmail = '',
+                                       companyInn = '',
+                                   }) {
+    const overlayMouseDownStartedOutsideRef = useRef(false)
+
+    useEffect(() => {
+        if (!isOpen) return
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                onClose()
+            }
+        }
+
+        document.addEventListener('keydown', handleKeyDown)
+        document.body.style.overflow = 'hidden'
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown)
+            document.body.style.overflow = ''
+        }
+    }, [isOpen, onClose])
+
+    const currentMethod = String(verificationData?.verificationMethod || 'TIN').toUpperCase()
+    const currentMeta = METHOD_META[currentMethod] || METHOD_META.TIN
+
+    const normalizedLinkRows = useMemo(() => {
+        return Array.isArray(verificationLinkRows) && verificationLinkRows.length > 0
+            ? verificationLinkRows
+            : [createLinkRow()]
+    }, [verificationLinkRows])
+
+    if (!isOpen) return null
+
+    const updateMethod = (method) => {
+        setVerificationData((prev) => ({
+            ...prev,
+            verificationMethod: method,
+        }))
+    }
+
+    const updateField = (field, value) => {
+        setVerificationData((prev) => ({
+            ...prev,
+            [field]: value,
+        }))
+    }
+
+    const handleOverlayMouseDown = (event) => {
+        overlayMouseDownStartedOutsideRef.current = event.target === event.currentTarget
+    }
+
+    const handleOverlayMouseUp = (event) => {
+        const endedOutside = event.target === event.currentTarget
+
+        if (overlayMouseDownStartedOutsideRef.current && endedOutside) {
+            onClose()
+        }
+
+        overlayMouseDownStartedOutsideRef.current = false
+    }
+
+    const handleAddLinkRow = () => {
+        setVerificationLinkRows((prev) => [...prev, createLinkRow()])
+    }
+
+    const handleRemoveLinkRow = (id) => {
+        setVerificationLinkRows((prev) => {
+            const nextRows = prev.filter((row) => row.id !== id)
+            return nextRows.length > 0 ? nextRows : [createLinkRow()]
+        })
+    }
+
+    const handleChangeLinkRow = (id, field, value) => {
+        setVerificationLinkRows((prev) =>
+            prev.map((row) =>
+                row.id === id
+                    ? {
+                        ...row,
+                        [field]: value,
+                    }
+                    : row
+            )
+        )
+    }
+
+    return (
+        <div
+            className="employer-verification-modal"
+            onMouseDown={handleOverlayMouseDown}
+            onMouseUp={handleOverlayMouseUp}
+        >
+            <div
+                className="employer-verification-modal__dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="employer-verification-modal-title"
+            >
+                <div className="employer-verification-modal__header">
+                    <div className="employer-verification-modal__header-content">
+                        <h2
+                            id="employer-verification-modal-title"
+                            className="employer-verification-modal__title"
+                        >
+                            Верификация компании
+                        </h2>
+                        <p className="employer-verification-modal__subtitle">
+                            Выберите способ подтверждения, который удобнее для вашей компании
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="employer-verification-modal__close"
+                        onClick={onClose}
+                        aria-label="Закрыть"
+                    >
+                        ×
+                    </button>
+                </div>
+
+                <div className="employer-verification-modal__body">
+                    <div className="employer-verification-modal__methods">
+                        {Object.entries(METHOD_META).map(([method, meta]) => {
+                            const isActive = currentMethod === method
+
+                            return (<button
+                                key={method}
+                                type="button"
+                                className={`employer-verification-modal__method ${isActive ? 'is-active' : ''}`}
+                                onClick={() => updateMethod(method)}
+                            >
+                        <span className="employer-verification-modal__method-title">
+                            {meta.title}
+                        </span>
+                            </button>)
+                        })}
+                    </div>
+
+                    <div className="employer-verification-modal__selected-card">
+                        <div className="employer-verification-modal__selected-card-top">
+        <span className="employer-verification-modal__selected-card-title">
+            Выбранный способ
+        </span>
+                            <span className="employer-verification-modal__selected-card-badge">
+            {currentMeta.badge}
+        </span>
+                        </div>
+
+                        <div className="employer-verification-modal__selected-method">
+                            {currentMeta.title}
+                        </div>
+
+                        <p className="employer-verification-modal__selected-description">
+                            {currentMeta.description}
+                        </p>
+                    </div>
+
+                    {currentMethod === 'CORPORATE_EMAIL' && (
+                        <div className="employer-verification-modal__section">
+                            <label className="label">Корпоративная почта</label>
+                            <input
+                                className="input"
+                                type="email"
+                                value={verificationData.corporateEmail || ''}
+                                placeholder={userEmail || 'company@domain.com'}
+                                onChange={(event) => updateField('corporateEmail', event.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {currentMethod === 'TIN' && (
+                        <div className="employer-verification-modal__section">
+                            <label className="label">ИНН</label>
+                            <input
+                                className="input"
+                                type="text"
+                                value={verificationData.inn || companyInn || ''}
+                                placeholder="Введите ИНН"
+                                onChange={(event) => updateField('inn', event.target.value)}
+                            />
+                        </div>
+                    )}
+
+                    {currentMethod === 'PROFESSIONAL_LINKS' && (
+                        <div className="employer-verification-modal__section">
+                            <div className="employer-verification-modal__section-head">
+                                <label className="label">Профессиональные ссылки</label>
+
+                                <button
+                                    type="button"
+                                    className="employer-verification-modal__add-link"
+                                    onClick={handleAddLinkRow}
+                                >
+                                    Добавить ссылку
+                                </button>
+                            </div>
+
+                            <div className="employer-verification-modal__links">
+                                {normalizedLinkRows.map((row) => (
+                                    <div
+                                        key={row.id}
+                                        className="employer-verification-modal__link-row"
+                                    >
+                                        <input
+                                            className="input"
+                                            type="text"
+                                            value={row.title || ''}
+                                            placeholder="Название площадки"
+                                            onChange={(event) =>
+                                                handleChangeLinkRow(row.id, 'title', event.target.value)
+                                            }
+                                        />
+
+                                        <input
+                                            className="input"
+                                            type="url"
+                                            value={row.url || ''}
+                                            placeholder="https://..."
+                                            onChange={(event) =>
+                                                handleChangeLinkRow(row.id, 'url', event.target.value)
+                                            }
+                                        />
+
+                                        <button
+                                            type="button"
+                                            className="employer-verification-modal__icon-button"
+                                            onClick={() => handleRemoveLinkRow(row.id)}
+                                            aria-label="Удалить ссылку"
+                                        >
+                                            <img
+                                                src={TrashIcon}
+                                                alt=""
+                                                className="employer-verification-modal__icon"
+                                            />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="employer-verification-modal__section">
+                        <label className="label">Комментарий</label>
+                        <Textarea
+                            value={verificationData.submittedComment || ''}
+                            placeholder="При необходимости добавьте комментарий для модератора"
+                            rows={3}
+                            onChange={(event) => updateField('submittedComment', event.target.value)}
+                        />
+                    </div>
+                </div>
+
+                <div className="employer-verification-modal__footer">
+                    <button
+                        type="button"
+                        className="button button--ghost employer-verification-modal__footer-button"
+                        onClick={onClose}
+                    >
+                        Отмена
+                    </button>
+
+                    <button
+                        type="button"
+                        className="button employer-verification-modal__footer-button"
+                        onClick={onSubmit}
+                    >
+                        Отправить заявку
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+export default EmployerVerificationModal

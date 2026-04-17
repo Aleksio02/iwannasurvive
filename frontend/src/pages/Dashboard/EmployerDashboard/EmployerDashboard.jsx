@@ -43,7 +43,7 @@ import EmployerOpportunityForm from './EmployerOpportunityForm'
 import EmployerOpportunitiesSection from './EmployerOpportunitiesSection'
 import EmployerApplicantsSection from './EmployerApplicantsSection'
 import ApplicantPreviewModal from './ApplicantPreviewModal'
-import EmployerTagsPage from './EmployerTagsPage';
+import EmployerTagsPage from './EmployerTagsPage'
 
 import {
     createLinkRow,
@@ -56,7 +56,6 @@ import {
     statusBucket,
 } from './employerDashboard.helpers'
 
-// ========== ХЕЛПЕРЫ ДЛЯ СРАВНЕНИЯ ==========
 const areProfilePayloadsEqual = (a = {}, b = {}) => {
     return JSON.stringify({
         companyName: a.companyName || '',
@@ -103,6 +102,9 @@ function EmployerDashboard() {
     const [isLogoUploading, setIsLogoUploading] = useState(false)
     const [moderationFeedback, setModerationFeedback] = useState(null)
     const [isModerationFeedbackLoading, setIsModerationFeedbackLoading] = useState(false)
+    const [activeModerationTask, setActiveModerationTask] = useState(null)
+    const [isActiveModerationTaskLoading, setIsActiveModerationTaskLoading] = useState(false)
+    const [dismissedDashboardAlerts, setDismissedDashboardAlerts] = useState([])
 
     const [opportunitySearchTerm, setOpportunitySearchTerm] = useState('')
     const [opportunityFilterStatus, setOpportunityFilterStatus] = useState('all')
@@ -209,7 +211,6 @@ function EmployerDashboard() {
     const verificationState = profile.verificationStatus || 'NOT_STARTED'
     const moderationState = profile.moderationStatus || 'DRAFT'
     const isVerified = verificationState === 'APPROVED'
-    const isVerificationRejected = verificationState === 'REJECTED'
     const moderationMeta = getEmployerModerationStatusMeta(moderationState)
 
     const selectedEmployerLocation = useMemo(
@@ -313,7 +314,7 @@ function EmployerDashboard() {
     const loadModerationFeedback = useCallback(async (entityId) => {
         if (!entityId) {
             setModerationFeedback(null)
-            return
+            return []
         }
 
         setIsModerationFeedbackLoading(true)
@@ -341,16 +342,56 @@ function EmployerDashboard() {
             }
 
             setModerationFeedback(extractModerationFeedback(sortedHistory, taskDetail))
+            return sortedHistory
         } catch (error) {
             if (error?.status === 403) {
                 setModerationFeedback(null)
-                return
+                return []
             }
+
             setModerationFeedback(null)
+            return []
         } finally {
             setIsModerationFeedbackLoading(false)
         }
     }, [])
+
+    const loadActiveModerationTask = useCallback(async (entityId, existingHistory = null) => {
+        if (!entityId || !isProfileAlreadyOnModeration(profile.moderationStatus)) {
+            setActiveModerationTask(null)
+            return null
+        }
+
+        setIsActiveModerationTaskLoading(true)
+
+        try {
+            const history = Array.isArray(existingHistory)
+                ? existingHistory
+                : await getEntityModerationHistory('EMPLOYER_PROFILE', entityId)
+
+            const sortedHistory = Array.isArray(history)
+                ? [...history].sort(
+                    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+                )
+                : []
+
+            const latestTaskEvent = sortedHistory.find((item) => item?.taskId) || null
+
+            if (!latestTaskEvent?.taskId) {
+                setActiveModerationTask(null)
+                return null
+            }
+
+            const detail = await getModerationTaskDetail(latestTaskEvent.taskId)
+            setActiveModerationTask(detail || null)
+            return detail || null
+        } catch {
+            setActiveModerationTask(null)
+            return null
+        } finally {
+            setIsActiveModerationTaskLoading(false)
+        }
+    }, [isProfileAlreadyOnModeration, profile.moderationStatus])
 
     const reloadEmployerProfile = useCallback(async () => {
         if (!user?.userId) return null
@@ -400,9 +441,17 @@ function EmployerDashboard() {
             }
         }
 
-        await loadModerationFeedback(normalized.userId || user.userId)
+        const history = await loadModerationFeedback(normalized.userId || user.userId)
+        await loadActiveModerationTask(normalized.userId || user.userId, history)
+
         return normalized
-    }, [loadEmployerLocationsData, loadModerationFeedback, syncWorkspaceProfileState, user])
+    }, [
+        loadEmployerLocationsData,
+        loadModerationFeedback,
+        loadActiveModerationTask,
+        syncWorkspaceProfileState,
+        user,
+    ])
 
     const buildEmployerProfilePayload = () => {
         const payload = {
@@ -788,6 +837,7 @@ function EmployerDashboard() {
 
         if (method === 'CORPORATE_EMAIL') {
             const email = String(verificationData.corporateEmail || user?.email || '').trim()
+
             if (!email) {
                 toast({
                     title: 'Ошибка',
@@ -796,8 +846,12 @@ function EmployerDashboard() {
                 })
                 return
             }
+
             if (!verificationData.corporateEmail && user?.email) {
-                setVerificationData(prev => ({ ...prev, corporateEmail: user.email }))
+                setVerificationData((prev) => ({
+                    ...prev,
+                    corporateEmail: user.email,
+                }))
             }
         }
 
@@ -897,6 +951,7 @@ function EmployerDashboard() {
                 setOpportunities([])
                 setResponsesPage({ items: [], total: 0, limit: 50, offset: 0 })
                 setEmployerLocations([])
+                setActiveModerationTask(null)
                 return
             }
 
@@ -943,7 +998,8 @@ function EmployerDashboard() {
                 }
             }
 
-            await loadModerationFeedback(normalized.userId || currentUser.userId)
+            const history = await loadModerationFeedback(normalized.userId || currentUser.userId)
+            await loadActiveModerationTask(normalized.userId || currentUser.userId, history)
 
             try {
                 const opportunityPage = await getEmployerOpportunities()
@@ -970,6 +1026,7 @@ function EmployerDashboard() {
                 setOpportunities([])
                 setResponsesPage({ items: [], total: 0, limit: 50, offset: 0 })
                 setEmployerLocations([])
+                setActiveModerationTask(null)
                 return
             }
 
@@ -981,7 +1038,14 @@ function EmployerDashboard() {
         } finally {
             setIsLoading(false)
         }
-    }, [loadEmployerLocationsData, loadModerationFeedback, responseFilters, syncWorkspaceProfileState, toast])
+    }, [
+        loadEmployerLocationsData,
+        loadModerationFeedback,
+        loadActiveModerationTask,
+        responseFilters,
+        syncWorkspaceProfileState,
+        toast,
+    ])
 
     useEffect(() => {
         loadData()
@@ -1011,6 +1075,7 @@ function EmployerDashboard() {
         }
 
         document.addEventListener('mousedown', handleClickOutside)
+
         return () => {
             document.removeEventListener('mousedown', handleClickOutside)
         }
@@ -1037,15 +1102,18 @@ function EmployerDashboard() {
     }, [profile.inn])
 
     useEffect(() => {
-        if (showVerificationModal && verificationData.verificationMethod === 'CORPORATE_EMAIL') {
-            if (user?.email && !verificationData.corporateEmail) {
-                setVerificationData(prev => ({
-                    ...prev,
-                    corporateEmail: user.email
-                }))
-            }
+        if (
+            showVerificationModal &&
+            verificationData.verificationMethod === 'CORPORATE_EMAIL' &&
+            user?.email &&
+            !verificationData.corporateEmail
+        ) {
+            setVerificationData((prev) => ({
+                ...prev,
+                corporateEmail: user.email,
+            }))
         }
-    }, [showVerificationModal, verificationData.verificationMethod, user?.email])
+    }, [showVerificationModal, verificationData.verificationMethod, verificationData.corporateEmail, user?.email])
 
     const filteredOpportunities = useMemo(() => {
         return opportunities.filter((opp) => {
@@ -1059,6 +1127,120 @@ function EmployerDashboard() {
             return matchesSearch && matchesStatus
         })
     }, [opportunities, opportunityFilterStatus, opportunitySearchTerm])
+
+    const dashboardAlerts = useMemo(() => {
+        const alerts = []
+
+        if (!isVerified) {
+            if (verificationState === 'NOT_STARTED') {
+                alerts.push({
+                    key: 'verification-not-started',
+                    variant: 'draft',
+                    closable: false,
+                    title: 'Компания ещё не верифицирована',
+                    text: 'Пройдите верификацию компании, чтобы публиковать вакансии и мероприятия.',
+                    buttonText: 'Пройти верификацию',
+                    onClick: () => setShowVerificationModal(true),
+                })
+            }
+
+            if (['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW'].includes(verificationState)) {
+                alerts.push({
+                    key: 'verification-pending',
+                    variant: 'pending',
+                    closable: true,
+                    title: 'Верификация компании на проверке',
+                    text: 'Пока заявка рассматривается, публикация новых карточек временно ограничена.',
+                    buttonText: 'Открыть профиль',
+                    onClick: () => setActiveTab('profile'),
+                })
+            }
+
+            if (verificationState === 'REJECTED') {
+                alerts.push({
+                    key: 'verification-rejected',
+                    variant: 'revision',
+                    closable: false,
+                    title: 'Верификация отклонена',
+                    text: 'Проверьте реквизиты компании, исправьте данные и отправьте заявку повторно.',
+                    buttonText: 'Исправить данные',
+                    onClick: () => setActiveTab('profile'),
+                })
+            }
+
+            if (verificationState === 'REVOKED') {
+                alerts.push({
+                    key: 'verification-revoked',
+                    variant: 'revision',
+                    closable: false,
+                    title: 'Верификация отозвана',
+                    text: 'Нужно повторно пройти верификацию компании, чтобы снова публиковать вакансии и мероприятия.',
+                    buttonText: 'Пройти заново',
+                    onClick: () => setShowVerificationModal(true),
+                })
+            }
+        }
+
+        if (isProfileAlreadyOnModeration(moderationState)) {
+            alerts.push({
+                key: 'moderation-pending',
+                variant: 'pending',
+                closable: true,
+                title: 'Публичный профиль находится на модерации',
+                text: activeModerationTask?.status
+                    ? `Текущий статус задачи: ${activeModerationTask.status}. Новая отправка сейчас не требуется.`
+                    : 'Изменения уже отправлены на модерацию. Дождитесь завершения проверки.',
+                buttonText: 'Открыть профиль',
+                onClick: () => setActiveTab('profile'),
+            })
+        }
+
+        if (moderationState === 'REQUESTED_CHANGES' || moderationState === 'REJECTED') {
+            alerts.push({
+                key: 'moderation-revision',
+                variant: 'revision',
+                closable: false,
+                title: 'По профилю есть замечания модератора',
+                text: moderationFeedback?.summary || 'Исправьте замечания и отправьте профиль повторно.',
+                buttonText: 'Исправить профиль',
+                onClick: () => {
+                    setActiveTab('profile')
+                    setIsEditingProfile(true)
+                },
+            })
+        }
+
+        if (moderationState === 'APPROVED') {
+            alerts.push({
+                key: 'moderation-approved',
+                variant: 'approved',
+                closable: true,
+                title: 'Публичный профиль одобрен',
+                text: 'Публичная версия профиля доступна пользователям платформы.',
+                buttonText: 'Открыть профиль',
+                onClick: () => setActiveTab('profile'),
+            })
+        }
+
+        return alerts
+    }, [
+        activeModerationTask?.status,
+        isProfileAlreadyOnModeration,
+        isVerified,
+        moderationFeedback?.summary,
+        moderationState,
+        verificationState,
+    ])
+
+    const visibleDashboardAlerts = useMemo(() => {
+        return dashboardAlerts.filter((alert) => !dismissedDashboardAlerts.includes(alert.key))
+    }, [dashboardAlerts, dismissedDashboardAlerts])
+
+    const handleDismissDashboardAlert = useCallback((alertKey) => {
+        setDismissedDashboardAlerts((prev) =>
+            prev.includes(alertKey) ? prev : [...prev, alertKey]
+        )
+    }, [])
 
     const handleLogoUpload = async (event) => {
         const file = event.target.files?.[0]
@@ -1137,12 +1319,11 @@ function EmployerDashboard() {
 
             toast({
                 title: 'Изменения сохранены',
-                description: 'Публичный профиль сохранён',
+                description: 'Публичный профиль сохранён как текущая версия. Отправка на модерацию выполняется отдельно.',
             })
 
             setIsEditingProfile(false)
         } catch (error) {
-            console.error('Save profile error:', error)
             toast({
                 title: 'Ошибка',
                 description: error?.message || 'Не удалось сохранить профиль',
@@ -1191,11 +1372,15 @@ function EmployerDashboard() {
 
                 toast({
                     title: 'Реквизиты сохранены',
-                    description: 'Теперь выберите способ верификации компании',
+                    description: 'Реквизиты компании обновлены',
                 })
 
                 setIsEditingCompanyData(false)
-                openVerificationModalWithTinDefault(companyPayload.inn)
+
+                if (!isAlreadyVerified) {
+                    openVerificationModalWithTinDefault(companyPayload.inn)
+                }
+
                 return
             }
 
@@ -1216,7 +1401,6 @@ function EmployerDashboard() {
             setIsEditingCompanyData(false)
             openVerificationModalWithTinDefault(companyPayload.inn)
         } catch (error) {
-            console.error('Save company data error:', error)
             toast({
                 title: 'Ошибка',
                 description: error?.message || 'Не удалось сохранить реквизиты компании',
@@ -1422,46 +1606,62 @@ function EmployerDashboard() {
             title="Управление компанией"
             subtitle={profile.companyName || user?.displayName || 'Компания'}
         >
-            {!isVerified && (
-                <div className={`verification-banner ${isVerificationRejected ? 'verification-banner--warning' : ''}`}>
-                    <div className="verification-banner__content">
-                        <svg className="verification-banner__icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <path
-                                d="M12 8V12M12 16H12.01M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                            />
-                        </svg>
-                        <span>
-                            {verificationState === 'NOT_STARTED' && 'Пройдите верификацию компании, чтобы публиковать вакансии и мероприятия.'}
-                            {verificationState === 'PENDING' && 'Верификация компании на проверке. Публикация новых карточек временно ограничена.'}
-                            {verificationState === 'REJECTED' && 'Верификация отклонена. Проверьте данные и отправьте заявку повторно.'}
-                            {verificationState === 'REVOKED' && 'Верификация отозвана. Пройдите верификацию заново.'}
-                            {verificationState === 'IN_PROGRESS' && 'Заявка на верификацию обрабатывается. Публикация новых карточек временно ограничена.'}
-                            {verificationState === 'UNDER_REVIEW' && 'Верификация компании находится на рассмотрении. Публикация новых карточек временно ограничена.'}
-                        </span>
-                    </div>
-                    <button className="verification-banner__button" onClick={() => setShowVerificationModal(true)}>
-                        {verificationState === 'PENDING' || verificationState === 'IN_PROGRESS' || verificationState === 'UNDER_REVIEW'
-                            ? 'Проверить статус'
-                            : 'Пройти верификацию'}
-                    </button>
+            {visibleDashboardAlerts.length > 0 && (
+                <div className="employer-dashboard__alerts">
+                    {visibleDashboardAlerts.map((alert) => (
+                        <div
+                            key={alert.key}
+                            className={`employer-dashboard__alert employer-dashboard__alert--${alert.variant}`}
+                        >
+                            <div className="employer-dashboard__alert-body">
+                                <div className="employer-dashboard__alert-title-row">
+                                    <div className="employer-dashboard__alert-title">{alert.title}</div>
+
+                                    {alert.closable && (
+                                        <button
+                                            type="button"
+                                            className="employer-dashboard__alert-close"
+                                            aria-label="Закрыть уведомление"
+                                            onClick={() => handleDismissDashboardAlert(alert.key)}
+                                        >
+                                            ×
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="employer-dashboard__alert-text">{alert.text}</div>
+
+                                {alert.key === 'moderation-pending' && isActiveModerationTaskLoading && (
+                                    <div className="employer-dashboard__alert-text" style={{ marginTop: 8 }}>
+                                        Обновляем статус модерации...
+                                    </div>
+                                )}
+                            </div>
+
+                            {alert.buttonText && typeof alert.onClick === 'function' && (
+                                <button
+                                    className="employer-dashboard__alert-button"
+                                    type="button"
+                                    onClick={alert.onClick}
+                                >
+                                    {alert.buttonText}
+                                </button>
+                            )}
+                        </div>
+                    ))}
                 </div>
             )}
 
             <div className="dashboard-tabs">
                 <button
-                    className={`dashboard-tabs__btn ${activeTab
-                    === 'opportunities' ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'opportunities' ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('opportunities')}
                 >
                     Вакансии
                 </button>
 
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'create'
-                        ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'create' ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('create')}
                     disabled={!isVerified}
                 >
@@ -1469,23 +1669,21 @@ function EmployerDashboard() {
                 </button>
 
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'applicants'
-                        ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'applicants' ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('applicants')}
                 >
                     Отклики
                 </button>
 
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'profile'
-                        ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'profile' ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('profile')}
                 >
                     О компании
                 </button>
+
                 <button
-                    className={`dashboard-tabs__btn ${activeTab === 'tags'
-                        ? 'is-active' : ''}`}
+                    className={`dashboard-tabs__btn ${activeTab === 'tags' ? 'is-active' : ''}`}
                     onClick={() => setActiveTab('tags')}
                 >
                     Мои теги
@@ -1642,11 +1840,14 @@ function EmployerDashboard() {
                         onHandleSubmitEmployerProfileForModeration={handleSubmitEmployerProfileForModeration}
                         employerLocations={employerLocations}
                         selectedEmployerLocation={selectedEmployerLocation}
+                        activeModerationTask={activeModerationTask}
+                        isActiveModerationTaskLoading={isActiveModerationTaskLoading}
                         onOpenCreateLocation={handleOpenCreateLocation}
                         onOpenEditLocation={handleOpenEditLocation}
                         onDeleteLocation={handleDeleteLocation}
                     />
                 )}
+
                 {activeTab === 'tags' && <EmployerTagsPage />}
             </div>
 
