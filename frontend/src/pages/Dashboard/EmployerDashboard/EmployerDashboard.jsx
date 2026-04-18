@@ -576,37 +576,6 @@ function EmployerDashboard() {
         setIsAddressSearchOpen(false)
     }, [])
 
-    const resetVerificationForm = useCallback(() => {
-        setVerificationData({
-            verificationMethod: 'TIN',
-            corporateEmail: '',
-            inn: profile?.inn || '',
-            submittedComment: '',
-        })
-        setVerificationLinkRows([createLinkRow()])
-    }, [profile?.inn])
-
-    const openVerificationModal = useCallback(() => {
-        const fallbackStatus = String(profile?.verificationStatus || '').toUpperCase()
-
-        setShowVerificationModal(true)
-
-        if (!currentVerification && ['PENDING', 'APPROVED', 'REJECTED', 'REVOKED'].includes(fallbackStatus)) {
-            setCurrentVerification({
-                id: null,
-                status: fallbackStatus,
-                verificationStatus: fallbackStatus,
-            })
-        }
-
-        setVerificationData((prev) => ({
-            ...prev,
-            inn: prev.inn || profile?.inn || '',
-            corporateEmail: prev.corporateEmail || user?.email || '',
-        }))
-    }, [currentVerification, profile?.verificationStatus, profile?.inn, user?.email])
-
-
     const validatePublicProfile = () => {
         const nextErrors = {}
 
@@ -1336,24 +1305,22 @@ function EmployerDashboard() {
         } catch {}
     }, [dismissedDashboardAlerts, verificationAlertStateSignature])
 
-    const closeVerificationModal = useCallback(() => {
-        setShowVerificationModal(false)
-    }, [])
-
     useEffect(() => {
         if (!showVerificationModal) return
-        if (currentVerification) return
+        if (currentVerification?.id) return
 
-        const fallbackStatus = String(profile?.verificationStatus || '').toUpperCase()
+        const profileVerificationStatus = String(profile.verificationStatus || '').toUpperCase()
 
-        if (['PENDING', 'APPROVED', 'REJECTED', 'REVOKED'].includes(fallbackStatus)) {
-            setCurrentVerification({
-                id: null,
-                status: fallbackStatus,
-                verificationStatus: fallbackStatus,
-            })
+        if ([...ACTIVE_VERIFICATION_STATUSES, ...FINALIZED_VERIFICATION_STATUSES].includes(profileVerificationStatus)) {
+            setCurrentVerification((prev) =>
+                    prev || {
+                        id: null,
+                        status: profileVerificationStatus,
+                        verificationStatus: profileVerificationStatus,
+                    }
+            )
         }
-    }, [showVerificationModal, currentVerification, profile?.verificationStatus])
+    }, [showVerificationModal, currentVerification?.id, profile.verificationStatus])
 
     const filteredOpportunities = useMemo(() => {
         return opportunities.filter((opp) => {
@@ -2104,16 +2071,16 @@ function EmployerDashboard() {
                 verificationLinkRows={verificationLinkRows}
                 setVerificationLinkRows={setVerificationLinkRows}
                 onSubmit={handleSubmitVerification}
-                onClose={closeVerificationModal}
+                onClose={() => setShowVerificationModal(false)}
                 userEmail={user?.email || ''}
-                companyInn={profile?.inn || ''}
+                companyInn={profile.inn || ''}
                 currentVerification={currentVerification}
                 verificationModerationTask={verificationModerationTask}
                 verificationAttachments={verificationAttachments}
                 isVerificationAttachmentUploading={isVerificationAttachmentUploading}
                 onUploadVerificationAttachment={handleUploadVerificationAttachment}
                 onCancelVerificationModerationTask={handleCancelVerificationModerationTask}
-                profileVerificationStatus={profileVerificationStatus}
+                profileVerificationStatus={profile.verificationStatus || 'NOT_STARTED'}
             />
 
             <EmployerLocationModal
