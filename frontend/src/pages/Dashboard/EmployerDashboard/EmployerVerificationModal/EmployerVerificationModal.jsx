@@ -42,14 +42,14 @@ const VERIFICATION_STATUS_META = {
     IN_PROGRESS: {
         title: 'Заявка в обработке',
         description:
-            'Модератор уже работает с заявкой. Если идентификатор заявки доступен, можно добавить подтверждающие файлы.',
+            'Модератор уже работает с заявкой. При необходимости можно добавить подтверждающие файлы.',
         toneClassName: 'is-pending',
         shortLabel: 'В обработке',
     },
     UNDER_REVIEW: {
         title: 'Заявка на проверке',
         description:
-            'Заявка находится на рассмотрении. Если идентификатор заявки доступен, можно прикрепить дополнительные материалы.',
+            'Заявка находится на рассмотрении. При необходимости можно прикрепить дополнительные материалы.',
         toneClassName: 'is-pending',
         shortLabel: 'На проверке',
     },
@@ -112,15 +112,6 @@ function EmployerVerificationModal({
         }
     }, [isOpen, onClose])
 
-    const currentMethod = String(verificationData?.verificationMethod || 'TIN').toUpperCase()
-    const currentMeta = METHOD_META[currentMethod] || METHOD_META.TIN
-
-    const normalizedLinkRows = useMemo(() => {
-        return Array.isArray(verificationLinkRows) && verificationLinkRows.length > 0
-            ? verificationLinkRows
-            : [createLinkRow()]
-    }, [verificationLinkRows])
-
     const verificationStatus = String(
         currentVerification?.status ||
         currentVerification?.verificationStatus ||
@@ -134,17 +125,34 @@ function EmployerVerificationModal({
     const verificationId = currentVerification?.id ?? null
     const hasVerificationId = Boolean(verificationId)
 
+    const persistedMethod = String(
+        currentVerification?.verificationMethod ||
+        verificationData?.verificationMethod ||
+        'TIN'
+    ).toUpperCase()
+
+    const currentMethod = METHOD_META[persistedMethod] ? persistedMethod : 'TIN'
+    const currentMeta = METHOD_META[currentMethod] || METHOD_META.TIN
+
+    const normalizedLinkRows = useMemo(() => {
+        return Array.isArray(verificationLinkRows) && verificationLinkRows.length > 0
+            ? verificationLinkRows
+            : [createLinkRow()]
+    }, [verificationLinkRows])
+
+    const isActiveVerification = ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW'].includes(
+        verificationStatus
+    )
+    const isApprovedVerification = verificationStatus === 'APPROVED'
+    const canResubmitVerification = ['REJECTED', 'REVOKED', 'NOT_STARTED'].includes(
+        verificationStatus
+    )
+
+    const isReadonlyForm = isActiveVerification || isApprovedVerification
+
     const canUploadAttachments =
         hasVerificationId &&
         ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW'].includes(verificationStatus)
-
-    const canResubmitVerification = ['REJECTED', 'REVOKED'].includes(verificationStatus)
-
-    const isReadonlyVerificationState =
-        hasVerificationId &&
-        ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW', 'APPROVED'].includes(verificationStatus)
-
-    const shouldShowSubmitButton = !isReadonlyVerificationState || canResubmitVerification
 
     const hasModerationTask = Boolean(
         verificationModerationTask?.exists || verificationModerationTask?.taskId
@@ -155,16 +163,16 @@ function EmployerVerificationModal({
     const showCancelModerationButton =
         hasVerificationId &&
         hasModerationTask &&
-        ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW'].includes(verificationStatus) &&
+        isActiveVerification &&
         typeof onCancelVerificationModerationTask === 'function'
 
-    const shouldShowPendingWithoutIdHint =
-        !hasVerificationId &&
-        ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW'].includes(verificationStatus)
+    const shouldShowSubmitButton = canResubmitVerification
 
     if (!isOpen) return null
 
     const updateMethod = (method) => {
+        if (isReadonlyForm) return
+
         setVerificationData((prev) => ({
             ...prev,
             verificationMethod: method,
@@ -172,6 +180,8 @@ function EmployerVerificationModal({
     }
 
     const updateField = (field, value) => {
+        if (isReadonlyForm) return
+
         setVerificationData((prev) => ({
             ...prev,
             [field]: value,
@@ -193,10 +203,13 @@ function EmployerVerificationModal({
     }
 
     const handleAddLinkRow = () => {
+        if (isReadonlyForm) return
         setVerificationLinkRows((prev) => [...prev, createLinkRow()])
     }
 
     const handleRemoveLinkRow = (id) => {
+        if (isReadonlyForm) return
+
         setVerificationLinkRows((prev) => {
             const nextRows = prev.filter((row) => row.id !== id)
             return nextRows.length > 0 ? nextRows : [createLinkRow()]
@@ -204,6 +217,8 @@ function EmployerVerificationModal({
     }
 
     const handleChangeLinkRow = (id, field, value) => {
+        if (isReadonlyForm) return
+
         setVerificationLinkRows((prev) =>
             prev.map((row) =>
                 row.id === id
@@ -318,13 +333,6 @@ function EmployerVerificationModal({
                             </div>
                         </div>
 
-                        {shouldShowPendingWithoutIdHint && (
-                            <div className="employer-verification-modal__helper">
-                                Заявка уже существует, но API не вернул её идентификатор. Пока id не
-                                получен, прикрепление файлов недоступно.
-                            </div>
-                        )}
-
                         {showCancelModerationButton && (
                             <div className="employer-verification-modal__status-actions">
                                 <button
@@ -338,7 +346,7 @@ function EmployerVerificationModal({
                         )}
                     </div>
 
-                    {!isReadonlyVerificationState && (
+                    {!isReadonlyForm && (
                         <>
                             <div className="employer-verification-modal__methods">
                                 {Object.entries(METHOD_META).map(([method, meta]) => {
@@ -399,10 +407,14 @@ function EmployerVerificationModal({
                                     <input
                                         className="input"
                                         type="text"
-                                        value={verificationData?.inn || companyInn || ''}
-                                        placeholder="Введите ИНН"
-                                        onChange={(event) => updateField('inn', event.target.value)}
+                                        value={companyInn || verificationData?.inn || ''}
+                                        placeholder="ИНН берется из реквизитов компании"
+                                        readOnly
                                     />
+                                    <div className="employer-verification-modal__helper">
+                                        Для верификации по ИНН используется значение из реквизитов
+                                        компании. Изменить его можно в разделе с реквизитами.
+                                    </div>
                                 </div>
                             )}
 
@@ -486,6 +498,27 @@ function EmployerVerificationModal({
                         </>
                     )}
 
+                    {isReadonlyForm && (
+                        <div className="employer-verification-modal__selected-card">
+                            <div className="employer-verification-modal__selected-card-top">
+                                <span className="employer-verification-modal__selected-card-title">
+                                    Текущий способ верификации
+                                </span>
+                                <span className="employer-verification-modal__selected-card-badge">
+                                    {currentMeta.badge}
+                                </span>
+                            </div>
+
+                            <div className="employer-verification-modal__selected-method">
+                                {currentMeta.title}
+                            </div>
+
+                            <p className="employer-verification-modal__selected-description">
+                                {currentMeta.description}
+                            </p>
+                        </div>
+                    )}
+
                     <div className="employer-verification-modal__section">
                         <div className="employer-verification-modal__section-head">
                             <label className="label">Файлы к заявке</label>
@@ -511,24 +544,24 @@ function EmployerVerificationModal({
 
                         {!hasVerificationId && verificationStatus === 'NOT_STARTED' && (
                             <div className="employer-verification-modal__helper">
-                                Сначала отправьте заявку на верификацию, затем можно будет прикрепить
-                                файлы.
+                                Сначала отправьте заявку на верификацию, затем можно будет прикрепить файлы.
                             </div>
                         )}
 
-                        {!hasVerificationId &&
-                            ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW'].includes(verificationStatus) && (
+                        {['REJECTED', 'REVOKED'].includes(verificationStatus) && (
+                            <div className="employer-verification-modal__helper">
+                                Предыдущая заявка закрыта. Исправьте данные и отправьте новую заявку повторно.
+                                После создания новой заявки можно будет прикрепить файлы.
+                            </div>
+                        )}
+
+                        {hasVerificationId &&
+                            verificationAttachments.length === 0 &&
+                            canUploadAttachments && (
                                 <div className="employer-verification-modal__helper">
-                                    Заявка уже создана, но её id пока недоступен. Пока фронт не получил
-                                    идентификатор, прикрепить файл нельзя.
+                                    Пока нет прикреплённых файлов.
                                 </div>
                             )}
-
-                        {hasVerificationId && verificationAttachments.length === 0 && (
-                            <div className="employer-verification-modal__helper">
-                                Пока нет прикреплённых файлов.
-                            </div>
-                        )}
 
                         {verificationAttachments.length > 0 && (
                             <div className="employer-verification-modal__attachments">
@@ -579,7 +612,9 @@ function EmployerVerificationModal({
                             className="button employer-verification-modal__footer-button"
                             onClick={onSubmit}
                         >
-                            {canResubmitVerification ? 'Отправить повторно' : 'Отправить заявку'}
+                            {['REJECTED', 'REVOKED'].includes(verificationStatus)
+                                ? 'Отправить повторно'
+                                : 'Отправить заявку'}
                         </button>
                     )}
                 </div>

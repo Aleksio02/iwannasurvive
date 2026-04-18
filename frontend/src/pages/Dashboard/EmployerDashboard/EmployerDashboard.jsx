@@ -97,6 +97,34 @@ const areCompanyPayloadsEqual = (a = {}, b = {}) => {
     )
 }
 
+const normalizeVerificationResponse = (verification, fallbackUserId = null, fallbackMethod = 'TIN', fallbackInn = '') => {
+    if (!verification || typeof verification !== 'object') return null
+
+    const normalizedId = Number(verification.id)
+
+    if (!Number.isFinite(normalizedId) || normalizedId <= 0) {
+        return null
+    }
+
+    return {
+        id: normalizedId,
+        employerUserId: Number(verification.employerUserId) || fallbackUserId || null,
+        status: String(verification.status || 'PENDING').toUpperCase(),
+        verificationMethod: verification.verificationMethod || fallbackMethod,
+        corporateEmail: verification.corporateEmail || '',
+        inn: verification.inn || fallbackInn || '',
+        professionalLinks: Array.isArray(verification.professionalLinks)
+            ? verification.professionalLinks.filter((item) => typeof item === 'string' && item.trim())
+            : [],
+        submittedComment: verification.submittedComment || '',
+        submittedAt: verification.submittedAt || null,
+        createdAt: verification.createdAt || null,
+    }
+}
+
+const getVerificationStorageKey = (userId) => `tramplin_employer_verification_${userId || 'anonymous'}`
+const getVerificationAttachmentsStorageKey = (userId) => `tramplin_employer_verification_attachments_${userId || 'anonymous'}`
+
 function EmployerDashboard() {
     const { toast } = useToast()
 
@@ -261,6 +289,56 @@ function EmployerDashboard() {
                 label: row.title?.trim() || `Ссылка ${index + 1}`,
                 url: row.url.trim(),
             }))
+
+    const persistVerification = useCallback((verification, attachments = null, userId = user?.userId) => {
+        if (!userId) return
+
+        try {
+            const verificationKey = getVerificationStorageKey(userId)
+            const attachmentsKey = getVerificationAttachmentsStorageKey(userId)
+
+            if (verification?.id) {
+                localStorage.setItem(verificationKey, JSON.stringify(verification))
+            } else {
+                localStorage.removeItem(verificationKey)
+            }
+
+            if (attachments !== null) {
+                localStorage.setItem(attachmentsKey, JSON.stringify(Array.isArray(attachments) ? attachments : []))
+            }
+        } catch {}
+    }, [user?.userId])
+
+    const clearPersistedVerification = useCallback((userId = user?.userId) => {
+        if (!userId) return
+
+        try {
+            localStorage.removeItem(getVerificationStorageKey(userId))
+            localStorage.removeItem(getVerificationAttachmentsStorageKey(userId))
+        } catch {}
+    }, [user?.userId])
+
+    const restorePersistedVerification = useCallback((userId) => {
+        if (!userId) return { verification: null, attachments: [] }
+
+        try {
+            const rawVerification = localStorage.getItem(getVerificationStorageKey(userId))
+            const rawAttachments = localStorage.getItem(getVerificationAttachmentsStorageKey(userId))
+
+            const parsedVerification = rawVerification ? JSON.parse(rawVerification) : null
+            const parsedAttachments = rawAttachments ? JSON.parse(rawAttachments) : []
+
+            return {
+                verification: normalizeVerificationResponse(parsedVerification, userId),
+                attachments: Array.isArray(parsedAttachments) ? parsedAttachments : [],
+            }
+        } catch {
+            return {
+                verification: null,
+                attachments: [],
+            }
+        }
+    }, [])
 
     const normalizeEmployerWorkspaceResponse = useCallback((workspaceData = {}, fallbackUser = null) => {
         const current = normalizeEmployerProfileState(workspaceData.currentProfile || {}, fallbackUser)
@@ -853,8 +931,7 @@ function EmployerDashboard() {
         if (!verificationId) {
             toast({
                 title: 'Не удалось прикрепить файл',
-                description:
-                    'Идентификатор заявки пока недоступен. API не позволяет заново получить заявку после перезагрузки страницы.',
+                description: 'Сначала отправьте заявку на верификацию',
                 variant: 'destructive',
             })
             return
@@ -864,12 +941,13 @@ function EmployerDashboard() {
 
         try {
             const uploaded = await uploadEmployerVerificationAttachment(verificationId, file)
-
             const normalizedAttachments = Array.isArray(uploaded) ? uploaded : []
 
             setVerificationAttachments((prev) => {
                 const prevList = Array.isArray(prev) ? prev : []
-                return [...prevList, ...normalizedAttachments]
+                const nextList = [...prevList, ...normalizedAttachments]
+                persistVerification(currentVerification, nextList)
+                return nextList
             })
 
             toast({
@@ -893,7 +971,7 @@ function EmployerDashboard() {
         if (!verificationId) {
             toast({
                 title: 'Не удалось отменить задачу',
-                description: 'Идентификатор заявки отсутствует',
+                description: 'Сначала откройте созданную заявку на верификацию',
                 variant: 'destructive',
             })
             return
@@ -1021,34 +1099,25 @@ function EmployerDashboard() {
 
             const createdVerification = await createEmployerVerification(payload)
 
-            const normalizedVerification = createdVerification
-                ? {
-                    id: createdVerification?.id ?? null,
-                    employerUserId: createdVerification?.employerUserId ?? user.userId,
-                    status: String(createdVerification?.status || 'PENDING').toUpperCase(),
-                    verificationMethod: createdVerification?.verificationMethod || method,
-                    corporateEmail: createdVerification?.corporateEmail || '',
-                    inn: createdVerification?.inn || profile?.inn || '',
-                    professionalLinks: Array.isArray(createdVerification?.professionalLinks)
-                        ? createdVerification.professionalLinks
-                        : [],
-                    submittedComment: createdVerification?.submittedComment || '',
-                    submittedAt: createdVerification?.submittedAt || null,
-                    createdAt: createdVerification?.createdAt || null,
-                }
-                : null
+            const normalizedVerification = normalizeVerificationResponse(
+                createdVerification,
+                user.userId,
+                method,
+                profile?.inn || verificationData?.inn || ''
+            )
+
+            if (!normalizedVerification?.id) {
+                throw new Error('Сервер не вернул идентификатор заявки на верификацию')
+            }
 
             setCurrentVerification(normalizedVerification)
             setVerificationAttachments([])
+            persistVerification(normalizedVerification, [])
 
-            if (normalizedVerification?.id) {
-                try {
-                    const task = await getEmployerVerificationModerationTask(normalizedVerification.id)
-                    setVerificationModerationTask(task || null)
-                } catch {
-                    setVerificationModerationTask(null)
-                }
-            } else {
+            try {
+                const task = await getEmployerVerificationModerationTask(normalizedVerification.id)
+                setVerificationModerationTask(task || null)
+            } catch {
                 setVerificationModerationTask(null)
             }
 
@@ -1056,9 +1125,7 @@ function EmployerDashboard() {
 
             toast({
                 title: 'Заявка отправлена',
-                description: normalizedVerification?.id
-                    ? 'Теперь вы можете прикрепить файлы к заявке'
-                    : 'Заявка создана, но API не вернул идентификатор заявки',
+                description: `ID заявки: ${normalizedVerification.id}. Теперь можно прикрепить файлы.`,
             })
 
             setShowVerificationModal(true)
@@ -1110,6 +1177,10 @@ function EmployerDashboard() {
                 return
             }
 
+            const persistedVerificationState = restorePersistedVerification(currentUser.userId)
+            setCurrentVerification(persistedVerificationState.verification)
+            setVerificationAttachments(persistedVerificationState.attachments)
+
             const [workspaceData, locations] = await Promise.all([
                 getEmployerProfileWorkspace(currentUser.userId),
                 loadEmployerLocationsData(),
@@ -1151,6 +1222,28 @@ function EmployerDashboard() {
                             : prev
                     )
                 }
+            }
+
+            const profileVerificationStatus = String(
+                normalizedWorkspace?.current?.verificationStatus || ''
+            ).toUpperCase()
+
+            if (profileVerificationStatus === 'NOT_STARTED' || !profileVerificationStatus) {
+                setCurrentVerification(null)
+                setVerificationModerationTask(null)
+                setVerificationAttachments([])
+                clearPersistedVerification(currentUser.userId)
+            }
+
+            if (persistedVerificationState.verification?.id) {
+                try {
+                    const task = await getEmployerVerificationModerationTask(persistedVerificationState.verification.id)
+                    setVerificationModerationTask(task || null)
+                } catch {
+                    setVerificationModerationTask(null)
+                }
+            } else {
+                setVerificationModerationTask(null)
             }
 
             const history = await loadModerationFeedback(normalized.userId || currentUser.userId)
@@ -1197,10 +1290,12 @@ function EmployerDashboard() {
             setIsLoading(false)
         }
     }, [
+        clearPersistedVerification,
         loadEmployerLocationsData,
         loadModerationFeedback,
         loadActiveModerationTask,
         responseFilters,
+        restorePersistedVerification,
         syncWorkspaceProfileState,
         toast,
     ])
@@ -1304,23 +1399,6 @@ function EmployerDashboard() {
             )
         } catch {}
     }, [dismissedDashboardAlerts, verificationAlertStateSignature])
-
-    useEffect(() => {
-        if (!showVerificationModal) return
-        if (currentVerification?.id) return
-
-        const profileVerificationStatus = String(profile.verificationStatus || '').toUpperCase()
-
-        if ([...ACTIVE_VERIFICATION_STATUSES, ...FINALIZED_VERIFICATION_STATUSES].includes(profileVerificationStatus)) {
-            setCurrentVerification((prev) =>
-                    prev || {
-                        id: null,
-                        status: profileVerificationStatus,
-                        verificationStatus: profileVerificationStatus,
-                    }
-            )
-        }
-    }, [showVerificationModal, currentVerification?.id, profile.verificationStatus])
 
     const filteredOpportunities = useMemo(() => {
         return opportunities.filter((opp) => {
