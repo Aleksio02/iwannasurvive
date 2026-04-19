@@ -658,6 +658,19 @@ export async function uploadEmployerVerificationAttachment(verificationId, file)
     })
 }
 
+export async function getEmployerVerificationAttachments(verificationId) {
+    if (!verificationId) throw createApiError('Не указан verificationId', 400)
+
+    const userId = await getSessionUserIdFromApi()
+    if (!userId) {
+        throw createApiError('Пользователь не авторизован', 401)
+    }
+
+    return apiRequest(`/api/employer/verifications/${verificationId}/attachments`, {
+        method: 'GET',
+    })
+}
+
 export async function getEmployerVerificationModerationTask(verificationId) {
     const userId = await getSessionUserIdFromApi()
 
@@ -1338,4 +1351,24 @@ export async function completeEmployerOnboarding({
     }
 
     return getEmployerProfileWorkspace(userId)
+}
+
+// ========== VERIFICATION ATTACHMENTS ==========
+
+export async function getVerificationAttachmentDownloadUrl(employerUserId, fileId) {
+    if (!employerUserId || !fileId) return null
+    return `${API_BASE}/profile/employer/${employerUserId}/files/${fileId}`
+}
+
+export async function openVerificationAttachment(employerUserId, fileId) {
+    const url = getVerificationAttachmentDownloadUrl(employerUserId, fileId)
+    if (!url) return
+
+    window.open(url, '_blank')
+}
+
+export async function deleteVerificationAttachment(fileId) {
+    if (!fileId) throw createApiError('Не указан fileId', 400)
+
+    return deleteEmployerFile(fileId)
 }
