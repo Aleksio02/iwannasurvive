@@ -141,7 +141,18 @@ function EmployerDashboard() {
     const [isModerationFeedbackLoading, setIsModerationFeedbackLoading] = useState(false)
     const [activeModerationTask, setActiveModerationTask] = useState(null)
     const [isActiveModerationTaskLoading, setIsActiveModerationTaskLoading] = useState(false)
-    const [dismissedDashboardAlerts, setDismissedDashboardAlerts] = useState([])
+
+    const [dismissedDashboardAlerts, setDismissedDashboardAlerts] = useState(() => {
+        try {
+            const stored = localStorage.getItem(DISMISSED_ALERTS_STORAGE_KEY)
+            if (!stored) return []
+
+            const parsed = JSON.parse(stored)
+            return Array.isArray(parsed) ? parsed : []
+        } catch {
+            return []
+        }
+    })
 
     const [opportunitySearchTerm, setOpportunitySearchTerm] = useState('')
     const [opportunityFilterStatus, setOpportunityFilterStatus] = useState('all')
@@ -1426,20 +1437,6 @@ function EmployerDashboard() {
             }))
         }
     }, [showVerificationModal, verificationData.verificationMethod, verificationData.corporateEmail, user?.email])
-
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem(DISMISSED_ALERTS_STORAGE_KEY)
-            if (stored) {
-                const parsed = JSON.parse(stored)
-                if (Array.isArray(parsed)) {
-                    setDismissedDashboardAlerts(parsed)
-                }
-            }
-        } catch (e) {
-            console.error('Failed to load dismissed alerts', e)
-        }
-    }, [])
 
     useEffect(() => {
         try {
