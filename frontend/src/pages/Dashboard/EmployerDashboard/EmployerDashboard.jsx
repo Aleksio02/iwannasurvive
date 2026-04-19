@@ -1518,11 +1518,13 @@ function EmployerDashboard() {
             if (hasVerificationRevoked) {
                 alerts.push({
                     key: 'verification-revoked',
-                    variant: 'revision',
+                    variant: 'warning',
                     closable: false,
                     title: 'Верификация отозвана',
-                    text: 'Нужно повторно пройти верификацию компании.',
-                    buttonText: 'Пройти заново',
+                    text: verificationModerationTask?.comment
+                        ? `Верификация отозвана: ${verificationModerationTask.comment}`
+                        : 'Верификация компании была отозвана. Пройдите процедуру верификации заново, чтобы публиковать вакансии и мероприятия.',
+                    buttonText: 'Пройти верификацию',
                     onClick: () => setShowVerificationModal(true),
                 })
             }
