@@ -27,6 +27,9 @@ import {
     uploadEmployerVerificationAttachment,
     getEmployerVerificationModerationTask,
     cancelEmployerVerificationModerationTask,
+    openVerificationAttachment,
+    deleteVerificationAttachment,
+    getEmployerVerificationAttachments,
 } from '@/api/profile'
 
 import {
@@ -171,6 +174,7 @@ function EmployerDashboard() {
     const [verificationModerationTask, setVerificationModerationTask] = useState(null)
     const [verificationAttachments, setVerificationAttachments] = useState([])
     const [isVerificationAttachmentUploading, setIsVerificationAttachmentUploading] = useState(false)
+    const [isVerificationSubmitting, setIsVerificationSubmitting] = useState(false)
 
     const [profile, setProfile] = useState({
         userId: null,
@@ -244,6 +248,8 @@ function EmployerDashboard() {
     const [addressSuggestions, setAddressSuggestions] = useState([])
     const [isAddressSearchOpen, setIsAddressSearchOpen] = useState(false)
     const [isLocationSaving, setIsLocationSaving] = useState(false)
+
+    const [isDeletingAttachment, setIsDeletingAttachment] = useState(false)
 
     const locationCitySearchRef = useRef(null)
     const addressSearchRef = useRef(null)
@@ -339,6 +345,47 @@ function EmployerDashboard() {
             }
         }
     }, [])
+
+    const loadVerificationModerationTask = useCallback(async (verificationId) => {
+        if (!verificationId) {
+            setVerificationModerationTask(null)
+            return null
+        }
+
+        try {
+            const task = await getEmployerVerificationModerationTask(verificationId)
+            setVerificationModerationTask(task || null)
+            return task || null
+        } catch (error) {
+            console.error('Failed to load verification moderation task:', error)
+            setVerificationModerationTask(null)
+            return null
+        }
+    }, [])
+
+    const loadVerificationAttachments = useCallback(async (verificationId) => {
+        if (!verificationId) {
+            setVerificationAttachments([])
+            return []
+        }
+
+        try {
+            const { getEmployerVerificationAttachments } = await import('@/api/profile')
+            const response = await getEmployerVerificationAttachments(verificationId)
+            const attachments = Array.isArray(response) ? response : []
+            setVerificationAttachments(attachments)
+
+            if (currentVerification) {
+                persistVerification(currentVerification, attachments)
+            }
+
+            return attachments
+        } catch (error) {
+            console.error('Failed to load verification attachments:', error)
+            setVerificationAttachments([])
+            return []
+        }
+    }, [currentVerification, persistVerification])
 
     const normalizeEmployerWorkspaceResponse = useCallback((workspaceData = {}, fallbackUser = null) => {
         const current = normalizeEmployerProfileState(workspaceData.currentProfile || {}, fallbackUser)
@@ -945,7 +992,11 @@ function EmployerDashboard() {
 
             setVerificationAttachments((prev) => {
                 const prevList = Array.isArray(prev) ? prev : []
-                const nextList = [...prevList, ...normalizedAttachments]
+                const existingFileIds = new Set(prevList.map(item => item?.fileId || item?.id))
+                const newUniqueAttachments = normalizedAttachments.filter(
+                    item => !existingFileIds.has(item?.fileId || item?.id)
+                )
+                const nextList = [...prevList, ...newUniqueAttachments]
                 persistVerification(currentVerification, nextList)
                 return nextList
             })
@@ -999,15 +1050,6 @@ function EmployerDashboard() {
         }
     }
 
-    const moderationTaskLabel = useMemo(() => {
-        const exists = Boolean(
-            verificationModerationTask?.exists ||
-            verificationModerationTask?.taskId
-        )
-
-        return exists ? 'Создана' : 'Не создана'
-    }, [verificationModerationTask])
-
     const handleSubmitVerification = async () => {
         const method = String(verificationData?.verificationMethod || 'TIN').toUpperCase()
 
@@ -1017,9 +1059,7 @@ function EmployerDashboard() {
             ''
         ).toUpperCase()
 
-        const hasActiveVerification =
-            Boolean(currentVerification?.id) &&
-            ['PENDING', 'APPROVED'].includes(currentStatus)
+        const hasActiveVerification = Boolean(currentVerification?.id) && currentStatus === 'PENDING'
 
         if (hasActiveVerification) {
             toast({
@@ -1079,7 +1119,7 @@ function EmployerDashboard() {
             }
         }
 
-        setIsLoading(true)
+        setIsVerificationSubmitting(true)
 
         try {
             const payload = {
@@ -1110,17 +1150,15 @@ function EmployerDashboard() {
                 throw new Error('Сервер не вернул идентификатор заявки на верификацию')
             }
 
+            // Update current verification immediately
             setCurrentVerification(normalizedVerification)
             setVerificationAttachments([])
             persistVerification(normalizedVerification, [])
 
-            try {
-                const task = await getEmployerVerificationModerationTask(normalizedVerification.id)
-                setVerificationModerationTask(task || null)
-            } catch {
-                setVerificationModerationTask(null)
-            }
+            // Load moderation task for the new verification
+            await loadVerificationModerationTask(normalizedVerification.id)
 
+            // Reload employer profile to get updated verification status
             await reloadEmployerProfile()
 
             toast({
@@ -1128,7 +1166,8 @@ function EmployerDashboard() {
                 description: `ID заявки: ${normalizedVerification.id}. Теперь можно прикрепить файлы.`,
             })
 
-            setShowVerificationModal(true)
+            // Keep modal open so user can upload files immediately
+            // Don't close the modal - just update its state
         } catch (error) {
             toast({
                 title: 'Ошибка',
@@ -1136,7 +1175,7 @@ function EmployerDashboard() {
                 variant: 'destructive',
             })
         } finally {
-            setIsLoading(false)
+            setIsVerificationSubmitting(false)
         }
     }
 
@@ -1176,10 +1215,6 @@ function EmployerDashboard() {
                 setVerificationAttachments([])
                 return
             }
-
-            const persistedVerificationState = restorePersistedVerification(currentUser.userId)
-            setCurrentVerification(persistedVerificationState.verification)
-            setVerificationAttachments(persistedVerificationState.attachments)
 
             const [workspaceData, locations] = await Promise.all([
                 getEmployerProfileWorkspace(currentUser.userId),
@@ -1224,25 +1259,45 @@ function EmployerDashboard() {
                 }
             }
 
+            // ========== ВЕРИФИКАЦИЯ: получаем данные из профиля (бэкенд уже добавил verificationId!) ==========
             const profileVerificationStatus = String(
-                normalizedWorkspace?.current?.verificationStatus || ''
+                workspaceData?.currentProfile?.verificationStatus || ''
             ).toUpperCase()
 
-            if (profileVerificationStatus === 'NOT_STARTED' || !profileVerificationStatus) {
-                setCurrentVerification(null)
-                setVerificationModerationTask(null)
-                setVerificationAttachments([])
-                clearPersistedVerification(currentUser.userId)
-            }
+            // БЕРЁМ ID ИЗ ПРОФИЛЯ, А НЕ ИЗ LOCALSTORAGE!
+            const verificationId = workspaceData?.currentProfile?.verificationId || null
+            const verificationMethod = workspaceData?.currentProfile?.verificationMethod || null
 
-            if (persistedVerificationState.verification?.id) {
+            if (verificationId && profileVerificationStatus !== 'NOT_STARTED' && profileVerificationStatus !== '') {
+                // Есть ID верификации - загружаем данные
+                const verification = {
+                    id: verificationId,
+                    employerUserId: currentUser.userId,
+                    status: profileVerificationStatus,
+                    verificationMethod: verificationMethod,
+                }
+                setCurrentVerification(verification)
+
+                // Загружаем attachments
                 try {
-                    const task = await getEmployerVerificationModerationTask(persistedVerificationState.verification.id)
+                    const attachments = await getEmployerVerificationAttachments(verificationId)
+                    setVerificationAttachments(Array.isArray(attachments) ? attachments : [])
+                } catch (error) {
+                    console.error('Failed to load verification attachments:', error)
+                    setVerificationAttachments([])
+                }
+
+                // Загружаем moderation task
+                try {
+                    const task = await getEmployerVerificationModerationTask(verificationId)
                     setVerificationModerationTask(task || null)
-                } catch {
+                } catch (error) {
+                    console.error('Failed to load verification moderation task:', error)
                     setVerificationModerationTask(null)
                 }
             } else {
+                setCurrentVerification(null)
+                setVerificationAttachments([])
                 setVerificationModerationTask(null)
             }
 
@@ -1295,7 +1350,6 @@ function EmployerDashboard() {
         loadModerationFeedback,
         loadActiveModerationTask,
         responseFilters,
-        restorePersistedVerification,
         syncWorkspaceProfileState,
         toast,
     ])
@@ -1881,6 +1935,64 @@ function EmployerDashboard() {
         }
     }
 
+    const handleOpenVerificationAttachment = (employerUserId, fileId) => {
+        openVerificationAttachment(employerUserId, fileId)
+    }
+
+    const handleDeleteVerificationAttachment = async (fileId, file) => {
+        if (!fileId) return
+
+        setIsDeletingAttachment(true)
+
+        try {
+            await deleteEmployerFile(fileId)
+
+            setVerificationAttachments((prev) => {
+                const newAttachments = prev.filter((item) => {
+                    const itemFileId = item?.fileId || item?.id
+                    return itemFileId !== fileId
+                })
+
+                if (currentVerification) {
+                    persistVerification(currentVerification, newAttachments)
+                }
+
+                return newAttachments
+            })
+
+            toast({
+                title: 'Файл удалён',
+                description: 'Файл успешно удалён из заявки',
+            })
+        } catch (error) {
+            console.error('Delete error:', error)
+
+            if (error.status === 404) {
+                toast({
+                    title: 'Файл не найден',
+                    description: 'Возможно, файл уже был удалён. Обновите страницу.',
+                    variant: 'destructive',
+                })
+
+                setVerificationAttachments((prev) => {
+                    const newAttachments = prev.filter((item) => {
+                        const itemFileId = item?.fileId || item?.id
+                        return itemFileId !== fileId
+                    })
+                    return newAttachments
+                })
+            } else {
+                toast({
+                    title: 'Ошибка',
+                    description: error?.message || 'Не удалось удалить файл',
+                    variant: 'destructive',
+                })
+            }
+        } finally {
+            setIsDeletingAttachment(false)
+        }
+    }
+
     if (isLoading && !profile.companyName && opportunities.length === 0) {
         return (
             <DashboardLayout title="Кабинет работодателя">
@@ -2156,9 +2268,13 @@ function EmployerDashboard() {
                 verificationModerationTask={verificationModerationTask}
                 verificationAttachments={verificationAttachments}
                 isVerificationAttachmentUploading={isVerificationAttachmentUploading}
+                isVerificationSubmitting={isVerificationSubmitting}
                 onUploadVerificationAttachment={handleUploadVerificationAttachment}
                 onCancelVerificationModerationTask={handleCancelVerificationModerationTask}
                 profileVerificationStatus={profile.verificationStatus || 'NOT_STARTED'}
+                onOpenAttachment={handleOpenVerificationAttachment}
+                onDeleteAttachment={handleDeleteVerificationAttachment}
+                isDeletingAttachment={isDeletingAttachment}
             />
 
             <EmployerLocationModal

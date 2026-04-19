@@ -28,48 +28,52 @@ const METHOD_META = {
 const VERIFICATION_STATUS_META = {
     NOT_STARTED: {
         title: 'Верификация не начата',
-        description: 'Заполните данные и отправьте заявку на верификацию компании.',
+        description: 'Заполните данные компании и отправьте заявку на верификацию.',
         toneClassName: 'is-not-started',
         shortLabel: 'Не начата',
+        statusLabel: 'Не начата',
     },
     PENDING: {
         title: 'Заявка отправлена',
-        description:
-            'Заявка создана и ожидает проверки. После создания заявки можно прикрепить подтверждающие файлы.',
+        description: 'Заявка создана и ожидает проверки. После создания заявки можно прикрепить подтверждающие файлы.',
         toneClassName: 'is-pending',
         shortLabel: 'Отправлена',
+        statusLabel: 'Отправлена',
     },
     IN_PROGRESS: {
         title: 'Заявка в обработке',
-        description:
-            'Модератор уже работает с заявкой. При необходимости можно добавить подтверждающие файлы.',
+        description: 'Модератор уже работает с заявкой. При необходимости можно добавить подтверждающие файлы.',
         toneClassName: 'is-pending',
         shortLabel: 'В обработке',
+        statusLabel: 'В обработке',
     },
     UNDER_REVIEW: {
         title: 'Заявка на проверке',
-        description:
-            'Заявка находится на рассмотрении. При необходимости можно прикрепить дополнительные материалы.',
+        description: 'Заявка находится на рассмотрении. При необходимости можно прикрепить дополнительные материалы.',
         toneClassName: 'is-pending',
         shortLabel: 'На проверке',
+        statusLabel: 'На проверке',
     },
     APPROVED: {
         title: 'Верификация одобрена',
-        description: 'Компания успешно прошла верификацию.',
+        description: 'Компания успешно прошла верификацию. Теперь вы можете публиковать вакансии и мероприятия.',
         toneClassName: 'is-approved',
         shortLabel: 'Одобрена',
+        statusLabel: 'Одобрена',
     },
     REJECTED: {
         title: 'Нужна доработка',
         description: 'Заявка была отклонена. Исправьте данные и отправьте её повторно.',
         toneClassName: 'is-rejected',
         shortLabel: 'Нужна доработка',
+        statusLabel: 'Нужна доработка',
     },
     REVOKED: {
         title: 'Верификация отозвана',
         description: 'Необходимо повторно пройти верификацию компании.',
         toneClassName: 'is-rejected',
         shortLabel: 'Отозвана',
+        statusLabel: 'Отозвана',
     },
 }
 
@@ -87,9 +91,13 @@ function EmployerVerificationModal({
                                        verificationModerationTask = null,
                                        verificationAttachments = [],
                                        isVerificationAttachmentUploading = false,
+                                       isVerificationSubmitting = false,
                                        onUploadVerificationAttachment,
                                        onCancelVerificationModerationTask,
                                        profileVerificationStatus = 'NOT_STARTED',
+                                       onOpenAttachment,
+                                       onDeleteAttachment,
+                                       isDeletingAttachment = false,
                                    }) {
     const overlayMouseDownStartedOutsideRef = useRef(false)
     const attachmentInputRef = useRef(null)
@@ -124,6 +132,7 @@ function EmployerVerificationModal({
 
     const verificationId = currentVerification?.id ?? null
     const hasVerificationId = Boolean(verificationId)
+    const employerUserId = currentVerification?.employerUserId ?? null
 
     const persistedMethod = String(
         currentVerification?.verificationMethod ||
@@ -148,6 +157,9 @@ function EmployerVerificationModal({
         verificationStatus
     )
 
+    const isRejectedVerification = verificationStatus === 'REJECTED'
+    const isRevokedVerification = verificationStatus === 'REVOKED'
+
     const isReadonlyForm = isActiveVerification || isApprovedVerification
 
     const canUploadAttachments =
@@ -166,7 +178,17 @@ function EmployerVerificationModal({
         isActiveVerification &&
         typeof onCancelVerificationModerationTask === 'function'
 
-    const shouldShowSubmitButton = canResubmitVerification
+    const shouldShowSubmitButton = canResubmitVerification && !isActiveVerification && !isApprovedVerification
+
+    const submitButtonText = useMemo(() => {
+        if (isRejectedVerification || isRevokedVerification) {
+            return 'Отправить повторно'
+        }
+        if (verificationStatus === 'NOT_STARTED') {
+            return 'Отправить заявку'
+        }
+        return 'Отправить заявку'
+    }, [isRejectedVerification, isRevokedVerification, verificationStatus])
 
     if (!isOpen) return null
 
@@ -240,11 +262,56 @@ function EmployerVerificationModal({
         const file = event.target.files?.[0]
         if (!file) return
 
+        if (file.type !== 'application/pdf') {
+            alert('Можно загружать только PDF файлы')
+            event.target.value = ''
+            return
+        }
+
+        if (file.size > 20 * 1024 * 1024) {
+            alert('Размер файла не должен превышать 20 МБ')
+            event.target.value = ''
+            return
+        }
+
         try {
             await onUploadVerificationAttachment?.(file)
         } finally {
             event.target.value = ''
         }
+    }
+
+    const handleOpenAttachment = (file) => {
+        const fileId = file?.fileId || file?.id
+        if (onOpenAttachment && fileId && employerUserId) {
+            onOpenAttachment(employerUserId, fileId)
+        } else if (file?.url) {
+            window.open(file.url, '_blank')
+        }
+    }
+
+    const handleDeleteAttachment = (file) => {
+        const fileId = file?.fileId || file?.id
+        if (fileId && onDeleteAttachment) {
+            onDeleteAttachment(fileId, file)
+        }
+    }
+
+    const getAttachmentKey = (file, index) => {
+        const fileId = file?.fileId || file?.id
+        const attachmentId = file?.attachmentId
+        const fileName = file?.file?.originalFileName || file?.originalFileName || file?.fileName || file?.name || ''
+
+        if (fileId && attachmentId) {
+            return `file_${fileId}_att_${attachmentId}`
+        }
+        if (fileId) {
+            return `file_${fileId}_idx_${index}`
+        }
+        if (attachmentId) {
+            return `att_${attachmentId}_idx_${index}`
+        }
+        return `temp_${fileName}_${index}`
     }
 
     return (
@@ -292,7 +359,7 @@ function EmployerVerificationModal({
                             </span>
 
                             <span className="employer-verification-modal__status-badge">
-                                {verificationStatusMeta.shortLabel}
+                                {verificationStatusMeta.statusLabel}
                             </span>
                         </div>
 
@@ -319,7 +386,7 @@ function EmployerVerificationModal({
                                     Статус
                                 </span>
                                 <span className="employer-verification-modal__status-item-value">
-                                    {verificationStatusMeta.shortLabel}
+                                    {verificationStatusMeta.statusLabel}
                                 </span>
                             </div>
 
@@ -405,11 +472,12 @@ function EmployerVerificationModal({
                                 <div className="employer-verification-modal__section">
                                     <label className="label">ИНН</label>
                                     <input
-                                        className="input"
+                                        className="input input--disabled"
                                         type="text"
                                         value={companyInn || verificationData?.inn || ''}
                                         placeholder="ИНН берется из реквизитов компании"
                                         readOnly
+                                        disabled
                                     />
                                     <div className="employer-verification-modal__helper">
                                         Для верификации по ИНН используется значение из реквизитов
@@ -538,6 +606,7 @@ function EmployerVerificationModal({
                         <input
                             ref={attachmentInputRef}
                             type="file"
+                            accept=".pdf,application/pdf"
                             hidden
                             onChange={handleAttachmentChange}
                         />
@@ -548,9 +617,16 @@ function EmployerVerificationModal({
                             </div>
                         )}
 
-                        {['REJECTED', 'REVOKED'].includes(verificationStatus) && (
+                        {isRejectedVerification && (
                             <div className="employer-verification-modal__helper">
-                                Предыдущая заявка закрыта. Исправьте данные и отправьте новую заявку повторно.
+                                Предыдущая заявка отклонена. Исправьте данные и отправьте новую заявку повторно.
+                                После создания новой заявки можно будет прикрепить файлы.
+                            </div>
+                        )}
+
+                        {isRevokedVerification && (
+                            <div className="employer-verification-modal__helper">
+                                Верификация отозвана. Пройдите верификацию заново.
                                 После создания новой заявки можно будет прикрепить файлы.
                             </div>
                         )}
@@ -559,20 +635,18 @@ function EmployerVerificationModal({
                             verificationAttachments.length === 0 &&
                             canUploadAttachments && (
                                 <div className="employer-verification-modal__helper">
-                                    Пока нет прикреплённых файлов.
+                                    Пока нет прикреплённых файлов. Добавьте подтверждающие документы (PDF до 20 МБ).
                                 </div>
                             )}
 
                         {verificationAttachments.length > 0 && (
                             <div className="employer-verification-modal__attachments">
+                                <div className="employer-verification-modal__attachments-title">
+                                    Прикреплённые файлы ({verificationAttachments.length}):
+                                </div>
                                 {verificationAttachments.map((file, index) => {
-                                    const attachmentKey =
-                                        file?.attachmentId ||
-                                        file?.id ||
-                                        file?.fileId ||
-                                        file?.url ||
-                                        `${index}`
-
+                                    const attachmentKey = getAttachmentKey(file, index)
+                                    const fileId = file?.fileId || file?.id
                                     const fileName =
                                         file?.file?.originalFileName ||
                                         file?.originalFilename ||
@@ -581,13 +655,41 @@ function EmployerVerificationModal({
                                         file?.name ||
                                         `Файл ${index + 1}`
 
+                                    const canOpen = Boolean(fileId && employerUserId)
+                                    const canDelete = Boolean(fileId && !isDeletingAttachment && canUploadAttachments)
+
                                     return (
                                         <div
                                             key={attachmentKey}
                                             className="employer-verification-modal__attachment"
                                         >
-                                            <div className="employer-verification-modal__attachment-name">
-                                                {fileName}
+                                            <div className="employer-verification-modal__attachment-info">
+                                                <div
+                                                    className="employer-verification-modal__attachment-name"
+                                                    onClick={() => canOpen && handleOpenAttachment(file)}
+                                                    style={{ cursor: canOpen ? 'pointer' : 'default' }}
+                                                    role={canOpen ? 'button' : undefined}
+                                                    tabIndex={canOpen ? 0 : undefined}
+                                                >
+                                                    {fileName}
+                                                </div>
+                                            </div>
+                                            <div className="employer-verification-modal__attachment-actions">
+                                                {canDelete && (
+                                                    <button
+                                                        type="button"
+                                                        className="employer-verification-modal__attachment-delete"
+                                                        onClick={() => handleDeleteAttachment(file)}
+                                                        aria-label="Удалить файл"
+                                                        disabled={isDeletingAttachment}
+                                                    >
+                                                        <img
+                                                            src={TrashIcon}
+                                                            alt=""
+                                                            className="employer-verification-modal__icon"
+                                                        />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     )
@@ -611,10 +713,9 @@ function EmployerVerificationModal({
                             type="button"
                             className="button employer-verification-modal__footer-button"
                             onClick={onSubmit}
+                            disabled={isVerificationSubmitting}
                         >
-                            {['REJECTED', 'REVOKED'].includes(verificationStatus)
-                                ? 'Отправить повторно'
-                                : 'Отправить заявку'}
+                            {isVerificationSubmitting ? 'Отправка...' : submitButtonText}
                         </button>
                     )}
                 </div>
