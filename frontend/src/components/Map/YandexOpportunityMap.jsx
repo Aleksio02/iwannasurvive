@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { OPPORTUNITY_LABELS } from '../../api/opportunities'
 import './YandexOpportunityMap.scss'
 
@@ -206,6 +206,7 @@ export default function YandexOpportunityMap({
     const onOpenCardRef = useRef(onOpenCard)
     const onCenterChangeRef = useRef(onCenterChange)
     const didInitialFitRef = useRef(false)
+    const [isMapReady, setIsMapReady] = useState(false)
 
     const center = useMemo(() => {
         const first = points.find((point) => point.latitude && point.longitude)
@@ -244,6 +245,7 @@ export default function YandexOpportunityMap({
                     controls: ['zoomControl', 'typeSelector', 'fullscreenControl'],
                 })
             }
+            setIsMapReady(true)
 
             const map = mapRef.current
 
@@ -280,7 +282,7 @@ export default function YandexOpportunityMap({
     useEffect(() => {
         const ymaps = ymapsRef.current
         const map = mapRef.current
-        if (!ymaps || !map) return
+        if (!isMapReady || !ymaps || !map) return
 
         map.geoObjects.removeAll()
         placemarksRef.current.clear()
@@ -351,7 +353,7 @@ export default function YandexOpportunityMap({
         }
 
         map.container.fitToViewport()
-    }, [center, favoriteCompanies, favoriteCompaniesSignature, focusedOpportunityId, points, pointsSignature])
+    }, [center, favoriteCompanies, favoriteCompaniesSignature, focusedOpportunityId, isMapReady, points, pointsSignature])
 
     useEffect(() => {
         if (!focusedOpportunityId || !mapRef.current) return

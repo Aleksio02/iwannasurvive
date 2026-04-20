@@ -76,11 +76,17 @@ export async function listNearbyOpportunities(params = {}) {
         radius: normalizedRadius,
     })
 
-    return httpJson(`${API_BASE}/geo/opportunities/nearby${query ? `?${query}` : ''}`)
+    return httpJson(`${API_BASE}/geo/opportunities/nearby${query ? `?${query}` : ''}`, {
+        dedupe: true,
+        cacheTtlMs: 8_000,
+    })
 }
 
 export async function getOpportunity(id) {
-    return httpJson(`${API_BASE}/opportunities/${id}`)
+    return httpJson(`${API_BASE}/opportunities/${id}`, {
+        dedupe: true,
+        cacheTtlMs: 15_000,
+    })
 }
 
 export async function listTags(category) {
