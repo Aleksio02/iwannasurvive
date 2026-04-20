@@ -1,6 +1,9 @@
 import { httpJson, toQuery } from './http'
 
 const API_BASE = '/api'
+const SEARCH_CACHE_TTL_MS = 30_000
+const searchPageCache = new Map()
+const searchPageInFlight = new Map()
 
 function normalizeSearchItem(item = {}) {
     return {
@@ -46,6 +49,32 @@ export async function searchApplicantProfiles(params = {}) {
         search: params.search?.trim() || undefined,
     })
 
-    const data = await httpJson(`${API_BASE}/profile/applicants${query ? `?${query}` : ''}`)
-    return normalizeSearchPage(data)
+    const cacheKey = query || '__default__'
+    const cachedEntry = searchPageCache.get(cacheKey)
+
+    if (cachedEntry && Date.now() - cachedEntry.createdAt < SEARCH_CACHE_TTL_MS) {
+        return cachedEntry.data
+    }
+
+    if (searchPageInFlight.has(cacheKey)) {
+        return searchPageInFlight.get(cacheKey)
+    }
+
+    const request = httpJson(`${API_BASE}/profile/applicants${query ? `?${query}` : ''}`)
+        .then((data) => {
+            const normalized = normalizeSearchPage(data)
+            searchPageCache.set(cacheKey, {
+                data: normalized,
+                createdAt: Date.now(),
+            })
+            searchPageInFlight.delete(cacheKey)
+            return normalized
+        })
+        .catch((error) => {
+            searchPageInFlight.delete(cacheKey)
+            throw error
+        })
+
+    searchPageInFlight.set(cacheKey, request)
+    return request
 }

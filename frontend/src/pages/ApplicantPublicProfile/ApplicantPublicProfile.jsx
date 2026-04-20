@@ -182,6 +182,20 @@ function findViewerRelationship(contacts, applicantId) {
     return contacts.find((item) => Number(item.id) === Number(applicantId)) || null
 }
 
+function upsertViewerRelationship(contacts, relationship) {
+    if (!Array.isArray(contacts)) return relationship ? [relationship] : []
+    if (!relationship?.id) return contacts
+
+    const nextContacts = contacts.filter((item) => Number(item.id) !== Number(relationship.id))
+    nextContacts.push(relationship)
+    return nextContacts
+}
+
+function removeViewerRelationship(contacts, applicantId) {
+    if (!Array.isArray(contacts)) return []
+    return contacts.filter((item) => Number(item.id) !== Number(applicantId))
+}
+
 function isAcceptedRelationship(relationship) {
     return relationship?.status === 'ACCEPTED'
 }
@@ -284,8 +298,11 @@ export default function ApplicantPublicProfile() {
 
         async function loadProfile() {
             setIsLoading(true)
+            setProfile(null)
             setApplications([])
             setContacts([])
+            setViewerContacts([])
+            setOptimisticContactState(null)
             setErrorState({
                 title: '',
                 message: '',
@@ -293,29 +310,19 @@ export default function ApplicantPublicProfile() {
             })
 
             try {
-                const profileData = await getApplicantPublicProfile(applicantId, currentUserId)
+                const [profileData, loadedViewerContacts] = await Promise.all([
+                    getApplicantPublicProfile(applicantId, currentUserId),
+                    isApplicantViewer && !isOwner
+                        ? getSeekerContacts()
+                            .then((myContacts) => (Array.isArray(myContacts) ? myContacts : []))
+                            .catch(() => [])
+                        : Promise.resolve([]),
+                ])
+
                 if (!isMounted) return
 
                 setProfile(profileData)
-
-                let loadedViewerContacts = []
-
-                if (isApplicantViewer && !isOwner) {
-                    try {
-                        const myContacts = await getSeekerContacts()
-                        loadedViewerContacts = Array.isArray(myContacts) ? myContacts : []
-
-                        if (isMounted) {
-                            setViewerContacts(loadedViewerContacts)
-                        }
-                    } catch {
-                        if (isMounted) {
-                            setViewerContacts([])
-                        }
-                    }
-                } else if (isMounted) {
-                    setViewerContacts([])
-                }
+                setViewerContacts(loadedViewerContacts)
 
                 const viewerRelationship = findViewerRelationship(loadedViewerContacts, applicantId)
                 const isAcceptedContactViewer = isAcceptedRelationship(viewerRelationship)
@@ -331,31 +338,46 @@ export default function ApplicantPublicProfile() {
                     isAuthenticated,
                     isAcceptedContact: isAcceptedContactViewer,
                 })
+                const tasks = []
 
                 if (canViewApplications) {
-                    try {
-                        const applicationsData = await getApplicantPublicApplications(applicantId, currentUserId)
-                        if (isMounted) {
-                            setApplications(Array.isArray(applicationsData) ? applicationsData : [])
-                        }
-                    } catch {
-                        if (isMounted) {
-                            setApplications([])
-                        }
-                    }
+                    tasks.push(
+                        getApplicantPublicApplications(applicantId, currentUserId)
+                            .then((applicationsData) => {
+                                if (isMounted) {
+                                    setApplications(Array.isArray(applicationsData) ? applicationsData : [])
+                                }
+                            })
+                            .catch(() => {
+                                if (isMounted) {
+                                    setApplications([])
+                                }
+                            })
+                    )
+                } else if (isMounted) {
+                    setApplications([])
                 }
 
                 if (canViewContacts) {
-                    try {
-                        const contactsData = await getApplicantPublicContacts(applicantId, currentUserId)
-                        if (isMounted) {
-                            setContacts(Array.isArray(contactsData) ? contactsData : [])
-                        }
-                    } catch {
-                        if (isMounted) {
-                            setContacts([])
-                        }
-                    }
+                    tasks.push(
+                        getApplicantPublicContacts(applicantId, currentUserId)
+                            .then((contactsData) => {
+                                if (isMounted) {
+                                    setContacts(Array.isArray(contactsData) ? contactsData : [])
+                                }
+                            })
+                            .catch(() => {
+                                if (isMounted) {
+                                    setContacts([])
+                                }
+                            })
+                    )
+                } else if (isMounted) {
+                    setContacts([])
+                }
+
+                if (tasks.length > 0) {
+                    await Promise.all(tasks)
                 }
             } catch (loadError) {
                 if (!isMounted) return
@@ -468,9 +490,7 @@ export default function ApplicantPublicProfile() {
             setOptimisticContactState(optimisticPending)
 
             await addContact(applicantId)
-
-            const myContacts = await getSeekerContacts()
-            setViewerContacts(Array.isArray(myContacts) ? myContacts : [])
+            setViewerContacts((prev) => upsertViewerRelationship(prev, optimisticPending))
             setOptimisticContactState(optimisticPending)
 
             toast({
@@ -577,16 +597,15 @@ export default function ApplicantPublicProfile() {
 
         try {
             setIsContactActionLoading(true)
-
-            await acceptContact(applicantId)
-
-            const myContacts = await getSeekerContacts()
-            setViewerContacts(Array.isArray(myContacts) ? myContacts : [])
-            setOptimisticContactState({
+            const acceptedRelationship = {
                 id: applicantId,
                 status: 'ACCEPTED',
                 direction: 'CONFIRMED',
-            })
+            }
+
+            await acceptContact(applicantId)
+            setViewerContacts((prev) => upsertViewerRelationship(prev, acceptedRelationship))
+            setOptimisticContactState(acceptedRelationship)
 
             toast({
                 title: 'Запрос принят',
@@ -610,9 +629,7 @@ export default function ApplicantPublicProfile() {
             setIsContactActionLoading(true)
 
             await declineContact(applicantId)
-
-            const myContacts = await getSeekerContacts()
-            setViewerContacts(Array.isArray(myContacts) ? myContacts : [])
+            setViewerContacts((prev) => removeViewerRelationship(prev, applicantId))
             setOptimisticContactState(null)
 
             toast({
@@ -637,9 +654,7 @@ export default function ApplicantPublicProfile() {
             setIsContactActionLoading(true)
 
             await removeContact(applicantId)
-
-            const myContacts = await getSeekerContacts()
-            setViewerContacts(Array.isArray(myContacts) ? myContacts : [])
+            setViewerContacts((prev) => removeViewerRelationship(prev, applicantId))
             setOptimisticContactState(null)
 
             toast({

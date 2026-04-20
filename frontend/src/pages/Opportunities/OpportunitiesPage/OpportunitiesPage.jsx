@@ -205,6 +205,7 @@ function OpportunitiesPage() {
     const [isMapSearchActive, setIsMapSearchActive] = useState(false)
 
     const [isLoading, setIsLoading] = useState(false)
+    const [isMapLoading, setIsMapLoading] = useState(false)
     const [isMapSearchLoading, setIsMapSearchLoading] = useState(false)
     const [error, setError] = useState('')
     const [focusedOpportunityId, setFocusedOpportunityId] = useState(null)
@@ -326,22 +327,35 @@ function OpportunitiesPage() {
 
         async function loadBaseData() {
             setIsLoading(true)
+            setIsMapLoading(true)
             setError('')
 
             try {
-                const [listData, mapData] = await Promise.all([
-                    listOpportunities(queryParams),
-                    listOpportunityMap({ ...queryParams, limit: 100, offset: 0 }),
-                ])
+                const listData = await listOpportunities(queryParams)
 
                 if (!mounted) return
 
                 setOpportunities(listData?.items || [])
                 setTotal(listData?.total || 0)
-                setBaseMapPoints(mapData?.items || [])
+                setIsLoading(false)
+
+                try {
+                    const mapData = await listOpportunityMap({ ...queryParams, limit: 100, offset: 0 })
+                    if (!mounted) return
+                    setBaseMapPoints(mapData?.items || [])
+                } catch {
+                    if (!mounted) return
+                    setBaseMapPoints([])
+                } finally {
+                    if (mounted) {
+                        setIsMapLoading(false)
+                    }
+                }
             } catch (requestError) {
                 if (!mounted) return
                 setError(requestError?.message || 'Не удалось загрузить вакансии')
+                setBaseMapPoints([])
+                setIsMapLoading(false)
             } finally {
                 if (mounted) setIsLoading(false)
             }
@@ -902,6 +916,9 @@ function OpportunitiesPage() {
                             </div>
 
                             <div className="opportunities-page__map-wrap">
+                                {isMapLoading && (
+                                    <p className="opportunities-page__state">Загружаем карту...</p>
+                                )}
                                 <YandexOpportunityMap
                                     points={visibleMapPoints}
                                     favoriteCompanies={favoriteCompanies}
