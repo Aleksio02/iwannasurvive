@@ -157,7 +157,10 @@ export async function getFavorites() {
     const userId = await getSessionUserIdFromApi()
     if (!userId) return []
 
-    return httpJson(`${API_BASE}/favorites?${toQuery({ userId })}`)
+    return httpJson(`${API_BASE}/favorites?${toQuery({ userId })}`, {
+        dedupe: true,
+        cacheTtlMs: 15_000,
+    })
 }
 
 export async function addToFavorites(opportunityId) {

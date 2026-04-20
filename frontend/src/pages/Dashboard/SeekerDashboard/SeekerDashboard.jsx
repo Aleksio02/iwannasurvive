@@ -30,7 +30,7 @@ import {
     deleteApplicantFile,
     getFileDownloadUrlByUserAndFile,
 } from '../../../api/profile'
-import { getSavedFavorites, removeEmployerFromSaved } from '../../../api/favorites'
+import { getCachedSavedFavorites, getSavedFavorites, removeEmployerFromSaved } from '../../../api/favorites'
 import SavedFavoritesSection from './components/SavedFavoritesSection'
 import RecommendationsSection from './components/RecommendationsSection'
 import '../DashboardBase.scss'
@@ -159,10 +159,7 @@ function SeekerDashboard() {
     const [tempContactLinks, setTempContactLinks] = useState([])
 
     const [applications, setApplications] = useState([])
-    const [savedFavorites, setSavedFavorites] = useState({
-        opportunities: [],
-        employers: [],
-    })
+    const [savedFavorites, setSavedFavorites] = useState(() => getCachedSavedFavorites())
     const [contacts, setContacts] = useState([])
     const [recommendations, setRecommendations] = useState({ incoming: [], outgoing: [] })
 
@@ -362,20 +359,30 @@ function SeekerDashboard() {
 
                 setIsLoading(false)
 
-                const [applicationsResult, favoritesResult] = await Promise.allSettled([
-                    getSeekerApplications(),
-                    getSavedFavorites(),
-                ])
-
-                if (!isMounted) return
-
-                setApplications(applicationsResult.status === 'fulfilled' ? applicationsResult.value : [])
-                setSavedFavorites(favoritesResult.status === 'fulfilled'
-                    ? favoritesResult.value
-                    : {
-                        opportunities: [],
-                        employers: [],
+                const applicationsPromise = getSeekerApplications()
+                    .then((items) => {
+                        if (!isMounted) return
+                        setApplications(items)
                     })
+                    .catch(() => {
+                        if (!isMounted) return
+                        setApplications([])
+                    })
+
+                const favoritesPromise = getSavedFavorites()
+                    .then((items) => {
+                        if (!isMounted) return
+                        setSavedFavorites(items)
+                    })
+                    .catch(() => {
+                        if (!isMounted) return
+                        setSavedFavorites({
+                            opportunities: [],
+                            employers: [],
+                        })
+                    })
+
+                await Promise.allSettled([applicationsPromise, favoritesPromise])
             } catch (error) {
                 if (error?.status === 401) {
                     setUser(null)

@@ -4,11 +4,34 @@ import {
     removeEmployerFromFavorites as removeEmployerFromFavoritesApi,
 } from './interaction'
 
+let savedFavoritesCache = null
+let savedFavoritesCacheAt = 0
+let savedFavoritesInFlight = null
+const SAVED_FAVORITES_CACHE_TTL_MS = 30_000
+
 function createEmptyFavorites() {
     return {
         opportunities: [],
         employers: [],
     }
+}
+
+function setSavedFavoritesCache(nextValue) {
+    savedFavoritesCache = nextValue
+    savedFavoritesCacheAt = Date.now()
+    savedFavoritesInFlight = null
+    return savedFavoritesCache
+}
+
+export function getCachedSavedFavorites() {
+    if (
+        savedFavoritesCache &&
+        Date.now() - savedFavoritesCacheAt < SAVED_FAVORITES_CACHE_TTL_MS
+    ) {
+        return savedFavoritesCache
+    }
+
+    return createEmptyFavorites()
 }
 
 function toNumberOrNull(value) {
@@ -72,25 +95,42 @@ function mapEmployerFavorite(item, index) {
 }
 
 export async function getSavedFavorites() {
-    try {
-        const favorites = await getFavorites()
-        if (!Array.isArray(favorites)) {
-            return createEmptyFavorites()
-        }
+    if (
+        savedFavoritesCache &&
+        Date.now() - savedFavoritesCacheAt < SAVED_FAVORITES_CACHE_TTL_MS
+    ) {
+        return savedFavoritesCache
+    }
 
-        return {
-            opportunities: favorites
-                .filter((item) => item?.targetType === 'OPPORTUNITY')
-                .map(mapOpportunityFavorite)
-                .filter((item) => item.id !== null),
-            employers: favorites
-                .filter((item) => item?.targetType === 'EMPLOYER')
-                .map(mapEmployerFavorite)
-                .filter((item) => item.id !== null),
-        }
+    if (savedFavoritesInFlight) {
+        return savedFavoritesInFlight
+    }
+
+    try {
+        savedFavoritesInFlight = getFavorites().then((favorites) => {
+            if (!Array.isArray(favorites)) {
+                return setSavedFavoritesCache(createEmptyFavorites())
+            }
+
+            return setSavedFavoritesCache({
+                opportunities: favorites
+                    .filter((item) => item?.targetType === 'OPPORTUNITY')
+                    .map(mapOpportunityFavorite)
+                    .filter((item) => item.id !== null),
+                employers: favorites
+                    .filter((item) => item?.targetType === 'EMPLOYER')
+                    .map(mapEmployerFavorite)
+                    .filter((item) => item.id !== null),
+            })
+        }).catch((error) => {
+            savedFavoritesInFlight = null
+            throw error
+        })
+
+        return await savedFavoritesInFlight
     } catch (error) {
         if ([401, 403, 500, 503].includes(error?.status)) {
-            return createEmptyFavorites()
+            return setSavedFavoritesCache(createEmptyFavorites())
         }
 
         throw error
