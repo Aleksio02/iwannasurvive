@@ -13,7 +13,7 @@ import userAvatarIcon from '../../assets/icons/user-avatar.svg'
 import './ApplicantSearchPage.scss'
 
 const DEFAULT_LIMIT = 12
-const INPUT_DEBOUNCE_MS = 400
+const INPUT_DEBOUNCE_MS = 250
 
 function useDebounce(value, delay) {
     const [debouncedValue, setDebouncedValue] = useState(value)
@@ -267,6 +267,8 @@ export default function ApplicantSearchPage() {
         return total > 0 ? Math.ceil(total / effectiveLimit) : 1
     }, [page.limit, page.total])
 
+    const shouldShowBlockingLoader = isLoading && page.items.length === 0
+
     const hasActiveFilters = useMemo(() => {
         return Boolean(
             filters.search.trim() ||
@@ -516,7 +518,9 @@ export default function ApplicantSearchPage() {
                     <div>
                         <h2>Результаты</h2>
                         <p>
-                            {isLoading
+                            {isLoading && page.items.length > 0
+                                ? 'Обновляем результаты...'
+                                : isLoading
                                 ? 'Загрузка каталога...'
                                 : `Найдено ${page.total} ${page.total === 1 ? 'профиль' : 'профилей'}`}
                         </p>
@@ -548,21 +552,21 @@ export default function ApplicantSearchPage() {
                     </div>
                 )}
 
-                {isLoading && (
+                {shouldShowBlockingLoader && (
                     <div className="applicant-search__state">
                         <div className="applicant-search__spinner"></div>
                         <p>Подбираем соискателей по выбранным фильтрам…</p>
                     </div>
                 )}
 
-                {!isLoading && !errorMessage && page.items.length === 0 && (
+                {!shouldShowBlockingLoader && !errorMessage && page.items.length === 0 && (
                     <div className="applicant-search__state">
                         <h3>Ничего не найдено</h3>
                         <p>Попробуй ослабить фильтры или убрать часть тегов.</p>
                     </div>
                 )}
 
-                {!isLoading && !errorMessage && page.items.length > 0 && (
+                {!errorMessage && page.items.length > 0 && (
                     <>
                         <div className="applicant-search__results">
                             {page.items.map((applicant) => {
@@ -590,6 +594,8 @@ export default function ApplicantSearchPage() {
                                                         src={avatarUrl}
                                                         alt={getApplicantDisplayName(applicant)}
                                                         className="applicant-search__avatar-image"
+                                                        loading="lazy"
+                                                        decoding="async"
                                                     />
                                                 ) : getApplicantInitials(applicant) !== '??' ? (
                                                     getApplicantInitials(applicant)

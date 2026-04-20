@@ -198,10 +198,13 @@ export default function YandexOpportunityMap({
                                              }) {
     const rootRef = useRef(null)
     const mapRef = useRef(null)
+    const ymapsRef = useRef(null)
     const placemarksRef = useRef(new Map())
     const focusRetryRef = useRef(null)
     const suppressCenterEventRef = useRef(false)
     const lastPointsSignatureRef = useRef('')
+    const onOpenCardRef = useRef(onOpenCard)
+    const onCenterChangeRef = useRef(onCenterChange)
     const didInitialFitRef = useRef(false)
 
     const center = useMemo(() => {
@@ -217,12 +220,22 @@ export default function YandexOpportunityMap({
             .join('|')
     }, [points])
 
+    const favoriteCompaniesSignature = useMemo(() => {
+        return Array.from(favoriteCompanies).sort().join('|')
+    }, [favoriteCompanies])
+
+    useEffect(() => {
+        onOpenCardRef.current = onOpenCard
+        onCenterChangeRef.current = onCenterChange
+    }, [onOpenCard, onCenterChange])
+
     useEffect(() => {
         let isDisposed = false
 
         async function initMap() {
             const ymaps = await loadYmaps()
             if (isDisposed || !rootRef.current) return
+            ymapsRef.current = ymaps
 
             if (!mapRef.current) {
                 mapRef.current = new ymaps.Map(rootRef.current, {
@@ -237,12 +250,12 @@ export default function YandexOpportunityMap({
             if (!map.__centerChangeBound) {
                 map.events.add('actionend', () => {
                     if (suppressCenterEventRef.current) return
-                    if (!onCenterChange) return
+                    if (!onCenterChangeRef.current) return
 
                     const currentCenter = map.getCenter()
                     if (!currentCenter || currentCenter.length < 2) return
 
-                    onCenterChange({
+                    onCenterChangeRef.current({
                         lat: currentCenter[0],
                         lng: currentCenter[1],
                     })
@@ -250,76 +263,6 @@ export default function YandexOpportunityMap({
 
                 map.__centerChangeBound = true
             }
-
-            map.geoObjects.removeAll()
-            placemarksRef.current.clear()
-
-            points
-                .filter((point) => point.latitude && point.longitude)
-                .forEach((point) => {
-                    const isFavorite = favoriteCompanies.has(point.companyName)
-
-                    const placemark = new ymaps.Placemark(
-                        [point.latitude, point.longitude],
-                        {
-                            balloonContentBody: buildBalloon(point),
-                            hintContent: buildHint(point),
-                        },
-                        {
-                            iconLayout: 'default#imageWithContent',
-                            iconImageHref: markerSvg(isFavorite ? '#f59f0a' : '#0f5f68'),
-                            iconImageSize: [34, 44],
-                            iconImageOffset: [-17, -44],
-                            hintOpenTimeout: 80,
-                            hintCloseTimeout: 0,
-                            hintFitPane: true,
-                            hintOffset: [18, -12],
-                            balloonMaxWidth: 340,
-                            balloonPanelMaxMapArea: 0,
-                            balloonAutoPan: true,
-                            balloonAutoPanDuration: 300,
-                            balloonAutoPanCheckZoomRange: true,
-                            balloonAutoPanMargin: [40, 40, 40, 40],
-                            balloonAutoPanUseMapMargin: true,
-                            hideIconOnBalloonOpen: false,
-                        }
-                    )
-
-                    placemark.events.add('click', () => {
-                        onOpenCard(point.id)
-                    })
-
-                    map.geoObjects.add(placemark)
-                    placemarksRef.current.set(point.id, placemark)
-                })
-
-            const pointsChanged = lastPointsSignatureRef.current !== pointsSignature
-
-            if (!focusedOpportunityId && (pointsChanged || !didInitialFitRef.current)) {
-                if (map.geoObjects.getLength() > 0) {
-                    suppressCenterEventRef.current = true
-                    map.setBounds(map.geoObjects.getBounds(), {
-                        checkZoomRange: true,
-                        zoomMargin: 40,
-                    })
-
-                    setTimeout(() => {
-                        suppressCenterEventRef.current = false
-                    }, 300)
-                } else if (!didInitialFitRef.current) {
-                    suppressCenterEventRef.current = true
-                    map.setCenter(center, 5)
-
-                    setTimeout(() => {
-                        suppressCenterEventRef.current = false
-                    }, 300)
-                }
-
-                didInitialFitRef.current = true
-                lastPointsSignatureRef.current = pointsSignature
-            }
-
-            map.container.fitToViewport()
         }
 
         initMap().catch((error) =>
@@ -332,7 +275,83 @@ export default function YandexOpportunityMap({
                 clearTimeout(focusRetryRef.current)
             }
         }
-    }, [center, favoriteCompanies, onOpenCard, onCenterChange, points, pointsSignature, focusedOpportunityId])
+    }, [center])
+
+    useEffect(() => {
+        const ymaps = ymapsRef.current
+        const map = mapRef.current
+        if (!ymaps || !map) return
+
+        map.geoObjects.removeAll()
+        placemarksRef.current.clear()
+
+        points
+            .filter((point) => point.latitude && point.longitude)
+            .forEach((point) => {
+                const isFavorite = favoriteCompanies.has(point.companyName)
+
+                const placemark = new ymaps.Placemark(
+                    [point.latitude, point.longitude],
+                    {
+                        balloonContentBody: buildBalloon(point),
+                        hintContent: buildHint(point),
+                    },
+                    {
+                        iconLayout: 'default#imageWithContent',
+                        iconImageHref: markerSvg(isFavorite ? '#f59f0a' : '#0f5f68'),
+                        iconImageSize: [34, 44],
+                        iconImageOffset: [-17, -44],
+                        hintOpenTimeout: 80,
+                        hintCloseTimeout: 0,
+                        hintFitPane: true,
+                        hintOffset: [18, -12],
+                        balloonMaxWidth: 340,
+                        balloonPanelMaxMapArea: 0,
+                        balloonAutoPan: true,
+                        balloonAutoPanDuration: 300,
+                        balloonAutoPanCheckZoomRange: true,
+                        balloonAutoPanMargin: [40, 40, 40, 40],
+                        balloonAutoPanUseMapMargin: true,
+                        hideIconOnBalloonOpen: false,
+                    }
+                )
+
+                placemark.events.add('click', () => {
+                    onOpenCardRef.current?.(point.id)
+                })
+
+                map.geoObjects.add(placemark)
+                placemarksRef.current.set(point.id, placemark)
+            })
+
+        const pointsChanged = lastPointsSignatureRef.current !== pointsSignature
+
+        if (!focusedOpportunityId && (pointsChanged || !didInitialFitRef.current)) {
+            if (map.geoObjects.getLength() > 0) {
+                suppressCenterEventRef.current = true
+                map.setBounds(map.geoObjects.getBounds(), {
+                    checkZoomRange: true,
+                    zoomMargin: 40,
+                })
+
+                setTimeout(() => {
+                    suppressCenterEventRef.current = false
+                }, 300)
+            } else if (!didInitialFitRef.current) {
+                suppressCenterEventRef.current = true
+                map.setCenter(center, 5)
+
+                setTimeout(() => {
+                    suppressCenterEventRef.current = false
+                }, 300)
+            }
+
+            didInitialFitRef.current = true
+            lastPointsSignatureRef.current = pointsSignature
+        }
+
+        map.container.fitToViewport()
+    }, [center, favoriteCompanies, favoriteCompaniesSignature, focusedOpportunityId, points, pointsSignature])
 
     useEffect(() => {
         if (!focusedOpportunityId || !mapRef.current) return

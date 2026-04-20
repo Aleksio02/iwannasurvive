@@ -176,6 +176,13 @@ export default function OpportunityDetailPage() {
                 const data = await getOpportunity(params.id)
                 if (!isMounted) return
                 setItem(data)
+                setIsLoading(false)
+
+                if (!currentUser) {
+                    setIsFavorite(isGuestFavoriteOpportunity(Number(params.id)))
+                    setIsEmployerFavorite(false)
+                    return
+                }
             } catch (err) {
                 if (!isMounted) return
                 setError(err?.message || 'Не удалось загрузить карточку')
@@ -198,7 +205,7 @@ export default function OpportunityDetailPage() {
 
         let isMounted = true
 
-        async function syncFavorites() {
+        async function loadFavoritesState() {
             if (!currentUser) {
                 setIsFavorite(isGuestFavoriteOpportunity(Number(params.id)))
                 setIsEmployerFavorite(false)
@@ -226,7 +233,7 @@ export default function OpportunityDetailPage() {
             }
         }
 
-        syncFavorites()
+        void loadFavoritesState()
 
         return () => {
             isMounted = false

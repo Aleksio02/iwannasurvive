@@ -123,6 +123,7 @@ function SeekerDashboard() {
     const [isAvatarUploading, setIsAvatarUploading] = useState(false)
     const [isResumeFileUploading, setIsResumeFileUploading] = useState(false)
     const [isPortfolioFileUploading, setIsPortfolioFileUploading] = useState(false)
+    const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('')
 
     const [profile, setProfile] = useState({
         userId: null,
@@ -324,11 +325,14 @@ function SeekerDashboard() {
     }, [toast])
 
     useEffect(() => {
+        let isMounted = true
+
         const loadData = async () => {
             setIsLoading(true)
 
             try {
                 const currentUser = await getCurrentSessionUser()
+                if (!isMounted) return
                 setUser(currentUser)
 
                 if (!currentUser) {
@@ -344,14 +348,11 @@ function SeekerDashboard() {
                     return
                 }
 
-                const [profileData, apps, saved] = await Promise.all([
-                    getApplicantProfile(),
-                    getSeekerApplications(),
-                    getSavedFavorites(),
-                ])
+                const profileResult = await getApplicantProfile()
+                if (!isMounted) return
 
-                if (profileData) {
-                    applyProfileFromApi(profileData, currentUser)
+                if (profileResult) {
+                    applyProfileFromApi(profileResult, currentUser)
                 } else {
                     setProfile((prev) => ({
                         ...prev,
@@ -359,33 +360,22 @@ function SeekerDashboard() {
                     }))
                 }
 
-                setApplications(apps)
-                setSavedFavorites(saved)
+                setIsLoading(false)
 
-                setNetworkingBlockedMessage('')
-                setHasLoadedNetworking(false)
+                const [applicationsResult, favoritesResult] = await Promise.allSettled([
+                    getSeekerApplications(),
+                    getSavedFavorites(),
+                ])
 
-                try {
-                    const [contactsList, recommendationsData] = await Promise.all([
-                        getSeekerContacts(),
-                        getSeekerRecommendations(),
-                    ])
+                if (!isMounted) return
 
-                    setContacts(contactsList)
-                    setRecommendations(recommendationsData)
-                } catch (error) {
-                    if (isNetworkingBlockedError(error)) {
-                        setContacts([])
-                        setRecommendations({ incoming: [], outgoing: [] })
-                        setNetworkingBlockedMessage(
-                            error?.message || 'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
-                        )
-                    } else {
-                        throw error
-                    }
-                } finally {
-                    setHasLoadedNetworking(true)
-                }
+                setApplications(applicationsResult.status === 'fulfilled' ? applicationsResult.value : [])
+                setSavedFavorites(favoritesResult.status === 'fulfilled'
+                    ? favoritesResult.value
+                    : {
+                        opportunities: [],
+                        employers: [],
+                    })
             } catch (error) {
                 if (error?.status === 401) {
                     setUser(null)
@@ -401,18 +391,64 @@ function SeekerDashboard() {
                     return
                 }
 
+                if (!isMounted) return
+
                 toast({
                     title: 'Ошибка',
                     description: error?.message || 'Не удалось загрузить профиль',
                     variant: 'destructive',
                 })
             } finally {
-                setIsLoading(false)
+                if (isMounted) {
+                    setIsLoading(false)
+                }
             }
         }
 
         loadData()
+
+        return () => {
+            isMounted = false
+        }
     }, [applyProfileFromApi, toast])
+
+    useEffect(() => {
+        if (!user?.id) return
+
+        const loadNetworking = async () => {
+            setNetworkingBlockedMessage('')
+            setHasLoadedNetworking(false)
+
+            try {
+                const [contactsList, recommendationsData] = await Promise.all([
+                    getSeekerContacts(),
+                    getSeekerRecommendations(),
+                ])
+
+                setContacts(contactsList)
+                setRecommendations(recommendationsData)
+            } catch (error) {
+                if (isNetworkingBlockedError(error)) {
+                    setContacts([])
+                    setRecommendations({ incoming: [], outgoing: [] })
+                    setNetworkingBlockedMessage(
+                        error?.message || 'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
+                    )
+                    return
+                }
+
+                toast({
+                    title: 'Ошибка',
+                    description: error?.message || 'Не удалось загрузить нетворкинг-данные',
+                    variant: 'destructive',
+                })
+            } finally {
+                setHasLoadedNetworking(true)
+            }
+        }
+
+        void loadNetworking()
+    }, [user?.id, toast])
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -427,6 +463,12 @@ function SeekerDashboard() {
             document.removeEventListener('mousedown', handleClickOutside)
         }
     }, [])
+
+    useEffect(() => () => {
+        if (avatarPreviewUrl) {
+            URL.revokeObjectURL(avatarPreviewUrl)
+        }
+    }, [avatarPreviewUrl])
 
     const validateProfile = () => {
         const newErrors = {}
@@ -837,14 +879,33 @@ function SeekerDashboard() {
         }
 
         try {
+            const localPreviewUrl = URL.createObjectURL(file)
+            setAvatarPreviewUrl((prev) => {
+                if (prev) {
+                    URL.revokeObjectURL(prev)
+                }
+                return localPreviewUrl
+            })
             setIsAvatarUploading(true)
             const updatedProfile = await uploadApplicantAvatar(file)
             applyProfileFromApi({ ...profile, ...updatedProfile }, user)
+            setAvatarPreviewUrl((prev) => {
+                if (prev) {
+                    URL.revokeObjectURL(prev)
+                }
+                return ''
+            })
             toast({
                 title: 'Аватар загружен',
                 description: 'Фото профиля успешно обновлено',
             })
         } catch (error) {
+            setAvatarPreviewUrl((prev) => {
+                if (prev) {
+                    URL.revokeObjectURL(prev)
+                }
+                return ''
+            })
             toast({
                 title: 'Ошибка загрузки аватара',
                 description: error.message || 'Не удалось загрузить изображение',
@@ -1116,9 +1177,11 @@ function SeekerDashboard() {
         recommendationOpportunityOptions.length > 0
 
     const avatarOwnerUserId = profile.userId || user?.id
-    const avatarUrl = profile.avatar && avatarOwnerUserId
-        ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, profile.avatar.fileId)
-        : null
+    const avatarUrl = avatarPreviewUrl || (
+        profile.avatar && avatarOwnerUserId
+            ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, profile.avatar.fileId)
+            : null
+    )
 
     const resumeFileUrl = profile.resumeFile && avatarOwnerUserId
         ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, profile.resumeFile.fileId)

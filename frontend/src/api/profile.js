@@ -44,6 +44,27 @@ function createApiError(message, status = 0, extra = {}) {
     return error
 }
 
+let applicantProfileCache = null
+let applicantProfileCacheAt = 0
+let applicantProfileInFlight = null
+let applicantProfileCacheUserId = null
+const APPLICANT_PROFILE_CACHE_TTL_MS = 30_000
+
+function clearApplicantProfileCache() {
+    applicantProfileCache = null
+    applicantProfileCacheAt = 0
+    applicantProfileInFlight = null
+    applicantProfileCacheUserId = null
+}
+
+function setApplicantProfileCache(profile, userId = applicantProfileCacheUserId) {
+    applicantProfileCache = profile || null
+    applicantProfileCacheAt = Date.now()
+    applicantProfileInFlight = null
+    applicantProfileCacheUserId = userId || null
+    return applicantProfileCache
+}
+
 async function parseApiResponse(response) {
     if (response.status === 204) return null
 
@@ -571,7 +592,7 @@ export async function uploadApplicantAvatar(file) {
         method: 'PUT',
     })
 
-    return normalizeApplicantProfile(data)
+    return setApplicantProfileCache(normalizeApplicantProfile(data))
 }
 
 export async function uploadApplicantResumeFile(file) {
@@ -582,7 +603,7 @@ export async function uploadApplicantResumeFile(file) {
         method: 'PUT',
     })
 
-    return normalizeApplicantProfile(data)
+    return setApplicantProfileCache(normalizeApplicantProfile(data))
 }
 
 export async function uploadApplicantPortfolioFile(file) {
@@ -593,7 +614,7 @@ export async function uploadApplicantPortfolioFile(file) {
         method: 'POST',
     })
 
-    return normalizeApplicantProfile(data)
+    return setApplicantProfileCache(normalizeApplicantProfile(data))
 }
 
 export async function deleteApplicantFile(fileId) {
@@ -604,7 +625,7 @@ export async function deleteApplicantFile(fileId) {
         method: 'DELETE',
     })
 
-    return normalizeApplicantProfile(data)
+    return setApplicantProfileCache(normalizeApplicantProfile(data))
 }
 
 export async function uploadEmployerLogo(file) {
@@ -867,14 +888,35 @@ export async function getGeoLocation(locationId) {
 export async function getApplicantProfile() {
     const userId = await getSessionUserIdFromApi()
     if (!userId) {
+        clearApplicantProfileCache()
         return null
     }
 
+    const isFresh =
+        applicantProfileCache &&
+        applicantProfileCacheUserId === userId &&
+        Date.now() - applicantProfileCacheAt < APPLICANT_PROFILE_CACHE_TTL_MS
+
+    if (isFresh) {
+        return applicantProfileCache
+    }
+
+    if (applicantProfileInFlight) {
+        return applicantProfileInFlight
+    }
+
     try {
-        const data = await apiRequest(`${API_BASE}/profile/applicant/${userId}?currentUserId=${userId}`)
-        return normalizeApplicantProfile(data)
+        applicantProfileInFlight = apiRequest(`${API_BASE}/profile/applicant/${userId}?currentUserId=${userId}`)
+            .then((data) => setApplicantProfileCache(normalizeApplicantProfile(data), userId))
+            .catch((error) => {
+                applicantProfileInFlight = null
+                throw error
+            })
+
+        return await applicantProfileInFlight
     } catch (error) {
         if (error.status === 404) {
+            clearApplicantProfileCache()
             return null
         }
         throw error
@@ -913,7 +955,7 @@ export async function updateApplicantProfile(profile) {
         body: JSON.stringify(payload),
     })
 
-    return normalizeApplicantProfile(data)
+    return setApplicantProfileCache(normalizeApplicantProfile(data))
 }
 
 // ========== РАБОТОДАТЕЛЬ ==========
