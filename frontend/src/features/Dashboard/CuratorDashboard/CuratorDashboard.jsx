@@ -153,7 +153,36 @@ function renderDiffValue(value) {
     if (value === null || value === undefined || value === '') return '—'
     if (typeof value === 'boolean') return value ? 'Да' : 'Нет'
     if (Array.isArray(value)) return value.length ? JSON.stringify(value) : '—'
-    if (typeof value === 'object') return JSON.stringify(value)
+    if (typeof value === 'object') {
+        if (value?.name) return String(value.name)
+        if (value?.cityName) return String(value.cityName)
+        if (value?.title) return String(value.title)
+        if (value?.label) return String(value.label)
+
+        try {
+            return JSON.stringify(value)
+        } catch {
+            return '—'
+        }
+    }
+    return String(value)
+}
+
+function getEditableInputValue(value, type) {
+    if (value === null || value === undefined) return ''
+
+    if (type === 'number') {
+        return typeof value === 'number' ? String(value) : ''
+    }
+
+    if (typeof value === 'object') {
+        if (value?.name) return String(value.name)
+        if (value?.cityName) return String(value.cityName)
+        if (value?.title) return String(value.title)
+        if (value?.label) return String(value.label)
+        return ''
+    }
+
     return String(value)
 }
 
@@ -215,7 +244,7 @@ function EntityEditor({ entityType, originalSnapshot, draft, onChange }) {
                         <Label>{field.label}</Label>
                         <Input
                             type={field.type === 'number' ? 'number' : 'text'}
-                            value={currentValue ?? ''}
+                            value={getEditableInputValue(currentValue, field.type)}
                             onChange={(e) =>
                                 onChange(
                                     field.key,
@@ -237,7 +266,14 @@ function EntityEditor({ entityType, originalSnapshot, draft, onChange }) {
     )
 }
 
-function PreviewBlock({ title, entityType, snapshot, draft = null }) {
+function PreviewBlock({
+                          title,
+                          entityType,
+                          snapshot,
+                          draft = null,
+                          compareSnapshot = null,
+                          highlightAll = false,
+                      }) {
     const fields = getPreviewFieldsByEntityType(entityType, snapshot)
 
     return (
@@ -247,15 +283,19 @@ function PreviewBlock({ title, entityType, snapshot, draft = null }) {
                 <div className="snapshot-fields">
                     {fields.map((field) => {
                         const draftValue = draft ? draft?.[field.key] : undefined
-                        const isChanged = draft
+                        const isChangedInDraft = draft
                             ? JSON.stringify(snapshot?.[field.key]) !== JSON.stringify(draftValue)
                             : false
+                        const isChangedByComparison = compareSnapshot
+                            ? JSON.stringify(snapshot?.[field.key]) !== JSON.stringify(compareSnapshot?.[field.key])
+                            : highlightAll
+                        const isChanged = isChangedInDraft || isChangedByComparison
 
                         return (
                             <div key={field.key} className={`snapshot-field ${isChanged ? 'is-changed' : ''}`}>
                                 <span className="field-label">{field.label}:</span>
                                 <span className="field-value">
-                  {isChanged ? renderDiffValue(draftValue) : field.value || '—'}
+                  {isChangedInDraft ? renderDiffValue(draftValue) : renderDiffValue(field.value)}
                 </span>
                             </div>
                         )
@@ -405,6 +445,8 @@ function CuratorDashboard() {
     const [newCuratorPassword, setNewCuratorPassword] = useState('')
     const [isCreating, setIsCreating] = useState(false)
     const historyTaskDetailsCacheRef = useRef(new Map())
+    const detailModalBodyRef = useRef(null)
+    const entityEditorRef = useRef(null)
 
     useEffect(() => {
         setCurrentUser(getSessionUser())
@@ -619,6 +661,29 @@ function CuratorDashboard() {
     }, [
         isApproveModalOpen,
         isDetailOpen,
+        imagePreview,
+        isManualTaskModalOpen,
+        isRejectModalOpen,
+        isRequestChangesModalOpen,
+    ])
+
+    useEffect(() => {
+        const shouldLock =
+            isDetailOpen ||
+            isApproveModalOpen ||
+            isRejectModalOpen ||
+            isRequestChangesModalOpen ||
+            isManualTaskModalOpen ||
+            Boolean(imagePreview)
+
+        document.documentElement.classList.toggle('is-lock', shouldLock)
+        return () => {
+            document.documentElement.classList.remove('is-lock')
+        }
+    }, [
+        imagePreview,
+        isApproveModalOpen,
+        isDetailOpen,
         isManualTaskModalOpen,
         isRejectModalOpen,
         isRequestChangesModalOpen,
@@ -656,6 +721,19 @@ function CuratorDashboard() {
     const handleEntityDraftChange = (key, value) => {
         setEntityDraft((prev) => ({ ...(prev || {}), [key]: value }))
     }
+
+    const scrollToEntityEditorStart = useCallback(() => {
+        requestAnimationFrame(() => {
+            const editor = entityEditorRef.current
+            if (!editor) return
+
+            editor.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+                inline: 'nearest',
+            })
+        })
+    }, [])
 
     const entityPatch = useMemo(() => {
         if (!selectedTask?.createdSnapshot || !entityDraft) return {}
@@ -1054,6 +1132,19 @@ function CuratorDashboard() {
     const canCancelTask = hasTaskAction(selectedTask, 'CANCEL')
     const canUploadAttachments = Boolean(selectedTask)
     const canEditEntity = canApproveTask && selectedTask?.assignee?.id === currentUserId
+    const detailActionsCount = [
+        canTakeTaskFromDetail,
+        canApproveTask,
+        canRequestChanges,
+        canRejectTask,
+        canCancelTask,
+    ].filter(Boolean).length
+    const detailFooterClassName = [
+        'modal-footer',
+        'modal-footer--wrap',
+        'modal-footer--detail-actions',
+        detailActionsCount === 3 && canCancelTask ? 'modal-footer--detail-actions-has-cancel-row' : '',
+    ].filter(Boolean).join(' ')
     const statsCards = [
         {
             key: 'open',
@@ -1139,23 +1230,41 @@ function CuratorDashboard() {
                             <div className="moderation-filters__section moderation-filters__section--dates">
                                 <div className="moderation-filter-input">
                                     <Label>Создано от</Label>
-                                    <Input type="datetime-local" value={filters.createdFrom} onChange={(e) => setFilters((prev) => ({ ...prev, createdFrom: e.target.value }))} />
+                                    <Input type="datetime-local" value={filters.createdFrom}
+                                           onChange={(e) => setFilters((prev) => ({
+                                               ...prev,
+                                               createdFrom: e.target.value
+                                           }))}/>
                                 </div>
 
                                 <div className="moderation-filter-input">
                                     <Label>Создано до</Label>
-                                    <Input type="datetime-local" value={filters.createdTo} onChange={(e) => setFilters((prev) => ({ ...prev, createdTo: e.target.value }))} />
+                                    <Input type="datetime-local" value={filters.createdTo}
+                                           onChange={(e) => setFilters((prev) => ({
+                                               ...prev,
+                                               createdTo: e.target.value
+                                           }))}/>
                                 </div>
 
-                                <div className="moderation-filter-input moderation-filter-input--checkbox">
+                                <div className="moderation-filter-input">
                                     <Label>Быстрый фильтр</Label>
-                                    <CustomCheckbox checked={filters.mine} onChange={(value) => setFilters((prev) => ({ ...prev, mine: value }))} label="Только мои задачи" />
+                                    <CustomSelect
+                                        value={filters.mine ? 'mine' : 'all'}
+                                        onChange={(value) => setFilters((prev) => ({...prev, mine: value === 'mine'}))}
+                                        options={[
+                                            {value: 'all', label: 'Все задачи'},
+                                            {value: 'mine', label: 'Только мои задачи'}
+                                        ]}
+                                    />
                                 </div>
                             </div>
 
                             <div className="filter-actions filter-actions--filters">
                                 <Button className="button--ghost" onClick={resetFilters}>Сбросить</Button>
-                                <Button className="button--ghost" onClick={() => { dismissActiveOverlayUi(); setIsManualTaskModalOpen(true) }}>Создать задачу</Button>
+                                <Button className="button--ghost" onClick={() => {
+                                    dismissActiveOverlayUi();
+                                    setIsManualTaskModalOpen(true)
+                                }}>Создать задачу</Button>
                             </div>
                         </div>
 
@@ -1303,7 +1412,7 @@ function CuratorDashboard() {
                             <button className="modal-close" onClick={closeDetailModal}>×</button>
                         </div>
 
-                        <div className="modal-body">
+                        <div className="modal-body" ref={detailModalBodyRef}>
                             {isDetailLoading || !selectedTask?.entityType ? (
                                 <div className="task-detail-skeleton">
                                     <div className="skeleton skeleton--title"></div>
@@ -1340,20 +1449,37 @@ function CuratorDashboard() {
 
                                     {canEditEntity && (
                                         <div className="moderation-entity-actions">
-                                            <Button className="button--ghost" onClick={() => setIsEditingEntity((prev) => !prev)}>
+                                            <Button
+                                                className="button--ghost"
+                                                onClick={() =>
+                                                    setIsEditingEntity((prev) => {
+                                                        const next = !prev
+                                                        if (next) {
+                                                            scrollToEntityEditorStart()
+                                                        }
+                                                        return next
+                                                    })
+                                                }
+                                            >
                                                 {isEditingEntity ? 'Скрыть редактор' : 'Исправить данные перед одобрением'}
                                             </Button>
                                         </div>
                                     )}
 
-                                    <PreviewBlock title="Исходные данные" entityType={selectedTask.entityType} snapshot={selectedTask.createdSnapshot} draft={isEditingEntity ? entityDraft : null} />
-
+                                    <PreviewBlock
+                                        title="Исходные данные"
+                                        entityType={selectedTask.entityType}
+                                        snapshot={selectedTask.createdSnapshot}
+                                        draft={isEditingEntity ? entityDraft : null}
+                                        compareSnapshot={selectedTask.currentEntityState || null}
+                                        highlightAll={!selectedTask.currentEntityState}
+                                    />
                                     {selectedTask.currentEntityState && JSON.stringify(selectedTask.currentEntityState) !== JSON.stringify(selectedTask.createdSnapshot) && (
                                         <PreviewBlock title="Актуальные данные сейчас" entityType={selectedTask.entityType} snapshot={selectedTask.currentEntityState} />
                                     )}
 
                                     {isEditingEntity && (
-                                        <div className="task-detail-snapshot">
+                                        <div className="task-detail-snapshot" ref={entityEditorRef}>
                                             <h4>Редактор сущности</h4>
                                             <p className="moderation-editor-note">Здесь можно скорректировать данные перед одобрением. Изменения применятся только после подтверждения.</p>
                                             <EntityEditor entityType={selectedTask.entityType} originalSnapshot={selectedTask.createdSnapshot} draft={entityDraft} onChange={handleEntityDraftChange} />
@@ -1361,7 +1487,7 @@ function CuratorDashboard() {
                                     )}
 
                                     {isEditingEntity && (
-                                        <div className="task-detail-snapshot">
+                                        <div className="task-detail-snapshot moderation-editor-block">
                                             <div className="moderation-editor-summary">Будет изменено полей: {Object.keys(entityPatch).length}</div>
                                             {!fieldDiffRows.length ? (
                                                 <div className="moderation-attachments__empty">Изменений пока нет.</div>
@@ -1487,14 +1613,14 @@ function CuratorDashboard() {
                                         <div className="task-detail-comments">
                                             <h4>Добавить комментарий</h4>
                                             <Textarea rows={3} value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Напишите комментарий..." className="comment-textarea" />
-                                            <Button className="button--primary" onClick={handleAddComment} disabled={!newComment.trim()}>Отправить</Button>
+                                            <Button className="button--outline" onClick={handleAddComment} disabled={!newComment.trim()}>Отправить</Button>
                                         </div>
                                     )}
                                 </>
                             )}
                         </div>
 
-                        <div className="modal-footer modal-footer--wrap">
+                        <div className={detailFooterClassName}>
                             {canTakeTaskFromDetail && (
                                 <Button className="button--primary" onClick={() => handleAssignToMe(selectedTask.id)}>Взять в работу</Button>
                             )}
@@ -1508,7 +1634,7 @@ function CuratorDashboard() {
                                 <Button className="button--danger" onClick={() => { dismissActiveOverlayUi(); setIsRejectModalOpen(true) }}>Отклонить</Button>
                             )}
                             {canCancelTask && (
-                                <Button className="button--ghost" onClick={handleCancelTask}>Отменить задачу</Button>
+                                <Button className="button--ghost button--cancel-task" onClick={handleCancelTask}>Отменить задачу</Button>
                             )}
                         </div>
                     </div>
@@ -1679,6 +1805,7 @@ function CuratorDashboard() {
                                 <div className="modal-field">
                                     <Label>Тип записи <span className="required-star">*</span></Label>
                                     <CustomSelect value={manualTaskForm.entityType} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, entityType: value }))} options={ENTITY_TYPES.filter((item) => item.value)} />
+                                    <p className="modal-field__hint modal-field__hint--placeholder">.</p>
                                 </div>
                                 <div className="modal-field">
                                     <Label>ID записи <span className="required-star">*</span></Label>
@@ -1688,15 +1815,17 @@ function CuratorDashboard() {
                                 <div className="modal-field">
                                     <Label>Тип задачи <span className="required-star">*</span></Label>
                                     <CustomSelect value={manualTaskForm.taskType} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, taskType: value }))} options={TASK_TYPES.filter((item) => item.value)} />
+                                    <p className="modal-field__hint modal-field__hint--placeholder">.</p>
                                 </div>
                                 <div className="modal-field">
                                     <Label>Приоритет <span className="required-star">*</span></Label>
                                     <CustomSelect value={manualTaskForm.priority} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, priority: value }))} options={PRIORITIES.filter((item) => item.value)} />
+                                    <p className="modal-field__hint modal-field__hint--placeholder">.</p>
                                 </div>
                                 <div className="modal-field modal-field--full">
                                     <Label>Комментарий <span className="required-star">*</span></Label>
                                     <Textarea rows={3} value={manualTaskForm.comment} onChange={(e) => setManualTaskForm((prev) => ({ ...prev, comment: e.target.value }))} placeholder="Почему задача создаётся вручную" />
-
+                                    <p className="modal-field__hint modal-field__hint--placeholder">.</p>
                                 </div>
                             </div>
                         </div>
