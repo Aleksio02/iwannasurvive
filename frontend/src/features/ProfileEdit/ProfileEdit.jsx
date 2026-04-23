@@ -59,6 +59,71 @@ const COMPANY_SIZE_OPTIONS = [
     { value: 'ENTERPRISE', label: 'Корпорация (1000+)' },
 ]
 
+const CONTACT_LINK_PRESETS = [
+    {
+        id: 'telegram',
+        label: 'Telegram',
+        shortLabel: 'TG',
+        placeholder: '@username или https://t.me/username',
+        hint: 'Можно вставить никнейм или полную ссылку',
+    },
+    {
+        id: 'email',
+        label: 'Email',
+        shortLabel: 'Email',
+        placeholder: 'name@example.com',
+        hint: 'Лучше указывать основную почту',
+    },
+    {
+        id: 'phone',
+        label: 'Телефон',
+        shortLabel: 'Tel',
+        placeholder: '+7 999 123-45-67',
+        hint: 'Удобнее, если номер начинается с кода страны',
+    },
+    {
+        id: 'whatsapp',
+        label: 'WhatsApp',
+        shortLabel: 'WA',
+        placeholder: '+7 999 123-45-67 или https://wa.me/79991234567',
+        hint: 'Можно вставить номер или готовую ссылку',
+    },
+    {
+        id: 'linkedin',
+        label: 'LinkedIn',
+        shortLabel: 'in',
+        placeholder: 'https://linkedin.com/in/username',
+        hint: 'Подходит для делового контакта',
+    },
+    {
+        id: 'github',
+        label: 'GitHub',
+        shortLabel: 'GH',
+        placeholder: 'https://github.com/username',
+        hint: 'Удобно для технического профиля',
+    },
+    {
+        id: 'website',
+        label: 'Сайт',
+        shortLabel: 'Web',
+        placeholder: 'https://your-site.com',
+        hint: 'Личный сайт, портфолио или публичная страница',
+    },
+]
+
+const CONTACT_PRESET_BY_ID = CONTACT_LINK_PRESETS.reduce((acc, preset) => {
+    acc[preset.id] = preset
+    return acc
+}, {})
+
+const SOCIAL_LINK_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
+    ['telegram', 'linkedin', 'github', 'website'].includes(preset.id)
+)
+
+const CONTACT_METHOD_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
+    ['telegram', 'email', 'phone', 'whatsapp', 'website'].includes(preset.id)
+)
+
 function mapLinksToRows(items = [], valueKey = 'url') {
     if (!Array.isArray(items) || items.length === 0) {
         return [createLinkRow()]
@@ -70,6 +135,67 @@ function mapLinksToRows(items = [], valueKey = 'url') {
             item?.[valueKey] || item?.url || item?.value || ''
         )
     )
+}
+
+function createContactLinkRow(presetId = 'website', value = '') {
+    const preset = CONTACT_PRESET_BY_ID[presetId] || CONTACT_PRESET_BY_ID.website
+
+    return {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        title: preset.label,
+        url: value,
+    }
+}
+
+function detectContactPreset(link = {}) {
+    const rawLabel = String(link?.title || link?.label || '').trim().toLowerCase()
+    const rawUrl = String(link?.url || link?.value || '').trim().toLowerCase()
+
+    if (rawLabel.includes('telegram') || rawUrl.includes('t.me/') || rawUrl.startsWith('@')) {
+        return CONTACT_PRESET_BY_ID.telegram
+    }
+
+    if (rawLabel.includes('email') || rawUrl.includes('@') || rawUrl.startsWith('mailto:')) {
+        return CONTACT_PRESET_BY_ID.email
+    }
+
+    if (rawLabel.includes('whatsapp') || rawUrl.includes('wa.me/') || rawUrl.includes('whatsapp')) {
+        return CONTACT_PRESET_BY_ID.whatsapp
+    }
+
+    if (rawLabel.includes('phone') || rawLabel.includes('тел') || rawUrl.startsWith('tel:')) {
+        return CONTACT_PRESET_BY_ID.phone
+    }
+
+    if (rawLabel.includes('linkedin') || rawUrl.includes('linkedin.com/')) {
+        return CONTACT_PRESET_BY_ID.linkedin
+    }
+
+    if (rawLabel.includes('github') || rawUrl.includes('github.com/')) {
+        return CONTACT_PRESET_BY_ID.github
+    }
+
+    return CONTACT_PRESET_BY_ID.website
+}
+
+function splitApplicantContactRowsByType(items = []) {
+    const rows = mapLinksToRows(items, 'value')
+    const social = []
+    const contacts = []
+
+    rows.forEach((row) => {
+        const preset = detectContactPreset(row)
+        if (['telegram', 'linkedin', 'github', 'website'].includes(preset.id)) {
+            social.push(row)
+            return
+        }
+        contacts.push(row)
+    })
+
+    return {
+        socialRows: social,
+        contactRows: contacts,
+    }
 }
 
 function buildEmployerLocationLabel(location) {
@@ -320,7 +446,10 @@ function ProfileEdit() {
                         setAbout(profile.about || '')
                         setResumeText(profile.resumeText || '')
                         setPortfolioRows(mapLinksToRows(profile.portfolioLinks, 'url'))
-                        setContactRows(mapLinksToRows(profile.contactLinks, 'value'))
+                        const { socialRows: applicantSocialRows, contactRows: applicantContactRows } =
+                            splitApplicantContactRowsByType(profile.contactLinks)
+                        setSocialRows(applicantSocialRows)
+                        setContactRows(applicantContactRows)
                         setProfileVisibility(profile.profileVisibility || 'PUBLIC')
                         setResumeVisibility(profile.resumeVisibility || 'AUTHENTICATED')
                         setApplicationsVisibility(profile.applicationsVisibility || 'PRIVATE')
@@ -402,6 +531,114 @@ function ProfileEdit() {
                 (location) => String(location.id) === String(selectedLocationId)
             ) || null,
         [employerLocations, selectedLocationId]
+    )
+
+    const updateContactRowsState = (setRows, id, patch) => {
+        setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)))
+    }
+
+    const removeContactRowsState = (setRows, id) => {
+        setRows((prev) => prev.filter((row) => row.id !== id))
+    }
+
+    const addContactRowsState = (setRows, presetId = 'website') => {
+        setRows((prev) => [...prev, createContactLinkRow(presetId)])
+    }
+
+    const renderContactEditor = (
+        label,
+        rows,
+        setRows,
+        presets = CONTACT_LINK_PRESETS,
+        editorClassName = '',
+        presetGroups = null,
+    ) => (
+        <div className={`profile-contact-editor ${editorClassName}`.trim()}>
+            <Label>{label}</Label>
+
+            {Array.isArray(presetGroups) && presetGroups.length > 0 ? (
+                <div className="profile-contact-editor__preset-groups">
+                    {presetGroups.map((group) => (
+                        <div key={group.id} className="profile-contact-editor__preset-group">
+                            <p className="profile-contact-editor__preset-label">{group.label}</p>
+                            <div className="profile-contact-editor__presets">
+                                {group.presets.map((preset) => (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        className="profile-contact-editor__preset"
+                                        onClick={() => addContactRowsState(setRows, preset.id)}
+                                    >
+                                        <span className="profile-contact-editor__preset-badge">{preset.shortLabel}</span>
+                                        <span>{preset.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="profile-contact-editor__presets">
+                    {presets.map((preset) => (
+                        <button
+                            key={preset.id}
+                            type="button"
+                            className="profile-contact-editor__preset"
+                            onClick={() => addContactRowsState(setRows, preset.id)}
+                        >
+                            <span className="profile-contact-editor__preset-badge">{preset.shortLabel}</span>
+                            <span>{preset.label}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            <div className="profile-contact-editor__list">
+                {rows.length === 0 && (
+                    <div className="profile-contact-editor__empty">
+                        Выберите тип контакта выше, чтобы добавить удобный способ связи
+                    </div>
+                )}
+
+                {rows.map((row) => {
+                    const preset = detectContactPreset(row)
+
+                    return (
+                        <div key={row.id} className="profile-contact-editor__card">
+                            <div className="profile-contact-editor__card-header">
+                                <div className="profile-contact-editor__card-title">
+                                    <span className="profile-contact-editor__card-badge">{preset.shortLabel}</span>
+                                    <div>
+                                        <strong>{row.title || preset.label}</strong>
+                                        <span>{preset.hint}</span>
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="profile-contact-editor__remove"
+                                    onClick={() => removeContactRowsState(setRows, row.id)}
+                                    aria-label="Удалить контакт"
+                                >
+                                    ×
+                                </button>
+                            </div>
+
+                            <Input
+                                placeholder={preset.placeholder}
+                                value={row.url}
+                                onChange={(e) =>
+                                    updateContactRowsState(setRows, row.id, {
+                                        title: preset.label,
+                                        url: e.target.value,
+                                    })
+                                }
+                            />
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
     )
 
     useEffect(() => {
@@ -550,6 +787,7 @@ function ProfileEdit() {
                 setStudyProgramActiveIndex(-1)
                 setLocationCityActiveIndex(-1)
                 setLocationAddressActiveIndex(-1)
+                setIsLocationModalOpen(false)
             }
         }
 
@@ -561,6 +799,11 @@ function ProfileEdit() {
             document.removeEventListener('keydown', handleEsc)
         }
     }, [])
+
+    useEffect(() => {
+        document.documentElement.classList.toggle('is-lock', isLocationModalOpen)
+        return () => document.documentElement.classList.remove('is-lock')
+    }, [isLocationModalOpen])
 
     if (isLoading || isProfileLoading) {
         return (
@@ -924,7 +1167,7 @@ function ProfileEdit() {
                     about: about.trim() || null,
                     resumeText: resumeText.trim() || null,
                     portfolioLinks: cleanLinksToArray(portfolioRows),
-                    contactLinks: cleanLinksToArray(contactRows),
+                    contactLinks: cleanLinksToArray([...socialRows, ...contactRows]),
                     profileVisibility,
                     resumeVisibility,
                     applicationsVisibility,
@@ -1080,7 +1323,7 @@ function ProfileEdit() {
                                     <div className="profile-edit-form__actions-inline">
                                         <Button
                                             type="button"
-                                            className="button--outline"
+                                            className="button--outline profile-edit__add-location-btn"
                                             onClick={openCreateLocationModal}
                                         >
                                             {employerLocations.length > 0
@@ -1236,7 +1479,7 @@ function ProfileEdit() {
 
                         <button
                             type="button"
-                            className="advanced-toggle"
+                            className={`advanced-toggle ${showAdvanced ? 'is-active' : ''}`}
                             onClick={() => setShowAdvanced((value) => !value)}
                         >
                             {showAdvanced ? 'Скрыть дополнительные поля' : 'Показать дополнительные поля'}
@@ -1279,17 +1522,19 @@ function ProfileEdit() {
                                             />
                                         </div>
 
-                                        <LinksEditor
-                                            label="Социальные сети"
-                                            rows={socialRows}
-                                            setRows={setSocialRows}
-                                        />
+                                        {renderContactEditor(
+                                            'Социальные сети',
+                                            socialRows,
+                                            setSocialRows,
+                                            SOCIAL_LINK_PRESETS,
+                                        )}
 
-                                        <LinksEditor
-                                            label="Контакты для связи"
-                                            rows={publicContactRows}
-                                            setRows={setPublicContactRows}
-                                        />
+                                        {renderContactEditor(
+                                            'Контакты для связи',
+                                            publicContactRows,
+                                            setPublicContactRows,
+                                            CONTACT_METHOD_PRESETS,
+                                        )}
                                     </>
                                 ) : (
                                     <>
@@ -1367,7 +1612,19 @@ function ProfileEdit() {
                                         </div>
 
                                         <LinksEditor label="Портфолио" rows={portfolioRows} setRows={setPortfolioRows} />
-                                        <LinksEditor label="Контакты" rows={contactRows} setRows={setContactRows} />
+                                        {renderContactEditor(
+                                            'Социальные сети',
+                                            socialRows,
+                                            setSocialRows,
+                                            SOCIAL_LINK_PRESETS,
+                                        )}
+
+                                        {renderContactEditor(
+                                            'Контакты для связи',
+                                            contactRows,
+                                            setContactRows,
+                                            CONTACT_METHOD_PRESETS,
+                                        )}
 
                                         <div className="profile-edit-form__grid-2">
                                             <CustomSelect
@@ -1425,11 +1682,11 @@ function ProfileEdit() {
             </Card>
 
             {isLocationModalOpen && (
-                <div className="modal-overlay">
-                    <div className="modal">
+                <div className="modal-overlay" onClick={() => setIsLocationModalOpen(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <h3>Добавить локацию компании</h3>
 
-                        <div className="modal__field">
+                        <div className="modal__field modal__field--location-title">
                             <Label>Название локации <span className="required-star">*</span></Label>
                             <Input
                                 value={locationForm.title}
@@ -1503,7 +1760,7 @@ function ProfileEdit() {
                             />
                         </div>
 
-                        <div className="modal__field">
+                        <div className="modal__field modal__field--address-extra">
                             <Label>Дополнительный адрес</Label>
                             <Input
                                 value={locationForm.addressLine2}
