@@ -53,6 +53,11 @@ class SecurityConfig(
                         request.matcher("/swagger-ui/**"),
                         request.matcher("/error"),
                     ).permitAll()
+                    .requestMatchers(
+                        request.matcher("/ws"),
+                        request.matcher("/ws/**"),
+                        request.matcher("/api/chats/**"),
+                    ).authenticated()
                     .requestMatchers(HttpMethod.GET, "/api/employer/**").hasRole("EMPLOYER")
                     .requestMatchers(HttpMethod.PATCH, "/api/interaction/responses/**").hasRole("EMPLOYER")
                     .requestMatchers(HttpMethod.PATCH, "/api/interaction/contacts/**").hasRole("APPLICANT")

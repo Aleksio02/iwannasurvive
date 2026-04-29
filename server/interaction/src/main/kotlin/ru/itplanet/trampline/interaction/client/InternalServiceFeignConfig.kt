@@ -1,17 +1,19 @@
 package ru.itplanet.trampline.interaction.client
 
 import feign.RequestInterceptor
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+import ru.itplanet.trampline.interaction.config.InternalApiProperties
 
-class InternalServiceFeignConfig {
+@Configuration
+class InternalServiceFeignConfig(
+    private val internalApiProperties: InternalApiProperties,
+) {
 
     @Bean
-    fun internalApiKeyRequestInterceptor(
-        @Value("\${internal-api.api-key}") apiKey: String,
-    ): RequestInterceptor {
+    fun internalApiKeyRequestInterceptor(): RequestInterceptor {
         return RequestInterceptor { requestTemplate ->
-            requestTemplate.header("X-Internal-Api-Key", apiKey)
+            requestTemplate.header("X-Internal-Api-Key", internalApiProperties.apiKey)
         }
     }
 }
