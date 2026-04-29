@@ -976,6 +976,24 @@ export async function getApplicantProfile() {
     }
 }
 
+export async function getApplicantProfileWorkspace(userId) {
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    const data = await apiRequest(`${API_BASE}/profile/applicant/${userId}/workspace?currentUser=${currentUser}`)
+
+    const currentProfile = normalizeApplicantProfile(data?.currentProfile || {})
+    const publicProfile = data?.publicProfile
+        ? normalizeApplicantProfile(data.publicProfile)
+        : null
+
+    return {
+        currentProfile,
+        publicProfile,
+        moderationStatus: data?.moderationStatus || currentProfile.moderationStatus || 'DRAFT',
+        hasApprovedPublicVersion: Boolean(data?.hasApprovedPublicVersion),
+    }
+}
+
 export async function updateApplicantProfile(profile) {
     const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
 

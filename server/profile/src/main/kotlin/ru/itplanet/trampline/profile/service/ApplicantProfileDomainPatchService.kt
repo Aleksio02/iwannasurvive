@@ -150,15 +150,31 @@ class ApplicantProfileDomainPatchService(
         profile: ApplicantProfileDto,
     ) {
         when (profile.moderationStatus) {
-            ApplicantProfileModerationStatus.APPROVED,
             ApplicantProfileModerationStatus.PENDING_MODERATION -> {
                 recreateModerationTask(profile)
                 profile.moderationStatus = ApplicantProfileModerationStatus.PENDING_MODERATION
             }
 
-            ApplicantProfileModerationStatus.DRAFT,
-            ApplicantProfileModerationStatus.NEEDS_REVISION -> Unit
+            ApplicantProfileModerationStatus.APPROVED -> {
+                recreateModerationTask(profile)
+                profile.moderationStatus = ApplicantProfileModerationStatus.PENDING_MODERATION
+            }
+
+            ApplicantProfileModerationStatus.NEEDS_REVISION -> {
+                if (hasApprovedPublicSnapshot(profile)) {
+                    recreateModerationTask(profile)
+                    profile.moderationStatus = ApplicantProfileModerationStatus.PENDING_MODERATION
+                }
+            }
+
+            ApplicantProfileModerationStatus.DRAFT -> Unit
         }
+    }
+
+    private fun hasApprovedPublicSnapshot(
+        profile: ApplicantProfileDto,
+    ): Boolean {
+        return profile.approvedPublicSnapshot.isObject && profile.approvedPublicSnapshot.size() > 0
     }
 
     private fun recreateModerationTask(
