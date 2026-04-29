@@ -12,6 +12,7 @@ import Button from '@/shared/ui/Button'
 import {
     getCurrentSessionUser,
     getApplicantProfile,
+    getApplicantProfileWorkspace,
     updateApplicantProfile,
     submitApplicantProfileForModeration,
     getSeekerApplications,
@@ -30,6 +31,13 @@ import {
     deleteApplicantFile,
     getFileDownloadUrlByUserAndFile,
 } from '@/shared/api/profile'
+import {
+    getEntityModerationHistory,
+    getModerationTaskDetail,
+} from '@/shared/api/moderation'
+import {
+    extractModerationFeedback,
+} from '@/features/Dashboard/EmployerDashboard/lib/employerDashboard.helpers'
 import { getCachedSavedFavorites, getSavedFavorites, removeEmployerFromSaved } from '@/shared/api/favorites'
 import SavedFavoritesSection from './components/SavedFavoritesSection'
 import RecommendationsSection from './components/RecommendationsSection'
@@ -266,6 +274,11 @@ function SeekerDashboard() {
     const [isResumeFileUploading, setIsResumeFileUploading] = useState(false)
     const [isPortfolioFileUploading, setIsPortfolioFileUploading] = useState(false)
     const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('')
+    const [publicProfile, setPublicProfile] = useState(null)
+    const [hasApprovedPublicVersion, setHasApprovedPublicVersion] = useState(false)
+    const [profileVersionView, setProfileVersionView] = useState('current')
+    const [moderationFeedback, setModerationFeedback] = useState(null)
+    const [isModerationFeedbackLoading, setIsModerationFeedbackLoading] = useState(false)
 
     const [profile, setProfile] = useState({
         userId: null,
@@ -321,7 +334,17 @@ function SeekerDashboard() {
     const [, navigate] = useLocation()
 
     const moderationState = profile.moderationStatus || 'DRAFT'
-    const canSubmitForModeration = moderationState === 'DRAFT' || moderationState === 'NEEDS_REVISION'
+    const canSubmitForModeration =
+        moderationState === 'DRAFT' ||
+        (moderationState === 'NEEDS_REVISION' && !hasApprovedPublicVersion)
+    const shouldShowVersionSwitch = Boolean(
+        hasApprovedPublicVersion &&
+        publicProfile &&
+        moderationState === 'PENDING_MODERATION'
+    )
+    const displayedProfile = shouldShowVersionSwitch && profileVersionView === 'public'
+        ? publicProfile
+        : profile
 
     const formatDate = (dateString) => {
         if (!dateString) return 'Дата не указана'
@@ -354,18 +377,45 @@ function SeekerDashboard() {
         setTempContactLinks(linksToArray(nextProfile.contactLinks || []))
     }, [])
 
+    const applyWorkspaceFromApi = useCallback((workspaceData, currentUser) => {
+        const currentProfile = workspaceData?.currentProfile || workspaceData
+        const nextProfile = mapApplicantProfileToState(currentProfile || {}, currentUser)
+        const nextPublicProfile = workspaceData?.publicProfile
+            ? mapApplicantProfileToState(workspaceData.publicProfile, currentUser)
+            : null
+
+        nextProfile.moderationStatus =
+            workspaceData?.moderationStatus ||
+            nextProfile.moderationStatus ||
+            'DRAFT'
+
+        setProfile(nextProfile)
+        setPublicProfile(nextPublicProfile)
+        setHasApprovedPublicVersion(Boolean(workspaceData?.hasApprovedPublicVersion))
+        setCitySearchQuery(nextProfile.cityName || '')
+        setTempPortfolioLinks(linksToArray(nextProfile.portfolioLinks || []))
+        setTempContactLinks(linksToArray(nextProfile.contactLinks || []))
+        return nextProfile
+    }, [])
+
     const refreshApplicantFiles = useCallback(async () => {
-        const freshProfile = await getApplicantProfile()
-        if (!freshProfile) return
-        applyProfileFromApi(freshProfile, user)
-    }, [applyProfileFromApi, user])
+        if (!user?.id) return
+        const workspace = await getApplicantProfileWorkspace(user.id)
+        applyWorkspaceFromApi(workspace, user)
+    }, [applyWorkspaceFromApi, user])
 
     const reloadApplicantProfile = useCallback(async (currentUserOverride = user) => {
-        const freshProfile = await getApplicantProfile()
-        if (!freshProfile) return null
-        applyProfileFromApi(freshProfile, currentUserOverride)
-        return freshProfile
-    }, [applyProfileFromApi, user])
+        if (!currentUserOverride?.id) {
+            const freshProfile = await getApplicantProfile()
+            if (!freshProfile) return null
+            applyProfileFromApi(freshProfile, currentUserOverride)
+            return freshProfile
+        }
+
+        const workspace = await getApplicantProfileWorkspace(currentUserOverride.id)
+        applyWorkspaceFromApi(workspace, currentUserOverride)
+        return workspace.currentProfile
+    }, [applyProfileFromApi, applyWorkspaceFromApi, user])
 
     const handleCancelPortfolioEdit = () => {
         setTempPortfolioLinks(linksToArray(profile.portfolioLinks || []))
@@ -500,10 +550,14 @@ function SeekerDashboard() {
                     return
                 }
 
-                const profileResult = await getApplicantProfile()
+                const profileResult = currentUser?.id
+                    ? await getApplicantProfileWorkspace(currentUser.id)
+                    : await getApplicantProfile()
                 if (!isMounted) return
 
-                if (profileResult) {
+                if (profileResult?.currentProfile) {
+                    applyWorkspaceFromApi(profileResult, currentUser)
+                } else if (profileResult) {
                     applyProfileFromApi(profileResult, currentUser)
                 } else {
                     setProfile((prev) => ({
@@ -572,7 +626,7 @@ function SeekerDashboard() {
         return () => {
             isMounted = false
         }
-    }, [applyProfileFromApi, toast])
+    }, [applyProfileFromApi, applyWorkspaceFromApi, toast])
 
     useEffect(() => {
         if (!user?.id) return
@@ -613,6 +667,59 @@ function SeekerDashboard() {
     }, [user?.id, toast])
 
     useEffect(() => {
+        if (!user?.id || moderationState !== 'NEEDS_REVISION') {
+            setModerationFeedback(null)
+            return
+        }
+
+        let isMounted = true
+
+        const loadModerationFeedback = async () => {
+            setIsModerationFeedbackLoading(true)
+
+            try {
+                const history = await getEntityModerationHistory('APPLICANT_PROFILE', user.id)
+                const sortedHistory = Array.isArray(history)
+                    ? [...history].sort(
+                        (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+                    )
+                    : []
+                const latestRevisionEvent =
+                    sortedHistory.find((item) => item?.action === 'REQUESTED_CHANGES') ||
+                    sortedHistory.find((item) => item?.action === 'REJECTED') ||
+                    null
+
+                let taskDetail = null
+                if (latestRevisionEvent?.taskId) {
+                    try {
+                        taskDetail = await getModerationTaskDetail(latestRevisionEvent.taskId)
+                    } catch {
+                        taskDetail = null
+                    }
+                }
+
+                if (isMounted) {
+                    setModerationFeedback(extractModerationFeedback(sortedHistory, taskDetail))
+                }
+            } catch {
+                if (isMounted) {
+                    setModerationFeedback(null)
+                }
+            } finally {
+                if (isMounted) {
+                    setIsModerationFeedbackLoading(false)
+                }
+            }
+        }
+
+        void loadModerationFeedback()
+
+        return () => {
+            isMounted = false
+        }
+    }, [moderationState, user?.id])
+
+    useEffect(() => {
         const handleClickOutside = (event) => {
             if (citySearchRef.current && !citySearchRef.current.contains(event.target)) {
                 setIsCitySearchOpen(false)
@@ -631,6 +738,12 @@ function SeekerDashboard() {
             URL.revokeObjectURL(avatarPreviewUrl)
         }
     }, [avatarPreviewUrl])
+
+    useEffect(() => {
+        if (!shouldShowVersionSwitch) {
+            setProfileVersionView('current')
+        }
+    }, [shouldShowVersionSwitch])
 
     const ensureDashboardTabVisible = useCallback((tabKey, behavior = 'smooth') => {
         const container = dashboardTabsRef.current
@@ -668,8 +781,22 @@ function SeekerDashboard() {
 
         if (!profile.firstName?.trim()) newErrors.firstName = 'Укажите имя'
         if (!profile.lastName?.trim()) newErrors.lastName = 'Укажите фамилию'
-        if (!profile.course) newErrors.course = 'Укажите курс'
-        if (!profile.graduationYear) newErrors.graduationYear = 'Укажите год выпуска'
+        if (!profile.universityName?.trim()) newErrors.universityName = 'Укажите вуз'
+        if (!profile.course && !profile.graduationYear) {
+            newErrors.course = 'Укажите курс или год выпуска'
+            newErrors.graduationYear = 'Укажите курс или год выпуска'
+        }
+
+        const hasProfessionalSignal =
+            Boolean(profile.resumeText?.trim()) ||
+            Boolean(profile.resumeFile) ||
+            (Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0) ||
+            (Array.isArray(profile.portfolioFiles) && profile.portfolioFiles.length > 0) ||
+            (Array.isArray(profile.skills) && profile.skills.length > 0)
+
+        if (!hasProfessionalSignal) {
+            newErrors.professionalSignal = 'Добавьте резюме, файл, портфолио или навыки'
+        }
 
         setErrors(newErrors)
         return Object.keys(newErrors).length === 0
@@ -678,12 +805,28 @@ function SeekerDashboard() {
     const submitApplicantProfileToModerationAction = async () => {
         const updatedProfile = await submitApplicantProfileForModeration()
         applyProfileFromApi({ ...profile, ...updatedProfile }, user)
+        await reloadApplicantProfile()
         return updatedProfile
     }
 
     const maybeResubmitAfterSave = async (updatedProfile, baseDescription) => {
-        if (profile.moderationStatus === 'APPROVED' || profile.moderationStatus === 'NEEDS_REVISION') {
+        const updatedModerationStatus = updatedProfile?.moderationStatus || profile.moderationStatus
+        const shouldSubmitManually =
+            profile.moderationStatus === 'NEEDS_REVISION' &&
+            !hasApprovedPublicVersion &&
+            updatedModerationStatus !== 'PENDING_MODERATION'
+
+        if (shouldSubmitManually) {
             await submitApplicantProfileToModerationAction()
+            toast({
+                title: 'Обновлено',
+                description: `${baseDescription}. Изменения отправлены на повторную модерацию`,
+            })
+            return
+        }
+
+        if (updatedModerationStatus === 'PENDING_MODERATION' && profile.moderationStatus !== 'DRAFT') {
+            await reloadApplicantProfile()
             toast({
                 title: 'Обновлено',
                 description: `${baseDescription}. Изменения автоматически отправлены на повторную модерацию`,
@@ -710,9 +853,14 @@ function SeekerDashboard() {
         setIsLoading(true)
 
         try {
-            await updateApplicantProfile(profile)
-            await reloadApplicantProfile()
-            await submitApplicantProfileToModerationAction()
+            const updatedProfile = await updateApplicantProfile(profile)
+
+            if (updatedProfile?.moderationStatus === 'PENDING_MODERATION') {
+                await reloadApplicantProfile()
+            } else {
+                await reloadApplicantProfile()
+                await submitApplicantProfileToModerationAction()
+            }
 
             toast({
                 title: 'Профиль отправлен на модерацию',
@@ -748,8 +896,18 @@ function SeekerDashboard() {
             const updatedProfile = await updateApplicantProfile(profile)
             applyProfileFromApi({ ...profile, ...updatedProfile }, user)
 
-            if (profile.moderationStatus === 'APPROVED' || profile.moderationStatus === 'NEEDS_REVISION') {
+            if (
+                profile.moderationStatus === 'NEEDS_REVISION' &&
+                !hasApprovedPublicVersion &&
+                updatedProfile?.moderationStatus !== 'PENDING_MODERATION'
+            ) {
                 await submitApplicantProfileToModerationAction()
+                toast({
+                    title: 'Профиль обновлён',
+                    description: 'Изменения сохранены и отправлены на повторную модерацию',
+                })
+            } else if (updatedProfile?.moderationStatus === 'PENDING_MODERATION' && profile.moderationStatus !== 'DRAFT') {
+                await reloadApplicantProfile()
                 toast({
                     title: 'Профиль обновлён',
                     description: 'Изменения сохранены и автоматически отправлены на повторную модерацию',
@@ -1224,9 +1382,9 @@ function SeekerDashboard() {
         }
     }
 
-    const getInitials = () => {
-        if (profile.firstName || profile.lastName) {
-            return `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`.toUpperCase()
+    const getInitials = (sourceProfile = profile) => {
+        if (sourceProfile.firstName || sourceProfile.lastName) {
+            return `${sourceProfile.firstName?.[0] || ''}${sourceProfile.lastName?.[0] || ''}`.toUpperCase()
         }
         if (user?.displayName) {
             return user.displayName[0].toUpperCase()
@@ -1234,17 +1392,17 @@ function SeekerDashboard() {
         return '?'
     }
 
-    const getFullNameWithPatronymic = () => {
+    const getFullNameWithPatronymic = (sourceProfile = profile) => {
         const parts = []
-        if (profile.firstName) parts.push(profile.firstName)
-        if (profile.lastName) parts.push(profile.lastName)
-        if (profile.middleName) parts.push(profile.middleName)
+        if (sourceProfile.firstName) parts.push(sourceProfile.firstName)
+        if (sourceProfile.lastName) parts.push(sourceProfile.lastName)
+        if (sourceProfile.middleName) parts.push(sourceProfile.middleName)
         return parts.join(' ')
     }
 
-    const getDisplayName = () => {
-        if (profile.firstName || profile.lastName) {
-            return `${profile.firstName} ${profile.lastName}`.trim()
+    const getDisplayName = (sourceProfile = profile) => {
+        if (sourceProfile.firstName || sourceProfile.lastName) {
+            return `${sourceProfile.firstName} ${sourceProfile.lastName}`.trim()
         }
         if (user?.displayName) return user.displayName
         return user?.email?.split('@')[0] || 'Пользователь'
@@ -1429,10 +1587,12 @@ function SeekerDashboard() {
         recommendationContactsOptions.length > 0 &&
         recommendationOpportunityOptions.length > 0
 
-    const avatarOwnerUserId = profile.userId || user?.id
-    const avatarUrl = avatarPreviewUrl || (
-        profile.avatar && avatarOwnerUserId
-            ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, profile.avatar.fileId)
+    const avatarOwnerUserId = displayedProfile.userId || profile.userId || user?.id
+    const avatarUrl = profileVersionView === 'current' && avatarPreviewUrl
+        ? avatarPreviewUrl
+        : (
+        displayedProfile.avatar && avatarOwnerUserId
+            ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, displayedProfile.avatar.fileId)
             : null
     )
 
@@ -1522,8 +1682,8 @@ function SeekerDashboard() {
                                 <div className="profile-card__avatar-initials">
                                     {avatarUrl ? (
                                         <img src={avatarUrl} alt="Аватар" className="profile-card__avatar-photo" />
-                                    ) : getInitials() !== '?' ? (
-                                        getInitials()
+                                    ) : getInitials(displayedProfile) !== '?' ? (
+                                        getInitials(displayedProfile)
                                     ) : (
                                         <img src={userAvatarIcon} alt="Аватар" className="profile-card__avatar-icon" />
                                     )}
@@ -1556,7 +1716,7 @@ function SeekerDashboard() {
                                                         : 'Загрузить фото профиля'}
                                             </button>
 
-                                            {profile.avatar && (
+                                            {profileVersionView === 'current' && profile.avatar && (
                                                 <button
                                                     type="button"
                                                     className="profile-card__avatar-action profile-card__avatar-action--danger"
@@ -1575,7 +1735,7 @@ function SeekerDashboard() {
 
                             <div className="profile-card__info">
                                 <div className="profile-card__header">
-                                    <h2>{getFullNameWithPatronymic() || user?.displayName || 'Не указано'}</h2>
+                                    <h2>{getFullNameWithPatronymic(displayedProfile) || user?.displayName || 'Не указано'}</h2>
                                     <div className="profile-card__header-actions">
                                         {!isEditing && (
                                             <button className="profile-card__edit-btn" onClick={() => setIsEditing(true)}>
@@ -1614,38 +1774,96 @@ function SeekerDashboard() {
                                     )}
                                 </div>
 
+                                {shouldShowVersionSwitch && (
+                                    <>
+                                        <div className="profile-card__moderation-hint">
+                                            Текущая версия профиля ожидает проверки. Публичная версия — то, что уже видят пользователи платформы.
+                                        </div>
+                                        <div className="profile-card__version-switch">
+                                            <button
+                                                type="button"
+                                                className={`profile-card__version-switch-btn ${profileVersionView === 'current' ? 'is-active' : ''}`}
+                                                onClick={() => setProfileVersionView('current')}
+                                            >
+                                                Текущая версия
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={`profile-card__version-switch-btn ${profileVersionView === 'public' ? 'is-active' : ''}`}
+                                                onClick={() => setProfileVersionView('public')}
+                                            >
+                                                Публичная версия
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+
+                                {moderationState === 'NEEDS_REVISION' && (
+                                    <div className="profile-card__revision-card">
+                                        <div className="profile-card__revision-header">
+                                            <h3>Профиль требует доработки</h3>
+                                            {isModerationFeedbackLoading && <span>Загружаем комментарий куратора...</span>}
+                                        </div>
+                                        <p>
+                                            {hasApprovedPublicVersion
+                                                ? 'Исправьте замечания и сохраните профиль. После сохранения он уйдёт на повторную модерацию автоматически.'
+                                                : 'Исправьте замечания, сохраните профиль и отправьте его на модерацию повторно.'}
+                                        </p>
+
+                                        {moderationFeedback?.comment && (
+                                            <div className="profile-card__revision-block">
+                                                <span>Комментарий куратора</span>
+                                                <p>{moderationFeedback.comment}</p>
+                                            </div>
+                                        )}
+
+                                        {moderationFeedback?.fieldIssues?.length > 0 && (
+                                            <div className="profile-card__revision-block">
+                                                <span>Что нужно исправить</span>
+                                                <ul>
+                                                    {moderationFeedback.fieldIssues.map((issue, index) => (
+                                                        <li key={`${issue.field || 'field'}-${index}`}>
+                                                            <strong>{issue.field || 'Поле'}:</strong> {issue.message}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div className="profile-card__details">
                                     <div className="profile-card__detail">
                                         <span className="profile-card__detail-label">
                                             <img src={briefcaseIcon} alt="" className="icon-small" />
                                             Статус
                                         </span>
-                                        <span className={`status-badge ${profile.openToWork ? 'status-active' : 'status-passive'}`}>
-                                            {profile.openToWork ? 'Активно ищу работу' : 'Не ищу работу'}
+                                        <span className={`status-badge ${displayedProfile.openToWork ? 'status-active' : 'status-passive'}`}>
+                                            {displayedProfile.openToWork ? 'Активно ищу работу' : 'Не ищу работу'}
                                         </span>
                                     </div>
 
-                                    {profile.universityName && (
+                                    {displayedProfile.universityName && (
                                         <div className="profile-card__detail">
                                             <span className="profile-card__detail-label">
                                                 <img src={calendarIcon} alt="" className="icon-small" />
                                                 Образование
                                             </span>
                                             <span className="profile-card__detail-value">
-                                                {profile.universityName}
-                                                {profile.facultyName && `, ${profile.facultyName}`}
-                                                {profile.graduationYear && `, ${profile.graduationYear}`}
+                                                {displayedProfile.universityName}
+                                                {displayedProfile.facultyName && `, ${displayedProfile.facultyName}`}
+                                                {displayedProfile.graduationYear && `, ${displayedProfile.graduationYear}`}
                                             </span>
                                         </div>
                                     )}
 
-                                    {profile.cityName && (
+                                    {displayedProfile.cityName && (
                                         <div className="profile-card__detail">
                                             <span className="profile-card__detail-label">
                                                 <img src={locationIcon} alt="" className="icon-small" />
                                                 Город
                                             </span>
-                                            <span className="profile-card__detail-value">{profile.cityName}</span>
+                                            <span className="profile-card__detail-value">{displayedProfile.cityName}</span>
                                         </div>
                                     )}
                                 </div>
@@ -1684,8 +1902,9 @@ function SeekerDashboard() {
                                 <div className="profile-edit-form__section">
                                     <h4>Образование</h4>
                                     <div className="form-group">
-                                        <Label>Вуз</Label>
+                                        <Label>Вуз <span className="required-star">*</span></Label>
                                         <Input value={profile.universityName} onChange={(e) => handleFieldChange('universityName', e.target.value)} />
+                                        {errors.universityName && <p className="field-error">{errors.universityName}</p>}
                                     </div>
                                     <div className="form-row">
                                         <div className="form-group">
@@ -1699,12 +1918,12 @@ function SeekerDashboard() {
                                     </div>
                                     <div className="form-row">
                                         <div className="form-group">
-                                            <Label>Курс <span className="required-star">*</span></Label>
+                                            <Label>Курс</Label>
                                             <Input value={profile.course || ''} onChange={(e) => handleFieldChange('course', e.target.value.replace(/[^\d]/g, ''))} />
                                             {errors.course && <p className="field-error">{errors.course}</p>}
                                         </div>
                                         <div className="form-group">
-                                            <Label>Год выпуска <span className="required-star">*</span></Label>
+                                            <Label>Год выпуска</Label>
                                             <Input value={profile.graduationYear || ''} onChange={(e) => handleFieldChange('graduationYear', e.target.value.replace(/[^\d]/g, '').slice(0, 4))} />
                                             {errors.graduationYear && <p className="field-error">{errors.graduationYear}</p>}
                                         </div>
@@ -1778,6 +1997,9 @@ function SeekerDashboard() {
 
                                 <div className="profile-edit-form__section">
                                     <h4>Карьерные настройки</h4>
+                                    {errors.professionalSignal && (
+                                        <p className="field-error">{errors.professionalSignal}</p>
+                                    )}
                                     <div className="checkbox-group">
                                         <CustomCheckbox checked={profile.openToWork} onChange={(val) => handleFieldChange('openToWork', val)} label="Ищу работу / стажировку" />
                                         <CustomCheckbox checked={profile.openToEvents} onChange={(val) => handleFieldChange('openToEvents', val)} label="Интересуюсь карьерными мероприятиями" />
