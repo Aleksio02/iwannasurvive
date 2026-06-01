@@ -93,6 +93,50 @@ export function getActionLabel(action) {
     return labels[action] || getStatusLabelRu(action)
 }
 
+export function getAiModerationStatusLabel(status) {
+    return {
+        PENDING: 'Ожидает',
+        PROCESSING: 'Выполняется',
+        SUCCESS: 'Готово',
+        FAILED: 'Недоступен',
+        SKIPPED: 'Не применяется',
+    }[status] || status || '—'
+}
+
+export function getAiModerationVerdictLabel(verdict) {
+    return {
+        LOW_RISK: 'Низкий риск',
+        NEEDS_REVIEW: 'Требуется внимание',
+        HIGH_RISK: 'Высокий риск',
+    }[verdict] || verdict || '—'
+}
+
+export function getAiModerationVerdictClass(verdict) {
+    return {
+        LOW_RISK: 'is-low-risk',
+        NEEDS_REVIEW: 'is-needs-review',
+        HIGH_RISK: 'is-high-risk',
+    }[verdict] || ''
+}
+
+export function getAiModerationCategoryLabel(category) {
+    return {
+        SPAM: 'Спам',
+        SCAM: 'Мошенничество',
+        TOXIC_CONTENT: 'Токсичный контент',
+        DISCRIMINATION: 'Дискриминация',
+        ADULT_CONTENT: 'Недопустимый контент',
+        EXTERNAL_CONTACTS: 'Внешние контакты',
+        SUSPICIOUS_SALARY: 'Подозрительная зарплата',
+        PERSONAL_DATA_EXPOSURE: 'Персональные данные',
+        MISLEADING_DESCRIPTION: 'Вводящее в заблуждение описание',
+        LOW_QUALITY_CONTENT: 'Низкое качество описания',
+        IRRELEVANT_CONTENT: 'Нерелевантный контент',
+        DUPLICATE_OR_BAD_TAG: 'Некорректный тег',
+        VERIFICATION_MISMATCH: 'Несоответствие верификации',
+    }[category] || category || '—'
+}
+
 export function deepClone(value) {
     if (value === null || value === undefined) return value
     return JSON.parse(JSON.stringify(value))
