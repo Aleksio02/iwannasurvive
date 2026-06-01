@@ -35,3 +35,15 @@ class OpportunityConflictException(
     message = message,
     details = details,
 )
+
+class OpportunityIntegrationException(
+    message: String,
+    code: String = "opportunity_integration_error",
+    status: HttpStatus = HttpStatus.SERVICE_UNAVAILABLE,
+    details: Map<String, String> = emptyMap(),
+) : ApiException(
+    status = status,
+    code = code,
+    message = message,
+    details = details,
+)

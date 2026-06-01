@@ -35,7 +35,7 @@ import {
     getModerationTaskDetail,
 } from '@/shared/api/moderation'
 
-import { listTags, uploadOpportunityMedia, deleteOpportunityMedia, getOpportunityModerationTask, cancelOpportunityModerationTask } from '@/shared/api/opportunities'
+import { listTags, suggestOpportunityTags, uploadOpportunityMedia, deleteOpportunityMedia, getOpportunityModerationTask, cancelOpportunityModerationTask } from '@/shared/api/opportunities'
 
 import '@/features/Dashboard/DashboardBase.scss'
 import './EmployerDashboard.scss'
@@ -270,6 +270,7 @@ function EmployerDashboard() {
     const [opportunities, setOpportunities] = useState([])
     const [responsesPage, setResponsesPage] = useState({ items: [], total: 0, limit: 50, offset: 0 })
     const [techTags, setTechTags] = useState([])
+    const [isSuggestingTags, setIsSuggestingTags] = useState(false)
 
     const [employerLocations, setEmployerLocations] = useState([])
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
@@ -2279,6 +2280,65 @@ function EmployerDashboard() {
         }
     }
 
+    const handleSuggestOpportunityTags = async () => {
+        const payload = {
+            title: opportunityForm.title?.trim() || '',
+            shortDescription: opportunityForm.shortDescription?.trim() || '',
+            fullDescription: opportunityForm.fullDescription?.trim() || '',
+            requirements: opportunityForm.requirements?.trim() || '',
+        }
+
+        if (!Object.values(payload).some((value) => value.length > 0)) {
+            toast({
+                title: 'Заполните описание',
+                description: 'Добавьте название, описание или требования, чтобы подобрать теги.',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        setIsSuggestingTags(true)
+
+        try {
+            const response = await suggestOpportunityTags(payload)
+            const suggestedTags = Array.isArray(response?.suggestedTags) ? response.suggestedTags : []
+            const validSuggestedIds = suggestedTags
+                .map((tag) => Number(tag?.id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+            const availableTagIds = new Set(techTags.map((tag) => Number(tag.id)))
+            const existingIds = Array.isArray(opportunityForm.tagIds) ? opportunityForm.tagIds.map(Number) : []
+            const nextTagIds = Array.from(new Set([
+                ...existingIds,
+                ...validSuggestedIds.filter((id) => availableTagIds.has(id)),
+            ]))
+
+            setOpportunityForm((prev) => ({
+                ...prev,
+                tagIds: nextTagIds,
+            }))
+
+            if (nextTagIds.length > existingIds.length) {
+                toast({
+                    title: 'Теги предложены',
+                    description: 'Проверьте выбранные теги перед публикацией.',
+                })
+            } else {
+                toast({
+                    title: 'Подходящие теги не найдены',
+                    description: 'Можно выбрать теги вручную из списка ниже.',
+                })
+            }
+        } catch {
+            toast({
+                title: 'Не удалось предложить теги',
+                description: 'Попробуйте выбрать теги вручную.',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsSuggestingTags(false)
+        }
+    }
+
     const handleOpenVerificationAttachment = (attachment) => {
         const url = attachment?.url || attachment?.file?.url
 
@@ -2549,11 +2609,13 @@ function EmployerDashboard() {
                         opportunityForm={opportunityForm}
                         errors={errors}
                         techTags={techTags}
+                        isSuggestingTags={isSuggestingTags}
                         employerLocations={employerLocations}
                         resourceRows={resourceRows}
                         setResourceRows={setResourceRows}
                         onResetOpportunityForm={resetOpportunityForm}
                         onSaveOpportunity={handleSaveOpportunity}
+                        onSuggestTags={handleSuggestOpportunityTags}
                         onChangeOpportunityForm={setOpportunityForm}
                         media={opportunityMedia}
                         mediaOpportunityId={editingOpportunityId}
