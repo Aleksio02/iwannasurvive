@@ -22,7 +22,7 @@ function AiModerationCard({ analysis }) {
             <div className="ai-moderation-card__header">
                 <div>
                     <h4>ИИ-предмодерация</h4>
-                    <p>Предварительная оценка. Решение принимает куратор.</p>
+                    <p>Подсказка для проверки задачи</p>
                 </div>
                 <span className="ai-moderation-card__status">{getAiModerationStatusLabel(status)}</span>
             </div>
@@ -48,14 +48,14 @@ function AiModerationCard({ analysis }) {
 
                     {analysis.reasons?.length > 0 && (
                         <div className="ai-moderation-card__section">
-                            <h5>На что обратить внимание</h5>
+                            <h5>Причины</h5>
                             <ul>{analysis.reasons.map((reason, index) => <li key={`${reason}-${index}`}>{reason}</li>)}</ul>
                         </div>
                     )}
 
                     {analysis.highlightedFields?.length > 0 && (
                         <div className="ai-moderation-card__section">
-                            <h5>Поля с замечаниями</h5>
+                            <h5>Замечания по полям</h5>
                             <ul>
                                 {analysis.highlightedFields.map((item, index) => (
                                     <li key={`${item.field}-${index}`}><strong>{item.field}:</strong> {item.issue}</li>
@@ -66,13 +66,12 @@ function AiModerationCard({ analysis }) {
 
                     {analysis.moderatorHint && (
                         <div className="ai-moderation-card__hint">
-                            <strong>Подсказка куратору:</strong> {analysis.moderatorHint}
+                            <h5>Рекомендация</h5>
+                            <p>{analysis.moderatorHint}</p>
                         </div>
                     )}
                 </>
             )}
-
-            <small>ИИ помогает куратору, но не принимает финальное решение.</small>
         </section>
     )
 }
