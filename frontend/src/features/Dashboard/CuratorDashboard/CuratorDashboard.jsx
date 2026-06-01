@@ -49,6 +49,7 @@ import {
 import '../DashboardBase.scss'
 import './CuratorDashboard.scss'
 import CuratorTagsPage from './CuratorTagsPage'
+import AiModerationCard from './components/AiModerationCard'
 
 import eyeIcon from '@/assets/icons/eye.svg'
 import trashIcon from '@/assets/icons/trash.svg'
@@ -406,6 +407,7 @@ function CuratorDashboard() {
     const [uploadingAttachment, setUploadingAttachment] = useState(false)
     const [isDetailLoading, setIsDetailLoading] = useState(false)
     const [imagePreview, setImagePreview] = useState(null)
+    const [aiPollingTick, setAiPollingTick] = useState(0)
 
     const [filters, setFilters] = useState({
         search: '',
@@ -452,6 +454,7 @@ function CuratorDashboard() {
     const historyTaskDetailsCacheRef = useRef(new Map())
     const detailModalBodyRef = useRef(null)
     const entityEditorRef = useRef(null)
+    const aiPollingAttemptsRef = useRef(0)
 
     useEffect(() => {
         setCurrentUser(getSessionUser())
@@ -519,14 +522,20 @@ function CuratorDashboard() {
         toast,
     ])
 
-    const loadTaskDetail = useCallback(async (taskId) => {
-        setIsLoading(true)
-        setIsDetailLoading(true)
+    const loadTaskDetail = useCallback(async (taskId, options = {}) => {
+        const { preserveEditor = false, silent = false } = options
+        if (!silent) {
+            setIsLoading(true)
+            setIsDetailLoading(true)
+        }
         try {
             const data = await getModerationTaskDetail(taskId)
             setSelectedTask(data)
-            setEntityDraft(deepClone(data.createdSnapshot || {}))
-            setIsEditingEntity(false)
+            if (!preserveEditor) {
+                setEntityDraft(deepClone(data.createdSnapshot || {}))
+                setIsEditingEntity(false)
+            }
+            if (silent) return data
 
             const [attachments] = await Promise.all([
                 getModerationEntityAttachments(data.entityType, data.entityId).catch(() => []),
@@ -536,6 +545,11 @@ function CuratorDashboard() {
             setEntityAttachments(attachments || [])
             return data
         } catch (error) {
+            if (silent) {
+                console.warn('Silent task detail refresh failed:', error)
+                return null
+            }
+
             console.error('Failed to load task detail:', error)
             toast({
                 title: 'Ошибка',
@@ -544,10 +558,29 @@ function CuratorDashboard() {
             })
             return null
         } finally {
-            setIsLoading(false)
-            setIsDetailLoading(false)
+            if (!silent) {
+                setIsLoading(false)
+                setIsDetailLoading(false)
+            }
         }
     }, [toast])
+
+    useEffect(() => {
+        const status = selectedTask?.aiModeration?.status
+        if (!isDetailOpen || !selectedTask?.id || !['PENDING', 'PROCESSING'].includes(status)) {
+            aiPollingAttemptsRef.current = 0
+            return undefined
+        }
+        if (aiPollingAttemptsRef.current >= 6) return undefined
+
+        const timeoutId = window.setTimeout(async () => {
+            aiPollingAttemptsRef.current += 1
+            await loadTaskDetail(selectedTask.id, { preserveEditor: true, silent: true })
+            setAiPollingTick((value) => value + 1)
+        }, 3000)
+
+        return () => window.clearTimeout(timeoutId)
+    }, [aiPollingTick, isDetailOpen, loadTaskDetail, selectedTask?.aiModeration?.status, selectedTask?.id])
 
     const loadAllHistory = useCallback(async () => {
         setIsHistoryLoading(true)
@@ -1575,6 +1608,8 @@ function CuratorDashboard() {
                                             </div>
                                         )}
                                     </div>
+
+                                    <AiModerationCard analysis={selectedTask.aiModeration} />
 
                                     {canEditEntity && (
                                         <div className="moderation-entity-actions">
