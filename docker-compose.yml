@@ -1,26 +1,26 @@
 # docker compose up -d --build
 services:
-#  postgres:
-#    container_name: tramplin_db
-#    image: postgres
-#    environment:
-#      POSTGRES_DB: tramplin
-#      POSTGRES_USER: tramplin_adm
-#      POSTGRES_PASSWORD: tramplin_adm
-#
-#    volumes:
-#      - tramplin_data:/var/lib/postgresql/data/
-#
-#    networks:
-#      - tramplin_net
-#
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -U tramplin_adm -d tramplin"]
-#      interval: 5s
-#      timeout: 3s
-#      retries: 5
-#
-#    restart: unless-stopped
+  postgres:
+    container_name: tramplin_db
+    image: postgres
+    environment:
+      POSTGRES_DB: tramplin
+      POSTGRES_USER: tramplin_adm
+      POSTGRES_PASSWORD: tramplin_adm
+
+    volumes:
+      - tramplin_data:/var/lib/postgresql/data/
+
+    networks:
+      - tramplin_net
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tramplin_adm -d tramplin"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+    restart: unless-stopped
 
   redis:
     container_name: tramplin_cache
@@ -47,6 +47,7 @@ services:
       - "9999:9999"
     depends_on:
       - redis
+      - postgres
 
     restart: unless-stopped
 
@@ -68,6 +69,7 @@ services:
 
     depends_on:
       - auth
+      - postgres
 
     restart: unless-stopped
 
@@ -90,6 +92,7 @@ services:
       - "8081:8081"
 
     depends_on:
+      - postgres
       - auth
       - media
 
