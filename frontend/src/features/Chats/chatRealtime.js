@@ -28,7 +28,21 @@ function isMessagePayload(payload) {
         isPositiveNumber(payload.dialogId) &&
         isPositiveNumber(payload.senderUserId) &&
         typeof payload.clientMessageId === 'string' &&
-        typeof payload.body === 'string'
+        (payload.body === null || typeof payload.body === 'string') &&
+        (payload.attachments === undefined || (
+            Array.isArray(payload.attachments) &&
+            payload.attachments.every(isAttachmentPayload)
+        ))
+}
+
+function isAttachmentPayload(payload) {
+    return isObject(payload) &&
+        isPositiveNumber(payload.id) &&
+        isPositiveNumber(payload.fileId) &&
+        typeof payload.originalFileName === 'string' &&
+        typeof payload.mediaType === 'string' &&
+        isPositiveNumber(payload.sizeBytes) &&
+        ['IMAGE', 'FILE'].includes(payload.attachmentKind)
 }
 
 function isReadPayload(payload) {
@@ -59,7 +73,15 @@ function parseEvent(body) {
         return null
     }
 
-    if (event.type === 'MESSAGE_CREATED' && isMessagePayload(event.payload)) return event
+    if (event.type === 'MESSAGE_CREATED' && isMessagePayload(event.payload)) {
+        return {
+            ...event,
+            payload: {
+                ...event.payload,
+                attachments: event.payload.attachments || [],
+            },
+        }
+    }
     if (event.type === 'READ_UPDATED' && isReadPayload(event.payload)) return event
     if (event.type === 'DIALOG_UPDATED' && isDialogPayload(event.payload)) return event
     if (event.type === 'DIALOG_CLOSED') return event

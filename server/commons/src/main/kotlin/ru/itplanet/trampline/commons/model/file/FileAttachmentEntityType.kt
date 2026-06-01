@@ -7,4 +7,5 @@ enum class FileAttachmentEntityType {
     OPPORTUNITY,
     OPPORTUNITY_RESPONSE,
     MODERATION_TASK,
+    CHAT_MESSAGE,
 }

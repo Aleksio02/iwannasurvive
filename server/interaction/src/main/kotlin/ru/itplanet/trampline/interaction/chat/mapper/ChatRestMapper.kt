@@ -14,6 +14,7 @@ import ru.itplanet.trampline.interaction.chat.model.request.GetChatMessagesReque
 import ru.itplanet.trampline.interaction.chat.model.response.ChatDialogListItemResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatDialogPageResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatDialogResponse
+import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatMessageResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatParticipantSummaryResponse
 import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
@@ -110,6 +111,16 @@ class ChatRestMapper {
             createdAt = message.createdAt,
             editedAt = message.editedAt,
             deletedAt = message.deletedAt,
+            attachments = message.attachments.map {
+                ChatAttachmentResponse(
+                    id = it.id,
+                    fileId = it.fileId,
+                    originalFileName = it.originalFileName,
+                    mediaType = it.mediaType,
+                    sizeBytes = it.sizeBytes,
+                    attachmentKind = it.attachmentKind,
+                )
+            },
         )
     }
 
