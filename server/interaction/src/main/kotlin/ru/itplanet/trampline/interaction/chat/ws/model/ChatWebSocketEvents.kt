@@ -3,6 +3,7 @@ package ru.itplanet.trampline.interaction.chat.ws.model
 import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatDialogStatus
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageType
+import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentResponse
 import ru.itplanet.trampline.interaction.dao.dto.OpportunityResponseStatus
 import java.time.OffsetDateTime
 
@@ -50,11 +51,12 @@ data class ChatMessageEventPayload(
     val senderUserId: Long,
     val senderRole: Role,
     val messageType: ChatMessageType,
-    val body: String,
+    val body: String?,
     val clientMessageId: String,
     val createdAt: OffsetDateTime?,
     val editedAt: OffsetDateTime?,
     val deletedAt: OffsetDateTime?,
+    val attachments: List<ChatAttachmentResponse> = emptyList(),
 )
 
 data class ChatReadUpdatedEventPayload(

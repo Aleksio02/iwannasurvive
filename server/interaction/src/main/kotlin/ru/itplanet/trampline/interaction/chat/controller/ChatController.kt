@@ -3,6 +3,7 @@ package ru.itplanet.trampline.interaction.chat.controller
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Positive
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -11,8 +12,11 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.interaction.chat.mapper.ChatRestMapper
 import ru.itplanet.trampline.interaction.chat.model.request.GetChatDialogListRequest
@@ -22,12 +26,14 @@ import ru.itplanet.trampline.interaction.chat.model.request.SendChatMessageReque
 import ru.itplanet.trampline.interaction.chat.model.response.ChatDialogPageResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatDialogResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatMessageResponse
+import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentDownloadUrlResponse
 import ru.itplanet.trampline.interaction.chat.service.ChatArchiveService
 import ru.itplanet.trampline.interaction.chat.service.ChatDialogQueryService
 import ru.itplanet.trampline.interaction.chat.service.ChatLifecycleService
 import ru.itplanet.trampline.interaction.chat.service.ChatMessageCommandService
 import ru.itplanet.trampline.interaction.chat.service.ChatMessageQueryService
 import ru.itplanet.trampline.interaction.chat.service.ChatReadService
+import ru.itplanet.trampline.interaction.chat.service.ChatRealtimeService
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 
 @Validated
@@ -39,6 +45,7 @@ class ChatController(
     private val chatMessageQueryService: ChatMessageQueryService,
     private val chatMessageCommandService: ChatMessageCommandService,
     private val chatReadService: ChatReadService,
+    private val chatRealtimeService: ChatRealtimeService,
     private val chatArchiveService: ChatArchiveService,
     private val chatRestMapper: ChatRestMapper,
 ) {
@@ -108,6 +115,47 @@ class ChatController(
         )
 
         return chatRestMapper.toChatMessageResponse(result.message)
+    }
+
+    @PostMapping(
+        "/{dialogId}/attachments",
+        consumes = [MediaType.MULTIPART_FORM_DATA_VALUE],
+    )
+    fun sendAttachment(
+        @PathVariable
+        @Positive(message = "Идентификатор диалога должен быть положительным")
+        dialogId: Long,
+        @RequestPart("file") file: MultipartFile,
+        @RequestParam clientMessageId: String,
+        @RequestParam(required = false) body: String?,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): ChatMessageResponse {
+        val result = chatRealtimeService.handleSendAttachment(
+            dialogId = dialogId,
+            currentUser = currentUser,
+            clientMessageId = clientMessageId,
+            body = body,
+            file = file,
+        )
+
+        return chatRestMapper.toChatMessageResponse(result.message)
+    }
+
+    @GetMapping("/{dialogId}/attachments/{attachmentId}/download-url")
+    fun getAttachmentDownloadUrl(
+        @PathVariable
+        @Positive(message = "Идентификатор диалога должен быть положительным")
+        dialogId: Long,
+        @PathVariable
+        @Positive(message = "Идентификатор вложения должен быть положительным")
+        attachmentId: Long,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): ChatAttachmentDownloadUrlResponse {
+        return chatMessageCommandService.getAttachmentDownloadUrl(
+            dialogId = dialogId,
+            attachmentId = attachmentId,
+            currentUser = currentUser,
+        )
     }
 
     @ResponseStatus(HttpStatus.NO_CONTENT)

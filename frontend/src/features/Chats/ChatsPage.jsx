@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { Download, FileText, LoaderCircle, Paperclip, RefreshCw, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
 import { useLocation, useRoute } from 'wouter'
 import DashboardLayout from '@/features/Dashboard/DashboardLayout'
-import Button from '@/shared/ui/Button'
 import Textarea from '@/shared/ui/Textarea'
 import { useToast } from '@/shared/hooks/use-toast'
 import { getSessionUser } from '@/shared/lib/utils/sessionStore'
@@ -9,14 +9,28 @@ import {
     archiveChat,
     getChatDialog,
     getChatDialogs,
+    getChatAttachmentDownloadUrl,
     getChatMessages,
     markChatRead,
+    sendChatAttachment,
     unarchiveChat,
 } from '@/shared/api/chats'
 import { useChatRealtime } from './useChatRealtime'
+import ChatImageLightbox from './ChatImageLightbox'
 import './ChatsPage.scss'
 
 const MESSAGE_LIMIT = 50
+const CHAT_TEXTAREA_MIN_HEIGHT = 58
+const CHAT_TEXTAREA_MAX_HEIGHT = 160
+const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
+const PDF_MAX_SIZE_BYTES = 20 * 1024 * 1024
+const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+const EMOJI_GROUPS = [
+    ['Эмоции', ['😊', '😂', '😍', '🥳', '😎', '🤔', '😢', '❤️']],
+    ['Жесты', ['👍', '👎', '👏', '🙌', '🤝', '🙏', '💪', '👋']],
+    ['Работа и учёба', ['💼', '📚', '✍️', '✅', '🚀', '🎯', '💡', '📌']],
+    ['Объекты', ['📎', '📄', '📅', '📞', '💻', '☕', '🎁', '⭐']],
+]
 const INITIAL_STATE = {
     dialogs: [],
     nextCursor: null,
@@ -120,6 +134,16 @@ function reducer(state, action) {
                     ),
                 },
             }
+        case 'MESSAGE_REMOVE':
+            return {
+                ...state,
+                messagesByDialogId: {
+                    ...state.messagesByDialogId,
+                    [action.dialogId]: (state.messagesByDialogId[action.dialogId] || []).filter((message) =>
+                        message.clientMessageId !== action.clientMessageId
+                    ),
+                },
+            }
         default:
             return state
     }
@@ -144,6 +168,176 @@ function getLastServerMessageId(messages) {
     return messages.reduce((max, message) => Math.max(max, message.id || 0), 0)
 }
 
+function formatFileSize(sizeBytes) {
+    if (sizeBytes < 1024 * 1024) return `${Math.max(1, Math.round(sizeBytes / 1024))} КБ`
+    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`
+}
+
+function validateAttachment(file) {
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+        return 'Можно отправить JPG, PNG, WEBP или PDF'
+    }
+
+    const maxSize = file.type === 'application/pdf' ? PDF_MAX_SIZE_BYTES : IMAGE_MAX_SIZE_BYTES
+    if (file.size > maxSize) {
+        return file.type === 'application/pdf'
+            ? 'Размер PDF не должен превышать 20 МБ'
+            : 'Размер изображения не должен превышать 10 МБ'
+    }
+
+    return ''
+}
+
+function openDownloadUrl(url) {
+    const link = document.createElement('a')
+    link.href = url
+    link.target = '_blank'
+    link.rel = 'noopener noreferrer'
+    link.click()
+}
+
+function ChatAttachment({ dialogId, attachment, failed = false, pending = false }) {
+    const [imageUrl, setImageUrl] = useState(attachment.localPreviewUrl || '')
+    const [isThumbnailLoading, setIsThumbnailLoading] = useState(!attachment.localPreviewUrl)
+    const [isFileOpening, setIsFileOpening] = useState(false)
+    const [isLightboxOpen, setIsLightboxOpen] = useState(false)
+    const [fullImageUrl, setFullImageUrl] = useState('')
+    const [isFullImageLoading, setIsFullImageLoading] = useState(false)
+    const [fullImageError, setFullImageError] = useState('')
+    const thumbnailRef = useRef(null)
+    const isImage = attachment.attachmentKind === 'IMAGE'
+
+    useEffect(() => {
+        if (!isImage || attachment.localPreviewUrl || !attachment.id) return undefined
+
+        let isActive = true
+        getChatAttachmentDownloadUrl(dialogId, attachment.id)
+            .then((response) => {
+                if (isActive) {
+                    setImageUrl(response.url)
+                    setIsThumbnailLoading(false)
+                }
+            })
+            .catch(() => {
+                if (isActive) setIsThumbnailLoading(false)
+            })
+
+        return () => {
+            isActive = false
+        }
+    }, [attachment.id, attachment.localPreviewUrl, dialogId, isImage])
+
+    const closeLightbox = useCallback(() => {
+        setIsLightboxOpen(false)
+        setFullImageUrl('')
+        setFullImageError('')
+        requestAnimationFrame(() => thumbnailRef.current?.focus())
+    }, [])
+
+    const handleOpenImage = async () => {
+        if (failed) return
+
+        setIsLightboxOpen(true)
+        setIsFullImageLoading(true)
+        setFullImageError('')
+
+        if (attachment.localPreviewUrl) {
+            setFullImageUrl(attachment.localPreviewUrl)
+            return
+        }
+        if (!attachment.id) {
+            setIsFullImageLoading(false)
+            setFullImageError('Изображение пока недоступно')
+            return
+        }
+
+        try {
+            const response = await getChatAttachmentDownloadUrl(dialogId, attachment.id)
+            setFullImageUrl(response.url)
+        } catch {
+            setIsFullImageLoading(false)
+            setFullImageError('Не удалось загрузить изображение')
+        }
+    }
+
+    if (isImage) {
+        return (
+            <>
+                <button
+                    ref={thumbnailRef}
+                    type="button"
+                    className="chats__attachment-image"
+                    aria-label={`Открыть изображение ${attachment.originalFileName}`}
+                    disabled={failed}
+                    onClick={handleOpenImage}
+                >
+                    {imageUrl && <img src={imageUrl} alt={attachment.originalFileName} loading="lazy" />}
+                    {(isThumbnailLoading || pending) && (
+                        <span className="chats__attachment-overlay">
+                            <LoaderCircle className="chats__spinner" size={24} aria-hidden="true" />
+                        </span>
+                    )}
+                    {failed && (
+                        <span className="chats__attachment-overlay chats__attachment-overlay--error">
+                            <X size={22} aria-hidden="true" />
+                            <small>Не отправлено</small>
+                        </span>
+                    )}
+                    {imageUrl && !isThumbnailLoading && !pending && !failed && (
+                        <ZoomIn className="chats__attachment-zoom" size={22} aria-hidden="true" />
+                    )}
+                </button>
+                {isLightboxOpen && (
+                    <ChatImageLightbox
+                        alt={attachment.originalFileName}
+                        error={fullImageError}
+                        imageUrl={fullImageUrl}
+                        isLoading={isFullImageLoading}
+                        onClose={closeLightbox}
+                        onImageError={() => {
+                            setIsFullImageLoading(false)
+                            setFullImageError('Не удалось загрузить изображение')
+                        }}
+                        onImageLoad={() => setIsFullImageLoading(false)}
+                    />
+                )}
+            </>
+        )
+    }
+
+    const handleOpenFile = async () => {
+        if (!attachment.id || isFileOpening || pending || failed) return
+
+        setIsFileOpening(true)
+        try {
+            const response = await getChatAttachmentDownloadUrl(dialogId, attachment.id)
+            openDownloadUrl(response.url)
+        } catch {
+            return
+        } finally {
+            setIsFileOpening(false)
+        }
+    }
+
+    return (
+        <button
+            type="button"
+            className="chats__attachment-file"
+            disabled={pending || failed}
+            onClick={handleOpenFile}
+        >
+            {pending || isFileOpening
+                ? <LoaderCircle className="chats__spinner chats__attachment-file-icon" size={20} aria-hidden="true" />
+                : <FileText className="chats__attachment-file-icon" size={20} aria-hidden="true" />}
+            <span className="chats__attachment-file-info">
+                <strong>{attachment.originalFileName}</strong>
+                <small>{formatFileSize(attachment.sizeBytes)}</small>
+            </span>
+            {!pending && !isFileOpening && <Download size={17} aria-hidden="true" />}
+        </button>
+    )
+}
+
 function ChatsPage() {
     const [, routeParams] = useRoute('/chats/:dialogId')
     const [, navigate] = useLocation()
@@ -153,7 +347,15 @@ function ChatsPage() {
     const [filter, setFilter] = useState('all')
     const [draft, setDraft] = useState('')
     const [showJumpToNew, setShowJumpToNew] = useState(false)
+    const [isEmojiOpen, setIsEmojiOpen] = useState(false)
+    const [selectedFile, setSelectedFile] = useState(null)
+    const [selectedFilePreview, setSelectedFilePreview] = useState('')
+    const [isUploading, setIsUploading] = useState(false)
     const messageListRef = useRef(null)
+    const textareaRef = useRef(null)
+    const fileInputRef = useRef(null)
+    const emojiButtonRef = useRef(null)
+    const emojiPickerRef = useRef(null)
     const shouldStickToBottomRef = useRef(true)
     const previousScrollMetricsRef = useRef(null)
     const olderMessagesLoadingRef = useRef(false)
@@ -179,6 +381,75 @@ function ChatsPage() {
         list.scrollTo({ top: list.scrollHeight, behavior })
         setShowJumpToNew(false)
     }, [])
+
+    const resizeTextarea = useCallback(() => {
+        const textarea = textareaRef.current
+        if (!textarea) return
+
+        textarea.style.height = 'auto'
+        const nextHeight = Math.min(textarea.scrollHeight, CHAT_TEXTAREA_MAX_HEIGHT)
+        textarea.style.height = `${Math.max(CHAT_TEXTAREA_MIN_HEIGHT, nextHeight)}px`
+        textarea.style.overflowY = textarea.scrollHeight > CHAT_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden'
+    }, [])
+
+    useLayoutEffect(() => {
+        resizeTextarea()
+    }, [draft, resizeTextarea])
+
+    useEffect(() => {
+        if (!selectedFile || !selectedFile.type.startsWith('image/')) {
+            setSelectedFilePreview('')
+            return undefined
+        }
+
+        const previewUrl = URL.createObjectURL(selectedFile)
+        setSelectedFilePreview(previewUrl)
+        return () => URL.revokeObjectURL(previewUrl)
+    }, [selectedFile])
+
+    useEffect(() => {
+        if (!isEmojiOpen) return undefined
+
+        const handlePointerDown = (event) => {
+            if (
+                !emojiPickerRef.current?.contains(event.target) &&
+                !emojiButtonRef.current?.contains(event.target)
+            ) {
+                setIsEmojiOpen(false)
+            }
+        }
+
+        document.addEventListener('pointerdown', handlePointerDown)
+        return () => document.removeEventListener('pointerdown', handlePointerDown)
+    }, [isEmojiOpen])
+
+    const insertEmoji = (emoji) => {
+        const textarea = textareaRef.current
+        const start = textarea?.selectionStart ?? draft.length
+        const end = textarea?.selectionEnd ?? start
+        const nextDraft = `${draft.slice(0, start)}${emoji}${draft.slice(end)}`
+
+        setDraft(nextDraft.slice(0, 4000))
+        setIsEmojiOpen(false)
+        requestAnimationFrame(() => {
+            const nextCursor = Math.min(start + emoji.length, 4000)
+            textareaRef.current?.focus()
+            textareaRef.current?.setSelectionRange(nextCursor, nextCursor)
+        })
+    }
+
+    const handleFileSelect = (file) => {
+        if (!file) return
+
+        const validationError = validateAttachment(file)
+        if (validationError) {
+            toast({ title: 'Файл не выбран', description: validationError, variant: 'destructive' })
+            return
+        }
+
+        setSelectedFile(file)
+        setIsEmojiOpen(false)
+    }
 
     const loadDialogs = useCallback(async ({ append = false } = {}) => {
         dispatch({ type: 'DIALOGS_LOADING' })
@@ -312,6 +583,65 @@ function ChatsPage() {
         scheduleReconciliation(routeDialogId, clientMessageId)
     }, [connectionStatus, currentUser?.id, publishMessage, routeDialogId, scheduleReconciliation, scrollToBottom, toast])
 
+    const sendAttachmentMessage = useCallback(async (
+        file,
+        body,
+        clientMessageId = createClientMessageId(),
+        existingPreviewUrl = ''
+    ) => {
+        if (!routeDialogId || !file || !state.activeDialog?.canSend || isUploading) return
+
+        const validationError = validateAttachment(file)
+        if (validationError) {
+            toast({ title: 'Файл не отправлен', description: validationError, variant: 'destructive' })
+            return
+        }
+
+        const normalizedBody = body.trim()
+        const localPreviewUrl = existingPreviewUrl || (file.type.startsWith('image/') ? URL.createObjectURL(file) : '')
+        dispatch({
+            type: 'MESSAGE_OPTIMISTIC',
+            dialogId: routeDialogId,
+            message: {
+                clientMessageId,
+                body: normalizedBody || null,
+                dialogId: routeDialogId,
+                senderUserId: currentUser?.id,
+                createdAt: new Date().toISOString(),
+                messageType: normalizedBody ? 'MIXED' : 'ATTACHMENT',
+                attachments: [{
+                    originalFileName: file.name,
+                    mediaType: file.type,
+                    sizeBytes: file.size,
+                    attachmentKind: file.type.startsWith('image/') ? 'IMAGE' : 'FILE',
+                    localPreviewUrl,
+                }],
+                retryFile: file,
+                pending: true,
+                failed: false,
+            },
+        })
+        setDraft('')
+        setSelectedFile(null)
+        setIsUploading(true)
+        requestAnimationFrame(() => scrollToBottom())
+
+        try {
+            const saved = await sendChatAttachment(routeDialogId, {
+                clientMessageId,
+                body: normalizedBody,
+                file,
+            })
+            dispatch({ type: 'MESSAGES_LOADED', dialogId: routeDialogId, messages: [saved] })
+            if (localPreviewUrl) setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 0)
+        } catch (error) {
+            dispatch({ type: 'MESSAGE_FAILED', dialogId: routeDialogId, clientMessageId })
+            toast({ title: 'Файл не отправлен', description: error.message, variant: 'destructive' })
+        } finally {
+            setIsUploading(false)
+        }
+    }, [currentUser?.id, isUploading, routeDialogId, scrollToBottom, state.activeDialog?.canSend, toast])
+
     const loadOlderMessages = useCallback(async () => {
         if (
             !routeDialogId ||
@@ -443,17 +773,27 @@ function ChatsPage() {
         }
     }
 
+    const removeFailedMessage = (message) => {
+        const previewUrl = message.attachments?.[0]?.localPreviewUrl
+        if (previewUrl) URL.revokeObjectURL(previewUrl)
+        dispatch({ type: 'MESSAGE_REMOVE', dialogId: message.dialogId, clientMessageId: message.clientMessageId })
+    }
+
     const connectionLabel = {
         connecting: 'Подключение...',
         reconnecting: 'Переподключение...',
         error: 'Нет подключения. Отправка станет доступна после переподключения.',
         idle: 'Нет подключения. Обновите страницу или войдите заново.',
     }[connectionStatus]
-    const canCompose = state.activeDialog?.canSend && connectionStatus === 'connected'
-    const composerPlaceholder = !state.activeDialog?.canSend
+    const canEdit = Boolean(state.activeDialog?.canSend)
+    const canSubmit = canEdit &&
+        !isUploading &&
+        Boolean(draft.trim() || selectedFile) &&
+        Boolean(selectedFile || connectionStatus === 'connected')
+    const composerPlaceholder = !canEdit
         ? 'Отправка недоступна для этого диалога'
         : connectionStatus !== 'connected'
-            ? 'Ожидаем подключения...'
+            ? 'Текст отправится после подключения. Файл можно отправить сейчас.'
             : 'Введите сообщение'
 
     return (
@@ -541,7 +881,7 @@ function ChatsPage() {
                                     <p className="chats__history-loading">Загружаем историю...</p>
                                 )}
                                 {!state.messagesLoading && messages.length === 0 && (
-                                    <p className="chats__empty-thread">В диалоге пока нет сообщений</p>
+                                    <p className="chats__empty-thread">Напишите первое сообщение по этому отклику</p>
                                 )}
                                 {messages.map((message) => {
                                     const isOwn = message.senderUserId === currentUser?.id
@@ -550,19 +890,54 @@ function ChatsPage() {
                                             key={message.id || message.clientMessageId}
                                             className={`chats__message ${isOwn ? 'chats__message--own' : ''}`}
                                         >
-                                            <p>{message.body}</p>
+                                            {message.body && <p>{message.body}</p>}
+                                            {(message.attachments || []).map((attachment) => (
+                                                <ChatAttachment
+                                                    key={attachment.id || `${message.clientMessageId}-${attachment.originalFileName}`}
+                                                    dialogId={message.dialogId}
+                                                    attachment={attachment}
+                                                    failed={message.failed}
+                                                    pending={message.pending}
+                                                />
+                                            ))}
                                             <span>
                                                 {formatTime(message.createdAt)}
                                                 {message.pending && ' · отправляется'}
                                                 {message.failed && ' · не отправлено'}
                                             </span>
                                             {message.failed && (
+                                                <div className="chats__message-actions">
                                                 <button
-                                                    disabled={connectionStatus !== 'connected'}
-                                                    onClick={() => void sendMessage(message.body, message.clientMessageId)}
+                                                    className="chats__message-action"
+                                                    disabled={message.retryFile ? isUploading : connectionStatus !== 'connected'}
+                                                    onClick={() => {
+                                                        if (message.retryFile) {
+                                                            void sendAttachmentMessage(
+                                                                message.retryFile,
+                                                                message.body || '',
+                                                                message.clientMessageId,
+                                                                message.attachments?.[0]?.localPreviewUrl || ''
+                                                            )
+                                                        } else {
+                                                            void sendMessage(message.body, message.clientMessageId)
+                                                        }
+                                                    }}
                                                 >
+                                                    <RefreshCw size={13} aria-hidden="true" />
                                                     Повторить
                                                 </button>
+                                                    {message.retryFile && (
+                                                        <button
+                                                            type="button"
+                                                            className="chats__message-action"
+                                                            disabled={isUploading}
+                                                            onClick={() => removeFailedMessage(message)}
+                                                        >
+                                                            <Trash2 size={13} aria-hidden="true" />
+                                                            Удалить
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     )
@@ -585,31 +960,115 @@ function ChatsPage() {
                                 className="chats__composer"
                                 onSubmit={(event) => {
                                     event.preventDefault()
-                                    void sendMessage(draft)
+                                    if (selectedFile) {
+                                        void sendAttachmentMessage(selectedFile, draft)
+                                    } else {
+                                        void sendMessage(draft)
+                                    }
                                 }}
                             >
-                                <Textarea
-                                    value={draft}
-                                    onChange={(event) => setDraft(event.target.value)}
-                                    placeholder={composerPlaceholder}
-                                    rows={2}
-                                    maxLength={4000}
-                                    disabled={!canCompose}
-                                    onKeyDown={(event) => {
-                                        if (event.key === 'Enter' && !event.shiftKey) {
-                                            event.preventDefault()
-                                            void sendMessage(draft)
-                                        }
-                                    }}
-                                />
+                                <div className="chats__composer-row">
+                                    <div className="chats__composer-tools">
+                                        <button
+                                            ref={emojiButtonRef}
+                                            type="button"
+                                            className="chats__tool"
+                                            aria-label="Открыть смайлики"
+                                            title="Открыть смайлики"
+                                            disabled={!canEdit}
+                                            onClick={() => setIsEmojiOpen((isOpen) => !isOpen)}
+                                        >
+                                            <SmilePlus size={20} aria-hidden="true" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="chats__tool"
+                                            aria-label="Прикрепить файл"
+                                            title="Прикрепить файл"
+                                            disabled={!canEdit || isUploading}
+                                            onClick={() => fileInputRef.current?.click()}
+                                        >
+                                            <Paperclip size={20} aria-hidden="true" />
+                                        </button>
+                                        <input
+                                            ref={fileInputRef}
+                                            className="chats__file-input"
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp,application/pdf"
+                                            onChange={(event) => {
+                                                handleFileSelect(event.target.files?.[0])
+                                                event.target.value = ''
+                                            }}
+                                        />
+                                    </div>
+                                    <Textarea
+                                        ref={textareaRef}
+                                        value={draft}
+                                        onChange={(event) => setDraft(event.target.value)}
+                                        placeholder={composerPlaceholder}
+                                        rows={2}
+                                        maxLength={4000}
+                                        disabled={!canEdit}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' && !event.shiftKey) {
+                                                event.preventDefault()
+                                                if (selectedFile) {
+                                                    void sendAttachmentMessage(selectedFile, draft)
+                                                } else {
+                                                    void sendMessage(draft)
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        type="submit"
+                                        className="button chats__send"
+                                        disabled={!canSubmit}
+                                        aria-label="Отправить сообщение"
+                                        title="Отправить сообщение"
+                                    >
+                                        {isUploading
+                                            ? <LoaderCircle className="chats__spinner" size={20} aria-hidden="true" />
+                                            : <Send size={20} aria-hidden="true" />}
+                                    </button>
+                                </div>
+                                {isEmojiOpen && (
+                                    <div ref={emojiPickerRef} className="chats__emoji-panel">
+                                        {EMOJI_GROUPS.map(([title, emojis]) => (
+                                            <section key={title}>
+                                                <strong>{title}</strong>
+                                                <div>
+                                                    {emojis.map((emoji) => (
+                                                        <button key={emoji} type="button" onClick={() => insertEmoji(emoji)}>
+                                                            {emoji}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </section>
+                                        ))}
+                                    </div>
+                                )}
+                                {selectedFile && (
+                                    <div className="chats__selected-file">
+                                        {selectedFilePreview
+                                            ? <img src={selectedFilePreview} alt="" />
+                                            : <FileText className="chats__attachment-file-icon" size={22} aria-hidden="true" />}
+                                        <span>
+                                            <strong>{selectedFile.name}</strong>
+                                            <small>{formatFileSize(selectedFile.size)}</small>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            aria-label="Убрать прикреплённый файл"
+                                            title="Убрать файл"
+                                            onClick={() => setSelectedFile(null)}
+                                        >
+                                            <X size={18} aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="chats__composer-footer">
                                     <span>{draft.length}/4000</span>
-                                    <Button
-                                        type="submit"
-                                        disabled={!canCompose || !draft.trim()}
-                                    >
-                                        Отправить
-                                    </Button>
                                 </div>
                             </form>
                         </>
