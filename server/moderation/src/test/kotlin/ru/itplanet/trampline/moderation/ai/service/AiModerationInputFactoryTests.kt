@@ -26,4 +26,19 @@ class AiModerationInputFactoryTests {
         assertFalse(input.contains("mail@example.org"))
         assertFalse(input.contains("+7 999 123-45-67"))
     }
+
+    @Test
+    fun `profile input strips url query and redacts nested secrets`() {
+        val input = factory.create(
+            ModerationEntityType.APPLICANT_PROFILE,
+            objectMapper.readTree(
+                """{"portfolioLinks":[{"url":"https://example.org/work?token=raw-secret#part","apiKey":"raw-secret"}]}"""
+            ),
+        ).fields.toString()
+
+        assertTrue(input.contains("https://example.org/work"))
+        assertTrue(input.contains("[redacted]"))
+        assertFalse(input.contains("raw-secret"))
+        assertFalse(input.contains("?token="))
+    }
 }
