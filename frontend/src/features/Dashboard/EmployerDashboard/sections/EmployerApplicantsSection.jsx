@@ -1,6 +1,9 @@
 import Input from '@/shared/ui/Input'
 import CustomSelect from '@/shared/ui/CustomSelect'
 import Button from '@/shared/ui/Button'
+import { useLocation } from 'wouter'
+import { ensureChatByResponse } from '@/shared/api/chats'
+import { useToast } from '@/shared/hooks/use-toast'
 
 import {
     APPLICATION_STATUSES,
@@ -16,6 +19,34 @@ function EmployerApplicantsSection({
                                        onUpdateApplicationStatus,
                                        onOpenApplicant,
                                    }) {
+    const [, navigate] = useLocation()
+    const { toast } = useToast()
+
+    const handleOpenChat = async (application) => {
+        const summary = application.chatSummary
+
+        if (summary?.hasChat && summary.dialogId) {
+            navigate(`/chats/${summary.dialogId}`)
+            return
+        }
+
+        if (!summary?.canSend) {
+            toast({
+                title: 'Чат недоступен',
+                description: 'Для этого отклика сейчас нельзя начать переписку',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        try {
+            const dialog = await ensureChatByResponse(application.id)
+            navigate(`/chats/${dialog.dialogId}`)
+        } catch (error) {
+            toast({ title: 'Не удалось открыть чат', description: error.message, variant: 'destructive' })
+        }
+    }
+
     return (
         <div className="employer-applicants">
             <div className="employer-opportunities__header">
@@ -87,6 +118,13 @@ function EmployerApplicantsSection({
 
                                 <button className="employer-opportunities__view" onClick={() => onOpenApplicant(app.applicant)}>
                                     Профиль кандидата
+                                </button>
+                                <button
+                                    className="employer-opportunities__view"
+                                    onClick={() => void handleOpenChat(app)}
+                                    disabled={!app.chatSummary?.hasChat && !app.chatSummary?.canSend}
+                                >
+                                    Сообщение{app.chatSummary?.unreadCount > 0 ? ` (${app.chatSummary.unreadCount})` : ''}
                                 </button>
                             </div>
                         </div>

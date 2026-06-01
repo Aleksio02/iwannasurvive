@@ -601,6 +601,36 @@ $transition: all 0.2s ease;
   color: $gray-500;
 }
 
+.application-card__chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 12px;
+  color: $primary-dark;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid $primary;
+  border-radius: 10px;
+  background: $primary-light;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  span {
+    min-width: 18px;
+    padding: 1px 5px;
+    color: white;
+    text-align: center;
+    font-size: 11px;
+    border-radius: 10px;
+    background: $primary;
+  }
+}
+
 .saved-card__remove {
   display: inline-flex;
   align-items: center;
