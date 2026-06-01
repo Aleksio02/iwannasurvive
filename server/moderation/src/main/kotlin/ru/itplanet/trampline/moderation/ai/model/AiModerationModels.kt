@@ -29,7 +29,6 @@ data class AiModerationAnalysisResponse(
     val reasons: List<String>,
     val highlightedFields: List<AiModerationFieldIssue>,
     val moderatorHint: String?,
-    val modelUri: String,
     val modelVersion: String?,
     val promptVersion: String,
     val createdAt: OffsetDateTime,
