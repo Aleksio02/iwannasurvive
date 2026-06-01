@@ -27,6 +27,7 @@ import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskResp
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationFieldIssue
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
+import ru.itplanet.trampline.moderation.ai.service.AiModerationCommandService
 import ru.itplanet.trampline.moderation.client.MediaServiceClient
 import ru.itplanet.trampline.moderation.client.OpportunityModerationOwnerClient
 import ru.itplanet.trampline.moderation.client.ProfileModerationOwnerClient
@@ -63,6 +64,7 @@ class ModerationCommandServiceImpl(
     private val opportunityModerationOwnerClient: OpportunityModerationOwnerClient,
     private val mediaServiceClient: MediaServiceClient,
     private val transactionTemplate: TransactionTemplate,
+    private val aiModerationCommandService: AiModerationCommandService,
 ) : ModerationCommandService {
 
     @PersistenceContext
@@ -97,13 +99,15 @@ class ModerationCommandServiceImpl(
 
         moderationTaskDao.save(task)
 
+        val createdPayload = buildInternalCreatedPayload(request)
         saveLog(
             task = task,
             action = ModerationLogAction.CREATED,
             actorUserId = request.createdByUserId,
-            payload = buildInternalCreatedPayload(request),
+            payload = createdPayload,
             createdAt = now,
         )
+        aiModerationCommandService.request(task, createdPayload)
 
         return task.toInternalResponse(created = true)
     }
@@ -139,13 +143,15 @@ class ModerationCommandServiceImpl(
 
         moderationTaskDao.save(task)
 
+        val createdPayload = buildManualCreatedPayload(snapshot, request.comment.trim())
         saveLog(
             task = task,
             action = ModerationLogAction.CREATED,
             actorUserId = currentUser.userId,
-            payload = buildManualCreatedPayload(snapshot, request.comment.trim()),
+            payload = createdPayload,
             createdAt = now,
         )
+        aiModerationCommandService.request(task, createdPayload)
 
         return task.id ?: throw IllegalStateException("Идентификатор задачи модерации не должен быть null")
     }
