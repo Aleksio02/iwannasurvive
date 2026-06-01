@@ -15,6 +15,7 @@ const ApplicantSearchPage = lazy(() => import('@/features/ApplicantSearch/Applic
 const ApplicantPublicProfile = lazy(() => import('@/features/ApplicantPublicProfile/ApplicantPublicProfile'))
 const SecuritySettings = lazy(() => import('@/features/Settings/SecuritySettings/SecuritySettings'))
 const CuratorsAdminPage = lazy(() => import('@/features/Admin/CuratorsAdminPage/CuratorsAdminPage'))
+const ChatsPage = lazy(() => import('@/features/Chats/ChatsPage'))
 
 function AppFallback() {
     return (
@@ -79,6 +80,18 @@ function App() {
                 <Route path="/settings/security">
                     <ProtectedRoute allowedRoles={['APPLICANT', 'EMPLOYER', 'CURATOR', 'ADMIN']}>
                         <SecuritySettings />
+                    </ProtectedRoute>
+                </Route>
+
+                <Route path="/chats/:dialogId">
+                    <ProtectedRoute allowedRoles={['APPLICANT', 'EMPLOYER']}>
+                        <ChatsPage />
+                    </ProtectedRoute>
+                </Route>
+
+                <Route path="/chats">
+                    <ProtectedRoute allowedRoles={['APPLICANT', 'EMPLOYER']}>
+                        <ChatsPage />
                     </ProtectedRoute>
                 </Route>
 
