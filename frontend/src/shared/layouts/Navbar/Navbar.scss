@@ -146,3 +146,20 @@
     display: none;
   }
 }
+
+.navbar__chat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.navbar__chat-badge {
+  min-width: 18px;
+  padding: 1px 5px;
+  color: #fff;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  background: var(--color-primary);
+}

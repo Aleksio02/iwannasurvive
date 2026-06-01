@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import brandMark from '@/assets/icons/brand-mark.svg'
 import { getCurrentUserInfo, logoutUser } from '@/shared/api/auth'
 import { getApplicantProfile, getEmployerProfile } from '@/shared/api/profile'
+import { getChatDialogs } from '@/shared/api/chats'
+import { useChatRealtime } from '@/features/Chats/useChatRealtime'
 import {
     clearSessionUser,
     getSessionUser,
@@ -16,6 +18,8 @@ function Navbar() {
     const [user, setUser] = useState(getSessionUser())
     const [displayName, setDisplayName] = useState('')
     const [isCheckingSession, setIsCheckingSession] = useState(!!getSessionUser())
+    const [unreadChatCount, setUnreadChatCount] = useState(0)
+    const { eventVersion } = useChatRealtime()
 
     const loadUserData = async () => {
         const localUser = getSessionUser()
@@ -123,6 +127,39 @@ function Navbar() {
         }
     }, [])
 
+    useEffect(() => {
+        if (!['APPLICANT', 'EMPLOYER'].includes(user?.role)) {
+            setUnreadChatCount(0)
+            return
+        }
+
+        let isActive = true
+        let refreshTimer = null
+
+        const refreshUnreadCount = () => {
+            getChatDialogs({ unreadOnly: true, limit: 100 })
+                .then((page) => {
+                    if (!isActive) return
+                    const total = (page?.items || []).reduce((sum, dialog) => sum + (dialog.unreadCount || 0), 0)
+                    setUnreadChatCount(total)
+                })
+                .catch(() => {
+                    if (isActive) setUnreadChatCount(0)
+                })
+        }
+
+        if (eventVersion > 0) {
+            refreshTimer = setTimeout(refreshUnreadCount, 250)
+        } else {
+            refreshUnreadCount()
+        }
+
+        return () => {
+            isActive = false
+            if (refreshTimer) clearTimeout(refreshTimer)
+        }
+    }, [eventVersion, user?.id, user?.role])
+
     const handleLogout = async () => {
         setUser(null)
         setDisplayName('')
@@ -138,6 +175,7 @@ function Navbar() {
     }
 
     const isActive = (path) => location === path
+    const isChatsActive = location.startsWith('/chats')
 
     const getDashboardLink = () => {
         if (user?.role === 'EMPLOYER') return '/employer'
@@ -166,6 +204,18 @@ function Navbar() {
                             >
                                 Личный кабинет
                             </Link>
+
+                            {['APPLICANT', 'EMPLOYER'].includes(user.role) && (
+                                <Link
+                                    href="/chats"
+                                    className={`navbar__link navbar__chat-link ${isChatsActive ? 'is-active' : ''}`}
+                                >
+                                    Сообщения
+                                    {unreadChatCount > 0 && (
+                                        <span className="navbar__chat-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>
+                                    )}
+                                </Link>
+                            )}
 
                             <button
                                 type="button"

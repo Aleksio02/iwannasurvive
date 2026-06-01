@@ -1215,6 +1215,7 @@ export async function getSeekerApplications() {
                 message: r.employerComment || r.applicantComment || 'Отклик отправлен',
                 appliedAt: r.createdAt,
                 createdAt: r.createdAt,
+                chatSummary: r.chatSummary || null,
             }
         })
     } catch (error) {

@@ -39,6 +39,7 @@ import {
     extractModerationFeedback,
 } from '@/features/Dashboard/EmployerDashboard/lib/employerDashboard.helpers'
 import { getCachedSavedFavorites, getSavedFavorites, removeEmployerFromSaved } from '@/shared/api/favorites'
+import { ensureChatByResponse } from '@/shared/api/chats'
 import SavedFavoritesSection from './components/SavedFavoritesSection'
 import RecommendationsSection from './components/RecommendationsSection'
 import '../DashboardBase.scss'
@@ -1600,6 +1601,32 @@ function SeekerDashboard() {
         ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, profile.resumeFile.fileId)
         : null
 
+    const handleOpenApplicationChat = async (event, application) => {
+        event.stopPropagation()
+
+        const summary = application.chatSummary
+        if (summary?.hasChat && summary.dialogId) {
+            navigate(`/chats/${summary.dialogId}`)
+            return
+        }
+
+        if (!summary?.canSend) {
+            toast({
+                title: 'Чат недоступен',
+                description: 'Для этого отклика сейчас нельзя начать переписку',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        try {
+            const dialog = await ensureChatByResponse(application.id)
+            navigate(`/chats/${dialog.dialogId}`)
+        } catch (error) {
+            toast({ title: 'Не удалось открыть чат', description: error.message, variant: 'destructive' })
+        }
+    }
+
     if (isLoading && !profile.firstName) {
         return (
             <DashboardLayout title="Мой профиль">
@@ -2388,6 +2415,16 @@ function SeekerDashboard() {
                                                         {formatDate(app.appliedAt)}
                                                     </span>
                                                 </div>
+                                                <button
+                                                    className="application-card__chat"
+                                                    onClick={(event) => void handleOpenApplicationChat(event, app)}
+                                                    disabled={!app.chatSummary?.hasChat && !app.chatSummary?.canSend}
+                                                >
+                                                    Сообщение
+                                                    {app.chatSummary?.unreadCount > 0 && (
+                                                        <span>{app.chatSummary.unreadCount}</span>
+                                                    )}
+                                                </button>
                                             </div>
                                         </div>
                                     )
