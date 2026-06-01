@@ -55,6 +55,30 @@ media:
 internal-api:
   api-key: ${INTERNAL_API_KEY}
 
+app:
+  ai:
+    moderation:
+      enabled: ${AI_MODERATION_ENABLED:false}
+      prompt-version: ai-moderation-v1
+      max-input-chars: 12000
+      max-reasons: 6
+      max-highlighted-fields: 8
+      async-timeout-ms: 10000
+      supported:
+        opportunity-review: true
+        applicant-profile-review: true
+        employer-profile-review: true
+        employer-verification-review: true
+        tag-review: true
+    yandex-gpt:
+      endpoint: ${YANDEX_AI_ENDPOINT:https://llm.api.cloud.yandex.net/foundationModels/v1/completion}
+      folder-id: ${YANDEX_AI_FOLDER_ID:}
+      api-key: ${YANDEX_AI_API_KEY:}
+      api-key-id: ${YANDEX_AI_API_KEY_ID:}
+      model-uri: ${YANDEX_AI_MODEL_URI:}
+      temperature: 0.2
+      max-tokens: 2000
+
 springdoc:
   paths-to-match: /api/**
   api-docs:

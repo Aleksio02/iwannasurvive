@@ -20,6 +20,11 @@ import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskPriority
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 import ru.itplanet.trampline.moderation.client.MediaServiceClient
+import com.fasterxml.jackson.databind.ObjectMapper
+import ru.itplanet.trampline.moderation.ai.dao.AiModerationAnalysisDao
+import ru.itplanet.trampline.moderation.ai.model.AiModerationAnalysisResponse
+import ru.itplanet.trampline.moderation.ai.model.AiModerationCategory
+import ru.itplanet.trampline.moderation.ai.model.AiModerationFieldIssue
 import ru.itplanet.trampline.moderation.dao.ModerationLogDao
 import ru.itplanet.trampline.moderation.dao.ModerationTaskDao
 import ru.itplanet.trampline.moderation.dao.dto.ModerationLogDto
@@ -49,6 +54,8 @@ class ModerationQueryServiceImpl(
     private val moderationLogDao: ModerationLogDao,
     private val moderationReadModelDao: ModerationReadModelDao,
     private val mediaServiceClient: MediaServiceClient,
+    private val aiModerationAnalysisDao: AiModerationAnalysisDao,
+    private val objectMapper: ObjectMapper,
 ) : ModerationQueryService {
 
     @Transactional(readOnly = true)
@@ -179,6 +186,28 @@ class ModerationQueryServiceImpl(
             history = history.map { it.toHistoryResponse() },
             attachments = attachments,
             availableActions = resolveAvailableActions(task, currentUser),
+            aiModeration = aiModerationAnalysisDao.findByTaskId(taskId)?.let { analysis ->
+                AiModerationAnalysisResponse(
+                    status = analysis.status,
+                    verdict = analysis.verdict,
+                    riskScore = analysis.riskScore,
+                    categories = analysis.categories.mapNotNull { node ->
+                        runCatching { AiModerationCategory.valueOf(node.asText()) }.getOrNull()
+                    },
+                    reasons = analysis.reasons.map { it.asText() },
+                    highlightedFields = analysis.highlightedFields.mapNotNull { node ->
+                        runCatching { objectMapper.treeToValue(node, AiModerationFieldIssue::class.java) }.getOrNull()
+                    },
+                    moderatorHint = analysis.moderatorHint,
+                    modelUri = analysis.modelUri,
+                    modelVersion = analysis.modelVersion,
+                    promptVersion = analysis.promptVersion,
+                    createdAt = analysis.createdAt,
+                    updatedAt = analysis.updatedAt,
+                    finishedAt = analysis.finishedAt,
+                    errorMessage = analysis.errorMessage.takeIf { analysis.status.name == "FAILED" },
+                )
+            },
         )
     }
 
