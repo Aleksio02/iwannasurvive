@@ -3,11 +3,13 @@ package ru.itplanet.trampline.interaction.chat.service
 import org.slf4j.LoggerFactory
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Service
+import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogQueryDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatDialogDto
 import ru.itplanet.trampline.interaction.chat.mapper.ChatRealtimeMapper
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
+import ru.itplanet.trampline.interaction.chat.model.ChatMessageCommandResult
 import java.time.OffsetDateTime
 
 @Service
@@ -36,9 +38,33 @@ class ChatRealtimeServiceImpl(
             body = body,
         )
 
-        if (!commandResult.created) {
-            return
-        }
+        broadcastCreatedMessage(dialog, commandResult)
+    }
+
+    override fun handleSendAttachment(
+        dialogId: Long,
+        currentUser: AuthenticatedUser,
+        clientMessageId: String,
+        body: String?,
+        file: MultipartFile,
+    ): ChatMessageCommandResult {
+        val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
+        val commandResult = chatMessageCommandService.sendAttachment(
+            dialogId = dialogId,
+            currentUser = currentUser,
+            clientMessageId = clientMessageId,
+            body = body,
+            file = file,
+        )
+        broadcastCreatedMessage(dialog, commandResult)
+        return commandResult
+    }
+
+    private fun broadcastCreatedMessage(
+        dialog: ChatDialogDto,
+        commandResult: ChatMessageCommandResult,
+    ) {
+        if (!commandResult.created) return
 
         safeSendToParticipants(
             dialog = dialog,

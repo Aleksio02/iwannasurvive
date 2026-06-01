@@ -1,6 +1,7 @@
+import { forwardRef } from 'react'
 import './Textarea.scss'
 
-function Textarea({
+const Textarea = forwardRef(function Textarea({
                       id,
                       value,
                       onChange,
@@ -9,9 +10,10 @@ function Textarea({
                       required = false,
                       className = '',
                       ...rest
-                  }) {
+                  }, ref) {
     return (
         <textarea
+            ref={ref}
             id={id}
             value={value}
             onChange={onChange}
@@ -22,6 +24,6 @@ function Textarea({
             {...rest}
         />
     )
-}
+})
 
 export default Textarea
