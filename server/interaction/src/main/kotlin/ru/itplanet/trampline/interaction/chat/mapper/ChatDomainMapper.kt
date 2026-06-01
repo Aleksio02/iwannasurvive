@@ -2,8 +2,10 @@ package ru.itplanet.trampline.interaction.chat.mapper
 
 import org.springframework.stereotype.Component
 import ru.itplanet.trampline.commons.model.Role
+import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageAttachmentDto
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageDto
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatSenderRole
+import ru.itplanet.trampline.interaction.chat.model.ChatAttachment
 import ru.itplanet.trampline.interaction.chat.model.ChatMessage
 import ru.itplanet.trampline.interaction.dao.dto.ContactInfoApplicantProfileDto
 import ru.itplanet.trampline.interaction.exception.InteractionForbiddenException
@@ -28,6 +30,21 @@ class ChatDomainMapper {
             createdAt = dto.createdAt,
             editedAt = dto.editedAt,
             deletedAt = dto.deletedAt,
+            attachments = dto.attachments.map(::toChatAttachment),
+        )
+    }
+
+    fun toChatAttachment(
+        dto: ChatMessageAttachmentDto,
+    ): ChatAttachment {
+        return ChatAttachment(
+            id = dto.id
+                ?: throw IllegalStateException("Идентификатор вложения чата не должен быть null"),
+            fileId = dto.fileId,
+            originalFileName = dto.originalFileName,
+            mediaType = dto.mediaType,
+            sizeBytes = dto.sizeBytes,
+            attachmentKind = dto.attachmentKind,
         )
     }
 
@@ -57,9 +74,15 @@ class ChatDomainMapper {
     }
 
     fun buildPreview(
-        body: String,
+        body: String?,
+        attachmentFileName: String? = null,
+        isImage: Boolean = false,
     ): String {
-        return body
+        val normalizedBody = body
+            ?.takeIf { it.isNotBlank() }
+            ?: if (isImage) "📷 Изображение" else "📎 Файл: ${attachmentFileName ?: "вложение"}"
+
+        return normalizedBody
             .replace(Regex("\\s+"), " ")
             .trim()
             .take(300)

@@ -10,9 +10,10 @@ data class ChatMessageResponse(
     val senderUserId: Long,
     val senderRole: Role,
     val messageType: ChatMessageType,
-    val body: String,
+    val body: String?,
     val clientMessageId: String,
     val createdAt: OffsetDateTime?,
     val editedAt: OffsetDateTime?,
     val deletedAt: OffsetDateTime?,
+    val attachments: List<ChatAttachmentResponse> = emptyList(),
 )

@@ -55,6 +55,7 @@ class FileValidationService {
 
             FileAssetKind.PORTFOLIO,
             FileAssetKind.MODERATION_ATTACHMENT,
+            FileAssetKind.CHAT_ATTACHMENT,
             FileAssetKind.OTHER -> IMAGE_CONTENT_TYPES + PDF_CONTENT_TYPES
         }
     }
@@ -68,7 +69,8 @@ class FileValidationService {
             FileAssetKind.RESUME,
             FileAssetKind.VERIFICATION_ATTACHMENT,
             FileAssetKind.APPLICATION_ATTACHMENT,
-            FileAssetKind.MODERATION_ATTACHMENT -> 20L * 1024 * 1024
+            FileAssetKind.MODERATION_ATTACHMENT,
+            FileAssetKind.CHAT_ATTACHMENT -> 20L * 1024 * 1024
 
             FileAssetKind.PORTFOLIO,
             FileAssetKind.OTHER -> 50L * 1024 * 1024

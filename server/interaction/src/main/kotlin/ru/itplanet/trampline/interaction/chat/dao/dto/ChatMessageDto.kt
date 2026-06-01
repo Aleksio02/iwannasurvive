@@ -7,6 +7,9 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.CascadeType
+import jakarta.persistence.FetchType
+import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import org.hibernate.annotations.CreationTimestamp
 import java.time.OffsetDateTime
@@ -33,8 +36,8 @@ open class ChatMessageDto {
     @Column(name = "message_type", nullable = false, length = 16)
     var messageType: ChatMessageType = ChatMessageType.TEXT
 
-    @Column(name = "body", nullable = false, columnDefinition = "TEXT")
-    var body: String = ""
+    @Column(name = "body", columnDefinition = "TEXT")
+    var body: String? = null
 
     @Column(name = "client_message_id", nullable = false, length = 100)
     var clientMessageId: String = ""
@@ -49,13 +52,16 @@ open class ChatMessageDto {
     @Column(name = "deleted_at")
     var deletedAt: OffsetDateTime? = null
 
+    @OneToMany(mappedBy = "message", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.EAGER)
+    var attachments: MutableList<ChatMessageAttachmentDto> = mutableListOf()
+
     constructor()
 
     constructor(
         dialogId: Long,
         senderUserId: Long,
         senderRole: ChatSenderRole,
-        body: String,
+        body: String?,
         clientMessageId: String,
         messageType: ChatMessageType = ChatMessageType.TEXT,
     ) {
@@ -75,4 +81,6 @@ enum class ChatSenderRole {
 
 enum class ChatMessageType {
     TEXT,
+    ATTACHMENT,
+    MIXED,
 }

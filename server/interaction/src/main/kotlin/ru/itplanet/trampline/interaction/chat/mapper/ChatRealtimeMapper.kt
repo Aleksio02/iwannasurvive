@@ -10,6 +10,7 @@ import ru.itplanet.trampline.interaction.chat.ws.model.ChatReadUpdatedEventPaylo
 import ru.itplanet.trampline.interaction.chat.ws.model.ChatEventEnvelope
 import ru.itplanet.trampline.interaction.chat.ws.model.ChatEventType
 import ru.itplanet.trampline.interaction.chat.ws.model.ChatMessageEventPayload
+import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentResponse
 import java.time.OffsetDateTime
 
 @Component
@@ -33,6 +34,16 @@ class ChatRealtimeMapper {
                 createdAt = message.createdAt,
                 editedAt = message.editedAt,
                 deletedAt = message.deletedAt,
+                attachments = message.attachments.map {
+                    ChatAttachmentResponse(
+                        id = it.id,
+                        fileId = it.fileId,
+                        originalFileName = it.originalFileName,
+                        mediaType = it.mediaType,
+                        sizeBytes = it.sizeBytes,
+                        attachmentKind = it.attachmentKind,
+                    )
+                },
             ),
         )
     }
