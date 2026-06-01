@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useLocation, useRoute } from 'wouter'
 import DashboardLayout from '@/features/Dashboard/DashboardLayout'
 import Button from '@/shared/ui/Button'
@@ -11,7 +11,6 @@ import {
     getChatDialogs,
     getChatMessages,
     markChatRead,
-    sendChatMessageRest,
     unarchiveChat,
 } from '@/shared/api/chats'
 import { useChatRealtime } from './useChatRealtime'
@@ -76,6 +75,8 @@ function reducer(state, action) {
             return { ...state, dialogsLoading: false, dialogsError: action.message }
         case 'DIALOG_UPSERT':
             return { ...state, dialogs: upsertDialog(state.dialogs, action.dialog) }
+        case 'ACTIVE_DIALOG_LOADING':
+            return { ...state, activeDialog: null }
         case 'ACTIVE_DIALOG_LOADED':
             return { ...state, activeDialog: action.dialog }
         case 'MESSAGES_LOADING':
@@ -154,11 +155,14 @@ function ChatsPage() {
     const [showJumpToNew, setShowJumpToNew] = useState(false)
     const messageListRef = useRef(null)
     const shouldStickToBottomRef = useRef(true)
-    const previousScrollHeightRef = useRef(0)
+    const previousScrollMetricsRef = useRef(null)
+    const olderMessagesLoadingRef = useRef(false)
+    const lastMarkedReadByDialogRef = useRef(new Map())
     const reconcileTimersRef = useRef(new Map())
+    const handledEventSequenceRef = useRef(0)
     const stateRef = useRef(state)
     const { toast } = useToast()
-    const { connectionStatus, lastEvent, publishMessage, publishRead } = useChatRealtime()
+    const { connectionStatus, events, publishMessage, publishRead } = useChatRealtime()
 
     const messages = useMemo(
         () => state.messagesByDialogId[routeDialogId] || [],
@@ -199,10 +203,14 @@ function ChatsPage() {
         const lastIncoming = incomingMessages[incomingMessages.length - 1]
 
         if (!lastIncoming) return
+        if (lastMarkedReadByDialogRef.current.get(dialogId) === lastIncoming.id) return
+
+        lastMarkedReadByDialogRef.current.set(dialogId, lastIncoming.id)
         if (!publishRead(dialogId, lastIncoming.id)) {
             try {
                 await markChatRead(dialogId, lastIncoming.id)
             } catch {
+                lastMarkedReadByDialogRef.current.delete(dialogId)
                 return
             }
         }
@@ -211,6 +219,7 @@ function ChatsPage() {
     const loadActiveDialog = useCallback(async (dialogId) => {
         if (!dialogId) return
 
+        dispatch({ type: 'ACTIVE_DIALOG_LOADING' })
         dispatch({ type: 'MESSAGES_LOADING' })
 
         try {
@@ -257,14 +266,22 @@ function ChatsPage() {
                 dispatch({ type: 'MESSAGE_FAILED', dialogId, clientMessageId })
             }
             reconcileTimersRef.current.delete(clientMessageId)
-        }, 3500)
+        }, 1500)
 
         reconcileTimersRef.current.set(clientMessageId, timer)
     }, [reconcileDialog])
 
-    const sendMessage = useCallback(async (body, clientMessageId = createClientMessageId()) => {
+    const sendMessage = useCallback((body, clientMessageId = createClientMessageId()) => {
         const normalizedBody = body.trim()
         if (!routeDialogId || !normalizedBody || normalizedBody.length > 4000) return
+        if (connectionStatus !== 'connected') {
+            toast({
+                title: 'Нет подключения',
+                description: 'Дождитесь восстановления соединения и повторите отправку.',
+                variant: 'destructive',
+            })
+            return
+        }
 
         const payload = { clientMessageId, body: normalizedBody }
         dispatch({
@@ -283,26 +300,34 @@ function ChatsPage() {
         requestAnimationFrame(() => scrollToBottom())
 
         if (!publishMessage(routeDialogId, payload)) {
-            try {
-                const saved = await sendChatMessageRest(routeDialogId, payload)
-                dispatch({ type: 'MESSAGES_LOADED', dialogId: routeDialogId, messages: [saved] })
-            } catch (error) {
-                dispatch({ type: 'MESSAGE_FAILED', dialogId: routeDialogId, clientMessageId })
-                toast({ title: 'Сообщение не отправлено', description: error.message, variant: 'destructive' })
-                return
-            }
+            dispatch({ type: 'MESSAGE_FAILED', dialogId: routeDialogId, clientMessageId })
+            toast({
+                title: 'Сообщение не отправлено',
+                description: 'Соединение прервалось. Повторите отправку после переподключения.',
+                variant: 'destructive',
+            })
+            return
         }
 
         scheduleReconciliation(routeDialogId, clientMessageId)
-    }, [currentUser?.id, publishMessage, routeDialogId, scheduleReconciliation, scrollToBottom, toast])
+    }, [connectionStatus, currentUser?.id, publishMessage, routeDialogId, scheduleReconciliation, scrollToBottom, toast])
 
     const loadOlderMessages = useCallback(async () => {
-        if (!routeDialogId || state.messagesLoading || !state.hasOlderByDialogId[routeDialogId]) return
+        if (
+            !routeDialogId ||
+            olderMessagesLoadingRef.current ||
+            state.messagesLoading ||
+            !state.hasOlderByDialogId[routeDialogId]
+        ) return
 
         const firstServerMessage = messages.find((message) => message.id)
         if (!firstServerMessage) return
 
-        previousScrollHeightRef.current = messageListRef.current?.scrollHeight || 0
+        const list = messageListRef.current
+        previousScrollMetricsRef.current = list
+            ? { scrollHeight: list.scrollHeight, scrollTop: list.scrollTop }
+            : null
+        olderMessagesLoadingRef.current = true
         dispatch({ type: 'MESSAGES_LOADING' })
 
         try {
@@ -313,6 +338,8 @@ function ChatsPage() {
             dispatch({ type: 'MESSAGES_LOADED', dialogId: routeDialogId, messages: older, prepend: true, trackOlder: true })
         } catch (error) {
             dispatch({ type: 'MESSAGES_ERROR', message: error.message || 'Не удалось загрузить старые сообщения' })
+        } finally {
+            olderMessagesLoadingRef.current = false
         }
     }, [messages, routeDialogId, state.hasOlderByDialogId, state.messagesLoading])
 
@@ -327,30 +354,40 @@ function ChatsPage() {
     }, [routeDialogId])
 
     useEffect(() => {
-        if (!lastEvent) return
+        events.forEach(({ sequence, event }) => {
+            if (sequence <= handledEventSequenceRef.current) return
+            handledEventSequenceRef.current = sequence
 
-        if (lastEvent.type === 'MESSAGE_CREATED') {
-            dispatch({ type: 'MESSAGES_LOADED', dialogId: lastEvent.dialogId, messages: [lastEvent.payload] })
-
-            if (lastEvent.dialogId === routeDialogId) {
-                const isIncoming = lastEvent.payload.senderUserId !== currentUser?.id
-                if (!isIncoming || shouldStickToBottomRef.current) {
-                    requestAnimationFrame(() => scrollToBottom())
-                } else {
-                    requestAnimationFrame(() => setShowJumpToNew(true))
+            if (event.type === 'MESSAGE_CREATED') {
+                const timer = reconcileTimersRef.current.get(event.payload.clientMessageId)
+                if (timer) {
+                    clearTimeout(timer)
+                    reconcileTimersRef.current.delete(event.payload.clientMessageId)
                 }
-                if (isIncoming) void markLatestAsRead(routeDialogId, [lastEvent.payload])
-            }
-            return
-        }
+                dispatch({ type: 'MESSAGES_LOADED', dialogId: event.dialogId, messages: [event.payload] })
 
-        if (lastEvent.type === 'DIALOG_UPDATED') {
-            dispatch({ type: 'DIALOG_UPSERT', dialog: lastEvent.payload })
-            if (lastEvent.dialogId === routeDialogId) {
-                dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog: lastEvent.payload })
+                if (event.dialogId === routeDialogId) {
+                    const isIncoming = event.payload.senderUserId !== currentUser?.id
+                    if (!isIncoming || shouldStickToBottomRef.current) {
+                        requestAnimationFrame(() => scrollToBottom())
+                    } else {
+                        requestAnimationFrame(() => setShowJumpToNew(true))
+                    }
+                    if (isIncoming && shouldStickToBottomRef.current) {
+                        void markLatestAsRead(routeDialogId, [event.payload])
+                    }
+                }
+                return
             }
-        }
-    }, [currentUser?.id, lastEvent, markLatestAsRead, routeDialogId, scrollToBottom])
+
+            if (event.type === 'DIALOG_UPDATED') {
+                dispatch({ type: 'DIALOG_UPSERT', dialog: event.payload })
+                if (event.dialogId === routeDialogId) {
+                    dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog: event.payload })
+                }
+            }
+        })
+    }, [currentUser?.id, events, markLatestAsRead, routeDialogId, scrollToBottom])
 
     useEffect(() => {
         if (connectionStatus === 'connected' && routeDialogId) {
@@ -360,11 +397,30 @@ function ChatsPage() {
     }, [connectionStatus])
 
     useEffect(() => {
-        const list = messageListRef.current
-        if (!list || previousScrollHeightRef.current === 0) return
+        if (!routeDialogId) return undefined
 
-        list.scrollTop += list.scrollHeight - previousScrollHeightRef.current
-        previousScrollHeightRef.current = 0
+        const reconcileVisibleDialog = () => {
+            if (document.visibilityState === 'visible') {
+                void reconcileDialog(routeDialogId)
+            }
+        }
+
+        document.addEventListener('visibilitychange', reconcileVisibleDialog)
+        window.addEventListener('focus', reconcileVisibleDialog)
+
+        return () => {
+            document.removeEventListener('visibilitychange', reconcileVisibleDialog)
+            window.removeEventListener('focus', reconcileVisibleDialog)
+        }
+    }, [reconcileDialog, routeDialogId])
+
+    useLayoutEffect(() => {
+        const list = messageListRef.current
+        const previousMetrics = previousScrollMetricsRef.current
+        if (!list || !previousMetrics) return
+
+        list.scrollTop = previousMetrics.scrollTop + list.scrollHeight - previousMetrics.scrollHeight
+        previousScrollMetricsRef.current = null
     }, [messages.length])
 
     useEffect(() => () => {
@@ -390,8 +446,15 @@ function ChatsPage() {
     const connectionLabel = {
         connecting: 'Подключение...',
         reconnecting: 'Переподключение...',
-        error: 'Нет подключения. Сообщение будет отправлено через REST.',
+        error: 'Нет подключения. Отправка станет доступна после переподключения.',
+        idle: 'Нет подключения. Обновите страницу или войдите заново.',
     }[connectionStatus]
+    const canCompose = state.activeDialog?.canSend && connectionStatus === 'connected'
+    const composerPlaceholder = !state.activeDialog?.canSend
+        ? 'Отправка недоступна для этого диалога'
+        : connectionStatus !== 'connected'
+            ? 'Ожидаем подключения...'
+            : 'Введите сообщение'
 
     return (
         <DashboardLayout title="Сообщения" subtitle="Общайтесь по вашим откликам">
@@ -465,10 +528,18 @@ function ChatsPage() {
                                 className="chats__messages"
                                 onScroll={(event) => {
                                     const list = event.currentTarget
-                                    shouldStickToBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80
+                                    const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80
+                                    shouldStickToBottomRef.current = isNearBottom
+                                    if (isNearBottom) {
+                                        setShowJumpToNew(false)
+                                        void markLatestAsRead(routeDialogId, messages)
+                                    }
                                     if (list.scrollTop < 60) void loadOlderMessages()
                                 }}
                             >
+                                {state.messagesLoading && messages.length > 0 && (
+                                    <p className="chats__history-loading">Загружаем историю...</p>
+                                )}
                                 {!state.messagesLoading && messages.length === 0 && (
                                     <p className="chats__empty-thread">В диалоге пока нет сообщений</p>
                                 )}
@@ -486,7 +557,10 @@ function ChatsPage() {
                                                 {message.failed && ' · не отправлено'}
                                             </span>
                                             {message.failed && (
-                                                <button onClick={() => void sendMessage(message.body, message.clientMessageId)}>
+                                                <button
+                                                    disabled={connectionStatus !== 'connected'}
+                                                    onClick={() => void sendMessage(message.body, message.clientMessageId)}
+                                                >
                                                     Повторить
                                                 </button>
                                             )}
@@ -496,7 +570,13 @@ function ChatsPage() {
                             </div>
 
                             {showJumpToNew && (
-                                <button className="chats__jump" onClick={() => scrollToBottom()}>
+                                <button
+                                    className="chats__jump"
+                                    onClick={() => {
+                                        scrollToBottom()
+                                        void markLatestAsRead(routeDialogId, messages)
+                                    }}
+                                >
                                     Новые сообщения
                                 </button>
                             )}
@@ -511,10 +591,10 @@ function ChatsPage() {
                                 <Textarea
                                     value={draft}
                                     onChange={(event) => setDraft(event.target.value)}
-                                    placeholder={state.activeDialog?.canSend ? 'Введите сообщение' : 'Отправка недоступна'}
+                                    placeholder={composerPlaceholder}
                                     rows={2}
                                     maxLength={4000}
-                                    disabled={!state.activeDialog?.canSend}
+                                    disabled={!canCompose}
                                     onKeyDown={(event) => {
                                         if (event.key === 'Enter' && !event.shiftKey) {
                                             event.preventDefault()
@@ -526,7 +606,7 @@ function ChatsPage() {
                                     <span>{draft.length}/4000</span>
                                     <Button
                                         type="submit"
-                                        disabled={!state.activeDialog?.canSend || !draft.trim()}
+                                        disabled={!canCompose || !draft.trim()}
                                     >
                                         Отправить
                                     </Button>
