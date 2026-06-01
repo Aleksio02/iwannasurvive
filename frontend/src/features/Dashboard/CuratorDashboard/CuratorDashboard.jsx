@@ -545,6 +545,11 @@ function CuratorDashboard() {
             setEntityAttachments(attachments || [])
             return data
         } catch (error) {
+            if (silent) {
+                console.warn('Silent task detail refresh failed:', error)
+                return null
+            }
+
             console.error('Failed to load task detail:', error)
             toast({
                 title: 'Ошибка',

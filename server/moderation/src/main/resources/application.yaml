@@ -59,11 +59,13 @@ app:
   ai:
     moderation:
       enabled: ${AI_MODERATION_ENABLED:false}
-      prompt-version: ai-moderation-v1
+      prompt-version: ai-moderation-v2
       max-input-chars: 12000
       max-reasons: 6
       max-highlighted-fields: 8
       async-timeout-ms: 10000
+      processing-timeout-ms: ${AI_MODERATION_PROCESSING_TIMEOUT_MS:60000}
+      recovery-interval-ms: ${AI_MODERATION_RECOVERY_INTERVAL_MS:60000}
       supported:
         opportunity-review: true
         applicant-profile-review: true
