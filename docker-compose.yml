@@ -2,11 +2,13 @@
 services:
   postgres:
     container_name: tramplin_db
-    image: postgres
+    image: postgis/postgis:17-3.5
     environment:
       POSTGRES_DB: tramplin
       POSTGRES_USER: tramplin_adm
       POSTGRES_PASSWORD: tramplin_adm
+    ports:
+      - "5555:5432"
 
     volumes:
       - tramplin_data:/var/lib/postgresql/data/
