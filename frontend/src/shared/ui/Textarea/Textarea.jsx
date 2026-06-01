@@ -8,6 +8,7 @@ function Textarea({
                       rows = 3,
                       required = false,
                       className = '',
+                      ...rest
                   }) {
     return (
         <textarea
@@ -18,6 +19,7 @@ function Textarea({
             rows={rows}
             required={required}
             className={`textarea ${className}`.trim()}
+            {...rest}
         />
     )
 }

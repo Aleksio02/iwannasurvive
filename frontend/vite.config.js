@@ -103,6 +103,17 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/api/chats': {
+          target: interactionTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/ws': {
+          target: interactionTarget,
+          changeOrigin: true,
+          secure: false,
+          ws: true,
+        },
 
         '/api/moderation': {
           target: moderationTarget,
