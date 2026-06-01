@@ -199,7 +199,6 @@ class ModerationQueryServiceImpl(
                         runCatching { objectMapper.treeToValue(node, AiModerationFieldIssue::class.java) }.getOrNull()
                     },
                     moderatorHint = analysis.moderatorHint,
-                    modelUri = analysis.modelUri,
                     modelVersion = analysis.modelVersion,
                     promptVersion = analysis.promptVersion,
                     createdAt = analysis.createdAt,
