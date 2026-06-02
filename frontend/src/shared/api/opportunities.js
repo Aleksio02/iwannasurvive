@@ -61,10 +61,17 @@ export async function listPersonalizedOpportunityRecommendations(params = {}) {
         limit: params.limit ?? 6,
     })
 
-    return httpJson(`${API_BASE}/opportunities/recommendations/personalized?${query}`, {
+    const data = await httpJson(`${API_BASE}/opportunities/recommendations/personalized?${query}`, {
         dedupe: true,
         cacheTtlMs: 30_000,
     })
+
+    return {
+        ...data,
+        items: Array.isArray(data?.items) ? data.items : [],
+        emptyReason: data?.emptyReason || null,
+        profileHints: data?.profileHints || null,
+    }
 }
 
 export async function listOpportunityMap(params = {}) {

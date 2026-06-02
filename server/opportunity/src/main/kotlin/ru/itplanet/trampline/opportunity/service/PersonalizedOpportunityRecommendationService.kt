@@ -18,7 +18,9 @@ import ru.itplanet.trampline.opportunity.dao.specification.OpportunitySpecificat
 import ru.itplanet.trampline.opportunity.model.PersonalizedOpportunityRecommendationItem
 import ru.itplanet.trampline.opportunity.model.PersonalizedOpportunityRecommendationPage
 import ru.itplanet.trampline.opportunity.model.PersonalizedRecommendationExplanation
+import ru.itplanet.trampline.opportunity.model.RecommendationEmptyReason
 import ru.itplanet.trampline.opportunity.model.RecommendationExplanationSource
+import ru.itplanet.trampline.opportunity.model.RecommendationProfileHints
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
@@ -38,6 +40,21 @@ class PersonalizedOpportunityRecommendationService(
         val limit = requestedLimit.coerceAtMost(properties.maxRecommendations.coerceAtLeast(1))
         val applicant = profileServiceClient.getApplicantRecommendationContext(userId)
         val signals = loadSignals(userId)
+        val profileHints = RecommendationProfileHints(
+            hasSkills = applicant.skills.isNotEmpty(),
+            hasInterests = applicant.interests.isNotEmpty(),
+            hasCity = applicant.cityId != null || !applicant.cityName.isNullOrBlank(),
+        )
+        if (applicant.skills.isEmpty() && applicant.interests.isEmpty() && signals.favoriteOpportunityIds.isEmpty()) {
+            return PersonalizedOpportunityRecommendationPage(
+                items = emptyList(),
+                limit = limit,
+                totalCandidates = 0,
+                generatedAt = now,
+                emptyReason = RecommendationEmptyReason.PROFILE_SIGNALS_MISSING,
+                profileHints = profileHints,
+            )
+        }
         val candidates = opportunityDao.findAll(
             OpportunitySpecification.recommendationCandidates(now),
             PageRequest.of(
@@ -46,20 +63,30 @@ class PersonalizedOpportunityRecommendationService(
                 Sort.by(Sort.Direction.DESC, "publishedAt"),
             ),
         ).content.filterNot { checkNotNull(it.id) in signals.respondedOpportunityIds }
+        if (candidates.isEmpty()) {
+            return PersonalizedOpportunityRecommendationPage(
+                items = emptyList(),
+                limit = limit,
+                totalCandidates = 0,
+                generatedAt = now,
+                emptyReason = RecommendationEmptyReason.NO_ACTIVE_CANDIDATES,
+                profileHints = profileHints,
+            )
+        }
 
         val scored = candidates.map { opportunity ->
             opportunity to scoreCalculator.calculate(opportunity, applicant, signals, now)
-        }.sortedWith(
-            compareByDescending<Pair<OpportunityDto, OpportunityRecommendationScore>> { it.second.score }
-                .thenByDescending { it.first.publishedAt },
-        )
-
-        val qualified = scored.filter { (_, score) ->
-            score.hasPersonalSignal && score.score >= properties.minScore.coerceAtLeast(0)
         }
 
-        return PersonalizedOpportunityRecommendationPage(
-            items = qualified.take(limit).map { (opportunity, score) ->
+        val qualified = scored
+            .filter { (_, score) -> score.isEligible }
+            .filter { (_, score) -> score.score >= properties.minScore.coerceAtLeast(0) }
+            .sortedWith(
+                compareByDescending<Pair<OpportunityDto, OpportunityRecommendationScore>> { it.second.score }
+                    .thenByDescending { it.first.publishedAt },
+            )
+
+        val items = qualified.take(limit).map { (opportunity, score) ->
                 val fallback = PersonalizedRecommendationExplanation(
                     source = RecommendationExplanationSource.RULES,
                     summary = rulesSummary(score),
@@ -99,10 +126,15 @@ class PersonalizedOpportunityRecommendationService(
                     ),
                     isFavorite = score.isFavorite,
                 )
-            },
+            }
+
+        return PersonalizedOpportunityRecommendationPage(
+            items = items,
             limit = limit,
             totalCandidates = candidates.size,
             generatedAt = now,
+            emptyReason = if (items.isEmpty()) RecommendationEmptyReason.NO_ELIGIBLE_MATCHES else null,
+            profileHints = profileHints,
         )
     }
 

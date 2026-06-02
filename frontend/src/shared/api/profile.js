@@ -1002,6 +1002,16 @@ export async function getApplicantProfileWorkspace(userId) {
 
 export async function updateApplicantProfile(profile) {
     const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+    const skillTagIds = Array.isArray(profile.skillTagIds)
+        ? profile.skillTagIds
+        : Array.isArray(profile.skills)
+            ? profile.skills.map((tag) => tag.id).filter(Boolean)
+            : undefined
+    const interestTagIds = Array.isArray(profile.interestTagIds)
+        ? profile.interestTagIds
+        : Array.isArray(profile.interests)
+            ? profile.interests.map((tag) => tag.id).filter(Boolean)
+            : undefined
 
     const payload = {
         firstName: profile.firstName || '',
@@ -1023,8 +1033,8 @@ export async function updateApplicantProfile(profile) {
         contactsVisibility: profile.contactsVisibility || 'AUTHENTICATED',
         openToWork: profile.openToWork ?? true,
         openToEvents: profile.openToEvents ?? true,
-        skillTagIds: Array.isArray(profile.skillTagIds) ? profile.skillTagIds : undefined,
-        interestTagIds: Array.isArray(profile.interestTagIds) ? profile.interestTagIds : undefined,
+        skillTagIds,
+        interestTagIds,
     }
 
     const data = await apiRequest(`${API_BASE}/profile/applicant?currentUser=${currentUser}`, {

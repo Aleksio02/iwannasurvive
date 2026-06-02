@@ -7,6 +7,8 @@ data class PersonalizedOpportunityRecommendationPage(
     val limit: Int,
     val totalCandidates: Int,
     val generatedAt: OffsetDateTime,
+    val emptyReason: RecommendationEmptyReason? = null,
+    val profileHints: RecommendationProfileHints? = null,
 )
 
 data class PersonalizedOpportunityRecommendationItem(
@@ -39,3 +41,15 @@ enum class RecommendationMatchLevel {
     MEDIUM,
     LOW,
 }
+
+enum class RecommendationEmptyReason {
+    PROFILE_SIGNALS_MISSING,
+    NO_ELIGIBLE_MATCHES,
+    NO_ACTIVE_CANDIDATES,
+}
+
+data class RecommendationProfileHints(
+    val hasSkills: Boolean,
+    val hasInterests: Boolean,
+    val hasCity: Boolean,
+)
