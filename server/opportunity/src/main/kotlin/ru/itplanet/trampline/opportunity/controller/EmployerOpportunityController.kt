@@ -19,12 +19,15 @@ import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
+import ru.itplanet.trampline.opportunity.ai.service.AiTagSuggestionService
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityCard
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityEditPayload
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityListItem
 import ru.itplanet.trampline.opportunity.model.OpportunityPage
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityRequest
+import ru.itplanet.trampline.opportunity.model.request.AiTagSuggestionRequest
 import ru.itplanet.trampline.opportunity.model.request.GetEmployerOpportunityListRequest
+import ru.itplanet.trampline.opportunity.model.response.AiTagSuggestionResponse
 import ru.itplanet.trampline.opportunity.service.EmployerOpportunityMediaService
 import ru.itplanet.trampline.opportunity.service.EmployerOpportunityModerationService
 import ru.itplanet.trampline.opportunity.service.EmployerOpportunityService
@@ -36,6 +39,7 @@ class EmployerOpportunityController(
     private val employerOpportunityService: EmployerOpportunityService,
     private val employerOpportunityModerationService: EmployerOpportunityModerationService,
     private val employerOpportunityMediaService: EmployerOpportunityMediaService,
+    private val aiTagSuggestionService: AiTagSuggestionService,
 ) {
 
     @PostMapping
@@ -69,6 +73,14 @@ class EmployerOpportunityController(
         @CurrentUser currentUserId: Long,
     ): EmployerOpportunityCard {
         return employerOpportunityModerationService.update(currentUserId, id, request)
+    }
+
+    @PostMapping("/ai/suggest-tags")
+    fun suggestTags(
+        @Valid @RequestBody request: AiTagSuggestionRequest,
+        @CurrentUser currentUserId: Long,
+    ): AiTagSuggestionResponse {
+        return aiTagSuggestionService.suggest(request)
     }
 
     @PostMapping(

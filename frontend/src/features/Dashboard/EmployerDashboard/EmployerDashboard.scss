@@ -1327,6 +1327,24 @@ $section-title-size: 19px;
   }
 }
 
+.employer-create-form__section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.employer-create-form__section-hint {
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.employer-create-form__suggest-tags-button {
+  width: auto;
+  flex-shrink: 0;
+}
+
 .employer-create-form__actions,
 .modal__actions {
   display: flex;
@@ -1820,6 +1838,10 @@ $section-title-size: 19px;
 }
 
 @media (max-width: 640px) {
+  .employer-create-form__suggest-tags-button {
+    width: 100%;
+  }
+
   .employer-opportunities__actions {
     gap: 8px;
 

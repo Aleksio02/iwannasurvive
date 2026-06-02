@@ -50,6 +50,24 @@ profile:
 internal-api:
   api-key: ${INTERNAL_API_KEY}
 
+app:
+  ai:
+    tag-suggestions:
+      enabled: ${AI_TAG_SUGGESTIONS_ENABLED:false}
+      prompt-version: ai-tag-suggestions-v1
+      max-input-chars: 6000
+      max-candidate-tags: 300
+      max-suggestions: 7
+      timeout-ms: 10000
+    yandex-gpt:
+      endpoint: ${YANDEX_AI_ENDPOINT:https://llm.api.cloud.yandex.net/foundationModels/v1/completion}
+      folder-id: ${YANDEX_AI_FOLDER_ID:}
+      api-key: ${YANDEX_AI_API_KEY:}
+      api-key-id: ${YANDEX_AI_API_KEY_ID:}
+      model-uri: ${YANDEX_AI_MODEL_URI:}
+      temperature: 0.1
+      max-tokens: 1200
+
 springdoc:
   paths-to-match: /api/**
   api-docs:

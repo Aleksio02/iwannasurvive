@@ -118,7 +118,7 @@ export async function listEmployerOpportunities(params = {}) {
             dedupe: true,
             cacheTtlMs: 7_000,
         })
-    } catch (error) {
+    } catch {
         const fallbackQuery = toQuery({ currentUserId })
 
         return httpJson(`${API_BASE}/employer/opportunities?${fallbackQuery}`, {
@@ -160,6 +160,16 @@ export async function updateEmployerOpportunity(id, payload) {
     })
     clearHttpGetCache('/api/employer/opportunities')
     return data
+}
+
+export async function suggestOpportunityTags(payload) {
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
+
+    return httpJson(`${API_BASE}/employer/opportunities/ai/suggest-tags?${query}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
 }
 
 export async function closeEmployerOpportunity(id) {

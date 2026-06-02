@@ -21,11 +21,13 @@ function EmployerOpportunityForm({
                                      opportunityForm,
                                      errors,
                                      techTags,
+                                     isSuggestingTags,
                                      employerLocations,
                                      resourceRows,
                                      setResourceRows,
                                      onResetOpportunityForm,
                                      onSaveOpportunity,
+                                     onSuggestTags,
                                      onChangeOpportunityForm,
                                      media,
                                      mediaOpportunityId,
@@ -279,7 +281,21 @@ function EmployerOpportunityForm({
             </div>
 
             <div className="employer-create-form__field">
-                <Label>Теги</Label>
+                <div className="employer-create-form__section-header">
+                    <div>
+                        <Label>Теги</Label>
+                        <p className="field-hint employer-create-form__section-hint">
+                            Выберите подходящие навыки или подберите их по описанию.
+                        </p>
+                    </div>
+                    <Button
+                        className="button--outline employer-create-form__suggest-tags-button"
+                        onClick={onSuggestTags}
+                        disabled={isLoading || isSuggestingTags}
+                    >
+                        {isSuggestingTags ? 'Подбираем...' : 'Предложить теги с помощью ИИ'}
+                    </Button>
+                </div>
                 <div className="employer-opportunities__skills">
                     {techTags.map((tag) => (
                         <button
