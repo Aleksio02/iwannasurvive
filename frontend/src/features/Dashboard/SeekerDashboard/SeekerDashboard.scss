@@ -276,6 +276,22 @@ $transition: all 0.2s ease;
   }
 }
 
+.profile-overview-card__editor {
+  display: grid;
+  gap: 16px;
+}
+
+.profile-overview-card__status {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-overview-card__editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 @media (max-width: 900px) {
   .profile-overview-grid {
     grid-template-columns: 1fr;
@@ -289,6 +305,14 @@ $transition: all 0.2s ease;
 
   .profile-overview-card__action {
     width: 100%;
+  }
+
+  .profile-overview-card__editor-actions {
+    display: grid;
+
+    button {
+      width: 100%;
+    }
   }
 }
 

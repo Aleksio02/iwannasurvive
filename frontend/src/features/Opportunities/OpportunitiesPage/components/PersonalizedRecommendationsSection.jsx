@@ -56,7 +56,7 @@ function PersonalizedRecommendationsSection({
                         <div className="personalized-recommendations__state">
                             <strong>Пока нет рекомендаций</strong>
                             <span>Добавьте навыки, чтобы подборка стала точнее.</span>
-                            <Link href="/profile/edit?focus=skills&returnTo=/" className="personalized-recommendations__profile-link">
+                            <Link href="/seeker?edit=skills" className="personalized-recommendations__profile-link">
                                 Добавить навыки
                             </Link>
                         </div>
