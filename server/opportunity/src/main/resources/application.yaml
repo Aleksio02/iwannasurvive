@@ -76,6 +76,7 @@ app:
       prompt-version: ai-recommendation-explanations-v1
       max-candidates: 120
       max-recommendations: 6
+      min-score: ${AI_RECOMMENDATION_MIN_SCORE:45}
       max-reasons: 3
       max-improvement-tips: 3
     yandex-gpt:

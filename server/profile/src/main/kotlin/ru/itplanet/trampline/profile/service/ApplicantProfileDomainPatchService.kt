@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.commons.dao.CityDao
 import ru.itplanet.trampline.commons.exception.ApiException
 import ru.itplanet.trampline.commons.model.Tag
+import ru.itplanet.trampline.commons.model.enums.TagCategory
 import ru.itplanet.trampline.commons.model.file.FileAssetVisibility
 import ru.itplanet.trampline.commons.model.file.FileAttachmentEntityType
 import ru.itplanet.trampline.commons.model.file.FileAttachmentRole
@@ -99,6 +100,9 @@ class ApplicantProfileDomainPatchService(
         val requestedSkillTagIds = request.skillTagIds?.distinct()
         val requestedInterestTagIds = request.interestTagIds?.distinct()
 
+        validateTagCount(requestedSkillTagIds, MAX_SKILL_TAGS, "Можно выбрать до $MAX_SKILL_TAGS навыков", "applicant_skill_tag_invalid")
+        validateTagCount(requestedInterestTagIds, MAX_INTEREST_TAGS, "Можно выбрать до $MAX_INTEREST_TAGS интересов", "applicant_interest_tag_invalid")
+
         if (requestedSkillTagIds != null || requestedInterestTagIds != null) {
             val tagIdsToValidate = buildSet {
                 requestedSkillTagIds?.let(::addAll)
@@ -114,6 +118,8 @@ class ApplicantProfileDomainPatchService(
                     relationType = ApplicantTagRelationType.SKILL,
                     tagIds = it,
                     activeTagsById = activeTagsById,
+                    expectedCategory = TagCategory.TECH,
+                    invalidCode = "applicant_skill_tag_invalid",
                 )
             }
 
@@ -123,6 +129,8 @@ class ApplicantProfileDomainPatchService(
                     relationType = ApplicantTagRelationType.INTEREST,
                     tagIds = it,
                     activeTagsById = activeTagsById,
+                    expectedCategory = TagCategory.DIRECTION,
+                    invalidCode = "applicant_interest_tag_invalid",
                 )
             }
         }
@@ -242,10 +250,12 @@ class ApplicantProfileDomainPatchService(
         relationType: ApplicantTagRelationType,
         tagIds: List<Long>,
         activeTagsById: Map<Long, Tag>,
+        expectedCategory: TagCategory,
+        invalidCode: String,
     ) {
         val normalizedTagIds = tagIds.distinct()
 
-        val invalidTagIds = normalizedTagIds.filterNot { activeTagsById.containsKey(it) }
+        val invalidTagIds = normalizedTagIds.filter { activeTagsById[it]?.category != expectedCategory }
         if (invalidTagIds.isNotEmpty()) {
             val relationLabel = when (relationType) {
                 ApplicantTagRelationType.SKILL -> "навыки"
@@ -253,8 +263,8 @@ class ApplicantProfileDomainPatchService(
             }
 
             throw ProfileBadRequestException(
-                message = "Среди выбранных тегов для раздела \"$relationLabel\" есть несуществующие, неактивные или неодобренные: $invalidTagIds",
-                code = "applicant_tags_not_available",
+                message = "Среди выбранных тегов для раздела \"$relationLabel\" есть недоступные теги или теги неверной категории",
+                code = invalidCode,
             )
         }
 
@@ -276,6 +286,12 @@ class ApplicantProfileDomainPatchService(
                 )
             },
         )
+    }
+
+    private fun validateTagCount(tagIds: List<Long>?, maxCount: Int, message: String, code: String) {
+        if (tagIds != null && tagIds.size > maxCount) {
+            throw ProfileBadRequestException(message = message, code = code)
+        }
     }
 
     private fun buildApplicantProfile(
@@ -441,6 +457,8 @@ class ApplicantProfileDomainPatchService(
     )
 
     private companion object {
+        private const val MAX_SKILL_TAGS = 12
+        private const val MAX_INTEREST_TAGS = 8
         private val logger = LoggerFactory.getLogger(ApplicantProfileDomainPatchService::class.java)
     }
 }

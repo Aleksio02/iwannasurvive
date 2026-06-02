@@ -14,6 +14,7 @@ data class PersonalizedOpportunityRecommendationItem(
     val score: Int,
     val matchLevel: RecommendationMatchLevel,
     val matchedSkills: List<String>,
+    val matchedInterests: List<String>,
     val missingSkills: List<String>,
     val reasons: List<String>,
     val improvementTips: List<String>,

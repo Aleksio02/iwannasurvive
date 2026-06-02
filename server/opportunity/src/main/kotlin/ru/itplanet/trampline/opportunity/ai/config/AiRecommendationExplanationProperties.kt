@@ -8,6 +8,7 @@ data class AiRecommendationExplanationProperties(
     val promptVersion: String = "ai-recommendation-explanations-v1",
     val maxCandidates: Int = 120,
     val maxRecommendations: Int = 6,
+    val minScore: Int = 45,
     val maxReasons: Int = 3,
     val maxImprovementTips: Int = 3,
 )
