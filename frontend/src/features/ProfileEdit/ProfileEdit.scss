@@ -19,10 +19,32 @@
   transition: box-shadow 0.2s ease;
 }
 
+.profile-edit__back {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 auto 12px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+
+  &:hover {
+    color: var(--color-primary-dark);
+  }
+}
+
 .profile-edit-form {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.profile-edit-form__actions {
+  display: grid;
+  gap: 10px;
 }
 
 .profile-edit-form__field {
