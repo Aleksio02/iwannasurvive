@@ -4,6 +4,7 @@ import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import ru.itplanet.trampline.commons.model.profile.InternalEmployerOpportunityAccessResponse
+import ru.itplanet.trampline.commons.model.profile.InternalApplicantRecommendationContextResponse
 
 @FeignClient(
     name = "opportunity-profile-service-client",
@@ -11,6 +12,10 @@ import ru.itplanet.trampline.commons.model.profile.InternalEmployerOpportunityAc
     configuration = [InternalServiceFeignConfig::class],
 )
 interface ProfileServiceClient {
+    @GetMapping("/internal/applicant-profiles/{userId}/recommendation-context")
+    fun getApplicantRecommendationContext(
+        @PathVariable userId: Long,
+    ): InternalApplicantRecommendationContextResponse
 
     @GetMapping("/internal/employer-profiles/{employerUserId}/opportunity-access")
     fun getEmployerOpportunityAccess(

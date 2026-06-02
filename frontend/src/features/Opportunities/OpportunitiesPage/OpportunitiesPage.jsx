@@ -9,6 +9,7 @@ import { useToast } from '@/shared/hooks/use-toast'
 import {
     listOpportunityMap,
     listOpportunities,
+    listPersonalizedOpportunityRecommendations,
     listNearbyOpportunities,
     listTags,
     getOpportunity,
@@ -35,6 +36,7 @@ import {
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
 import './OpportunitiesPage.scss'
+import PersonalizedRecommendationsSection from './components/PersonalizedRecommendationsSection'
 
 import locationIcon from '@/assets/icons/location.svg'
 import briefcaseIcon from '@/assets/icons/briefcase.svg'
@@ -390,6 +392,9 @@ function OpportunitiesPage() {
     const [error, setError] = useState('')
     const [focusedOpportunityId, setFocusedOpportunityId] = useState(null)
     const [tags, setTags] = useState([])
+    const [personalizedRecommendations, setPersonalizedRecommendations] = useState([])
+    const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(false)
+    const [recommendationsError, setRecommendationsError] = useState('')
 
     const [pendingMapCenter, setPendingMapCenter] = useState(null)
     const [appliedMapCenter, setAppliedMapCenter] = useState(null)
@@ -508,6 +513,39 @@ function OpportunitiesPage() {
     useEffect(() => {
         syncFavoriteOpportunities()
     }, [syncFavoriteOpportunities])
+
+    useEffect(() => {
+        let mounted = true
+
+        if (!isApplicant) {
+            setPersonalizedRecommendations([])
+            setRecommendationsError('')
+            setIsRecommendationsLoading(false)
+            return () => {
+                mounted = false
+            }
+        }
+
+        setIsRecommendationsLoading(true)
+        setRecommendationsError('')
+        listPersonalizedOpportunityRecommendations()
+            .then((data) => {
+                if (mounted) setPersonalizedRecommendations(data?.items || [])
+            })
+            .catch((requestError) => {
+                if (!mounted) return
+                console.error('Failed to load personalized recommendations:', requestError)
+                setPersonalizedRecommendations([])
+                setRecommendationsError(requestError?.message || 'Не удалось загрузить рекомендации')
+            })
+            .finally(() => {
+                if (mounted) setIsRecommendationsLoading(false)
+            })
+
+        return () => {
+            mounted = false
+        }
+    }, [isApplicant, currentUser?.id])
 
     useEffect(() => {
         const handleFavoritesUpdated = async () => {
@@ -1088,6 +1126,18 @@ function OpportunitiesPage() {
             </header>
 
             <main className="container opportunities-page__main">
+                {isApplicant && (
+                    <PersonalizedRecommendationsSection
+                        items={personalizedRecommendations}
+                        isLoading={isRecommendationsLoading}
+                        error={recommendationsError}
+                        onOpenOpportunity={(id) => navigate(`/opportunities/${id}`)}
+                        onApply={handleApply}
+                        onToggleFavorite={toggleOpportunityFavorite}
+                        favoriteOpportunities={favoriteOpportunities}
+                    />
+                )}
+
                 <section className="opportunities-page__toolbar">
                     <h2>Найдено возможностей: {visibleTotal}</h2>
 
