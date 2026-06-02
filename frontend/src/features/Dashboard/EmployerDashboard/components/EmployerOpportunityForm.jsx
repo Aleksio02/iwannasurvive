@@ -22,12 +22,18 @@ function EmployerOpportunityForm({
                                      errors,
                                      techTags,
                                      isSuggestingTags,
+                                     isGeneratingDescription,
+                                     aiDescriptionNotes,
+                                     isAiDescriptionOpen,
                                      employerLocations,
                                      resourceRows,
                                      setResourceRows,
                                      onResetOpportunityForm,
                                      onSaveOpportunity,
                                      onSuggestTags,
+                                     onChangeAiDescriptionNotes,
+                                     onToggleAiDescription,
+                                     onGenerateDescription,
                                      onChangeOpportunityForm,
                                      media,
                                      mediaOpportunityId,
@@ -40,6 +46,11 @@ function EmployerOpportunityForm({
     const isVerificationPending = verificationState === 'PENDING'
     const isVerificationRejected = verificationState === 'REJECTED'
     const isVerificationApproved = verificationState === 'APPROVED'
+    const hasExistingDescription = Boolean(
+        opportunityForm.shortDescription?.trim() ||
+        opportunityForm.fullDescription?.trim() ||
+        opportunityForm.requirements?.trim()
+    )
 
     return (
         <div className="employer-create-form">
@@ -165,6 +176,53 @@ function EmployerOpportunityForm({
                         placeholder="Будет подставлен из офиса"
                     />
                 </div>
+            </div>
+
+            <div className="employer-create-form__ai-description-card">
+                <div className="employer-create-form__ai-description-header">
+                    <div className="employer-create-form__ai-description-copy">
+                        <h3 className="employer-create-form__ai-description-title">Помочь заполнить описание с ИИ</h3>
+                        <p className="employer-create-form__ai-description-text">
+                            ИИ подготовит краткое описание, полное описание и требования. Результат можно отредактировать.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        className="button button--outline employer-create-form__ai-description-toggle"
+                        aria-expanded={isAiDescriptionOpen}
+                        aria-controls="ai-description-panel"
+                        onClick={onToggleAiDescription}
+                        disabled={isGeneratingDescription}
+                    >
+                        {isAiDescriptionOpen ? 'Свернуть' : 'Раскрыть'}
+                    </button>
+                </div>
+                {isAiDescriptionOpen && (
+                    <div id="ai-description-panel" className="employer-create-form__ai-description-body">
+                        <div className="employer-create-form__field">
+                            <Label>Тезисы для ИИ</Label>
+                            <Textarea
+                                rows={3}
+                                maxLength={2000}
+                                value={aiDescriptionNotes}
+                                onChange={(e) => onChangeAiDescriptionNotes(e.target.value)}
+                                placeholder="Например: стажировка 3 месяца, Kotlin, Spring Boot, наставник, code review"
+                            />
+                        </div>
+                        {hasExistingDescription && (
+                            <p className="employer-create-form__ai-description-warning">
+                                Новая генерация может заменить текущий текст в описании и требованиях.
+                            </p>
+                        )}
+                        <Button
+                            className="button--outline employer-create-form__ai-description-generate"
+                            onClick={onGenerateDescription}
+                            disabled={isLoading || isGeneratingDescription}
+                        >
+                            {isGeneratingDescription ? 'Генерируем...' : 'Сгенерировать описание'}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div className="employer-create-form__field">
