@@ -66,6 +66,7 @@ class SecurityConfig(
                         request.matcher("/swagger-ui/**"),
                         request.matcher("/error")
                     ).permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/opportunities/recommendations/personalized").authenticated()
                     .requestMatchers(HttpMethod.GET, "/api/opportunities/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/tags/**").permitAll()
                     .requestMatchers(request.matcher("/internal/**")).hasRole("INTERNAL")
