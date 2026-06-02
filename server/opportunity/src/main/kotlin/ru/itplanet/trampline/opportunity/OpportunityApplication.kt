@@ -8,6 +8,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import ru.itplanet.trampline.opportunity.ai.config.AiTagSuggestionProperties
+import ru.itplanet.trampline.opportunity.ai.config.AiOpportunityDescriptionProperties
 import ru.itplanet.trampline.opportunity.ai.config.YandexGptProperties
 import ru.itplanet.trampline.opportunity.config.InternalApiProperties
 
@@ -15,6 +16,7 @@ import ru.itplanet.trampline.opportunity.config.InternalApiProperties
 @EnableConfigurationProperties(
     InternalApiProperties::class,
     AiTagSuggestionProperties::class,
+    AiOpportunityDescriptionProperties::class,
     YandexGptProperties::class,
 )
 @EnableJpaRepositories(basePackages = ["ru.itplanet.trampline.opportunity", "ru.itplanet.trampline.commons"])

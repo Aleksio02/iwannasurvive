@@ -35,7 +35,7 @@ import {
     getModerationTaskDetail,
 } from '@/shared/api/moderation'
 
-import { listTags, suggestOpportunityTags, uploadOpportunityMedia, deleteOpportunityMedia, getOpportunityModerationTask, cancelOpportunityModerationTask } from '@/shared/api/opportunities'
+import { listTags, suggestOpportunityTags, generateOpportunityDescription, uploadOpportunityMedia, deleteOpportunityMedia, getOpportunityModerationTask, cancelOpportunityModerationTask } from '@/shared/api/opportunities'
 
 import '@/features/Dashboard/DashboardBase.scss'
 import './EmployerDashboard.scss'
@@ -271,6 +271,9 @@ function EmployerDashboard() {
     const [responsesPage, setResponsesPage] = useState({ items: [], total: 0, limit: 50, offset: 0 })
     const [techTags, setTechTags] = useState([])
     const [isSuggestingTags, setIsSuggestingTags] = useState(false)
+    const [isGeneratingDescription, setIsGeneratingDescription] = useState(false)
+    const [aiDescriptionNotes, setAiDescriptionNotes] = useState('')
+    const [isAiDescriptionOpen, setIsAiDescriptionOpen] = useState(false)
 
     const [employerLocations, setEmployerLocations] = useState([])
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
@@ -779,6 +782,8 @@ function EmployerDashboard() {
         setOpportunityMode('create')
         setEditingOpportunityId(null)
         setResourceRows([createLinkRow()])
+        setAiDescriptionNotes('')
+        setIsAiDescriptionOpen(false)
         setOpportunityForm({
             title: '',
             shortDescription: '',
@@ -2339,6 +2344,68 @@ function EmployerDashboard() {
         }
     }
 
+    const handleGenerateOpportunityDescription = async () => {
+        const normalizedWorkFormat = String(opportunityForm.workFormat || '').trim().toUpperCase()
+        const selectedLocation =
+            employerLocations.find((item) => Number(item.id) === Number(opportunityForm.locationId)) || null
+        const isOfficeBasedWorkFormat = ['OFFICE', 'HYBRID'].includes(normalizedWorkFormat)
+        const payload = {
+            title: opportunityForm.title?.trim() || '',
+            type: String(opportunityForm.type || '').trim().toUpperCase() || 'VACANCY',
+            workFormat: normalizedWorkFormat || 'REMOTE',
+            employmentType: opportunityForm.employmentType || 'FULL_TIME',
+            grade: opportunityForm.grade || 'JUNIOR',
+            salaryFrom:
+                opportunityForm.salaryFrom !== '' && opportunityForm.salaryFrom != null
+                    ? Number(opportunityForm.salaryFrom)
+                    : null,
+            salaryTo:
+                opportunityForm.salaryTo !== '' && opportunityForm.salaryTo != null
+                    ? Number(opportunityForm.salaryTo)
+                    : null,
+            salaryCurrency: (opportunityForm.salaryCurrency || 'RUB').trim().toUpperCase(),
+            cityName: isOfficeBasedWorkFormat
+                ? (opportunityForm.cityName || selectedLocation?.cityName || selectedLocation?.city?.name || '').trim()
+                : null,
+            companyName: profile.companyName?.trim() || '',
+            requirements: opportunityForm.requirements?.trim() || '',
+            notes: aiDescriptionNotes.trim(),
+        }
+
+        if (!payload.title && !payload.requirements && !payload.notes) {
+            toast({
+                title: 'Добавьте данные для генерации',
+                description: 'Укажите название, требования или короткие тезисы для ИИ.',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        setIsGeneratingDescription(true)
+
+        try {
+            const response = await generateOpportunityDescription(payload)
+            setOpportunityForm((prev) => ({
+                ...prev,
+                shortDescription: response?.shortDescription || prev.shortDescription,
+                fullDescription: response?.fullDescription || prev.fullDescription,
+                requirements: response?.requirements || prev.requirements,
+            }))
+            toast({
+                title: 'Описание сгенерировано',
+                description: 'Проверьте текст перед публикацией.',
+            })
+        } catch {
+            toast({
+                title: 'Не удалось сгенерировать описание',
+                description: 'Попробуйте изменить вводные или заполните описание вручную.',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsGeneratingDescription(false)
+        }
+    }
+
     const handleOpenVerificationAttachment = (attachment) => {
         const url = attachment?.url || attachment?.file?.url
 
@@ -2483,7 +2550,12 @@ function EmployerDashboard() {
                         dashboardTabButtonRefs.current.create = node
                     }}
                     className={`dashboard-tabs__btn ${activeTab === 'create' ? 'is-active' : ''}`}
-                    onClick={() => setActiveTab('create')}
+                    onClick={() => {
+                        if (activeTab !== 'create') {
+                            setIsAiDescriptionOpen(false)
+                        }
+                        setActiveTab('create')
+                    }}
                     disabled={!isVerified}
                 >
                     {opportunityMode === 'edit' ? 'Редактирование' : 'Создать'}
@@ -2543,6 +2615,8 @@ function EmployerDashboard() {
 
                             setEditingOpportunityId(opportunity.id)
                             setOpportunityMode('edit')
+                            setAiDescriptionNotes('')
+                            setIsAiDescriptionOpen(false)
                             setOpportunityMedia(opportunity.media || [])
                             setResourceRows(
                                 opportunity.resourceLinks?.length > 0
@@ -2610,12 +2684,18 @@ function EmployerDashboard() {
                         errors={errors}
                         techTags={techTags}
                         isSuggestingTags={isSuggestingTags}
+                        isGeneratingDescription={isGeneratingDescription}
+                        aiDescriptionNotes={aiDescriptionNotes}
+                        isAiDescriptionOpen={isAiDescriptionOpen}
                         employerLocations={employerLocations}
                         resourceRows={resourceRows}
                         setResourceRows={setResourceRows}
                         onResetOpportunityForm={resetOpportunityForm}
                         onSaveOpportunity={handleSaveOpportunity}
                         onSuggestTags={handleSuggestOpportunityTags}
+                        onChangeAiDescriptionNotes={setAiDescriptionNotes}
+                        onToggleAiDescription={() => setIsAiDescriptionOpen((prev) => !prev)}
+                        onGenerateDescription={handleGenerateOpportunityDescription}
                         onChangeOpportunityForm={setOpportunityForm}
                         media={opportunityMedia}
                         mediaOpportunityId={editingOpportunityId}
