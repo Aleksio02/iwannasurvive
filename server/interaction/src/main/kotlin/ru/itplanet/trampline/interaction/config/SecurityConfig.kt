@@ -64,7 +64,7 @@ class SecurityConfig(
                     .requestMatchers(HttpMethod.GET, "/api/interaction/opportunities/**").hasRole("EMPLOYER")
                     .requestMatchers(HttpMethod.POST, "/api/interaction/**").hasRole("APPLICANT")
                     .requestMatchers(HttpMethod.DELETE, "/api/interaction/**").hasRole("APPLICANT")
-                    .requestMatchers(HttpMethod.GET, "/api/interaction/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/interaction/**").authenticated()
                     .requestMatchers(request.matcher("/internal/**")).hasRole("INTERNAL")
                     .anyRequest().authenticated()
             }

@@ -17,11 +17,17 @@ export function getChatDialogs(params = {}) {
         cursor: params.cursor,
     })
 
-    return httpJson(`${API_BASE}${query ? `?${query}` : ''}`)
+    return httpJson(`${API_BASE}${query ? `?${query}` : ''}`, {
+        dedupe: true,
+        cacheTtlMs: Number(params.cacheTtlMs) || 0,
+    })
 }
 
 export function getChatDialog(dialogId) {
-    return httpJson(`${API_BASE}/${dialogId}`)
+    return httpJson(`${API_BASE}/${dialogId}`, {
+        dedupe: true,
+        cacheTtlMs: 10_000,
+    })
 }
 
 export function getChatMessages(dialogId, params = {}) {
@@ -31,7 +37,10 @@ export function getChatMessages(dialogId, params = {}) {
         limit: params.limit ?? 50,
     })
 
-    return httpJson(`${API_BASE}/${dialogId}/messages${query ? `?${query}` : ''}`)
+    return httpJson(`${API_BASE}/${dialogId}/messages${query ? `?${query}` : ''}`, {
+        dedupe: true,
+        cacheTtlMs: params.afterMessageId ? 0 : 8_000,
+    })
 }
 
 export function sendChatMessageRest(dialogId, payload) {
@@ -87,7 +96,10 @@ export async function sendChatAttachment(dialogId, { clientMessageId, body, file
 }
 
 export function getChatAttachmentDownloadUrl(dialogId, attachmentId) {
-    return httpJson(`${API_BASE}/${dialogId}/attachments/${attachmentId}/download-url`)
+    return httpJson(`${API_BASE}/${dialogId}/attachments/${attachmentId}/download-url`, {
+        dedupe: true,
+        cacheTtlMs: 60_000,
+    })
 }
 
 export function markChatRead(dialogId, lastReadMessageId) {

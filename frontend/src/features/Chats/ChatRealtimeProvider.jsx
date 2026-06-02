@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'wouter'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
 import { ChatRealtimeContext } from './useChatRealtime'
 import {
@@ -14,7 +15,9 @@ const CHAT_ROLES = new Set(['APPLICANT', 'EMPLOYER'])
 const EVENT_BUFFER_LIMIT = 100
 
 export function ChatRealtimeProvider({ children }) {
+    const [location] = useLocation()
     const [sessionUser, setSessionUser] = useState(getSessionUser())
+    const shouldConnectRealtime = /^\/chats(?:\/|$)/.test(location)
     const [connectionStatus, setConnectionStatus] = useState('idle')
     const [events, setEvents] = useState([])
     const eventSequenceRef = useRef(0)
@@ -22,7 +25,7 @@ export function ChatRealtimeProvider({ children }) {
     useEffect(() => subscribeSessionChange(setSessionUser), [])
 
     useEffect(() => {
-        if (!sessionUser?.id || !CHAT_ROLES.has(sessionUser.role)) {
+        if (!shouldConnectRealtime || !sessionUser?.id || !CHAT_ROLES.has(sessionUser.role)) {
             return undefined
         }
 
@@ -42,7 +45,7 @@ export function ChatRealtimeProvider({ children }) {
             unsubscribeStatus()
             releaseChatRealtime()
         }
-    }, [sessionUser?.id, sessionUser?.role])
+    }, [shouldConnectRealtime, sessionUser?.id, sessionUser?.role])
 
     const value = useMemo(() => ({
         connectionStatus,

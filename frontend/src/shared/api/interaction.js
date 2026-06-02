@@ -1,4 +1,11 @@
-import { httpJson, toQuery, getSessionUserFromApi, getSessionUserIdFromApi, getRequiredCurrentUserPayload } from './http'
+import {
+    httpJson,
+    toQuery,
+    getSessionUserFromApi,
+    getSessionUserIdFromApi,
+    getRequiredCurrentUserPayload,
+    clearHttpGetCache,
+} from './http'
 
 const API_BASE = '/api/interaction'
 
@@ -42,43 +49,30 @@ export async function getContacts() {
     const userId = await getSessionUserIdFromApi()
     if (!userId) return []
 
-    const query = toQuery({ userId })
-    return httpJson(`${API_BASE}/contacts?${query}`)
+    return httpJson(`${API_BASE}/contacts`, { dedupe: true, cacheTtlMs: 15_000 })
 }
 
 export async function addContact(contactUserId) {
-    const userId = await getRequiredUserId()
-    const query = toQuery({ userId })
-
-    return httpJson(`${API_BASE}/contacts?${query}`, {
+    return httpJson(`${API_BASE}/contacts`, {
         method: 'POST',
         body: JSON.stringify({ contactUserId }),
     })
 }
 
 export async function acceptContactRequest(contactUserId) {
-    const userId = await getRequiredUserId()
-    const query = toQuery({ userId })
-
-    return httpJson(`${API_BASE}/contacts/${contactUserId}/accept?${query}`, {
+    return httpJson(`${API_BASE}/contacts/${contactUserId}/accept`, {
         method: 'PATCH',
     })
 }
 
 export async function declineContactRequest(contactUserId) {
-    const userId = await getRequiredUserId()
-    const query = toQuery({ userId })
-
-    return httpJson(`${API_BASE}/contacts/${contactUserId}/decline?${query}`, {
+    return httpJson(`${API_BASE}/contacts/${contactUserId}/decline`, {
         method: 'PATCH',
     })
 }
 
 export async function removeContact(contactUserId) {
-    const userId = await getRequiredUserId()
-    const query = toQuery({ userId })
-
-    return httpJson(`${API_BASE}/contacts/${contactUserId}?${query}`, {
+    return httpJson(`${API_BASE}/contacts/${contactUserId}`, {
         method: 'DELETE',
     })
 }
@@ -87,7 +81,16 @@ export async function getMyResponses() {
     const userId = await getSessionUserIdFromApi()
     if (!userId) return []
 
-    return httpJson(`${API_BASE}/responses/my?${toQuery({ userId })}`)
+    try {
+        return await httpJson(`${API_BASE}/responses/my`, { dedupe: true, cacheTtlMs: 15_000 })
+    } catch (error) {
+        if (error?.status !== 404) {
+            throw error
+        }
+
+        clearHttpGetCache('/api/interaction/responses')
+        throw error
+    }
 }
 
 export async function getEmployerResponses(params = {}) {
@@ -130,10 +133,7 @@ export async function getEmployerResponses(params = {}) {
 }
 
 export async function createResponse(opportunityId, applicantComment = '', coverLetter = '') {
-    const userId = await getRequiredUserId()
-    const query = toQuery({ userId })
-
-    return httpJson(`${API_BASE}/responses?${query}`, {
+    const result = await httpJson(`${API_BASE}/responses`, {
         method: 'POST',
         body: JSON.stringify({
             opportunityId,
@@ -141,62 +141,63 @@ export async function createResponse(opportunityId, applicantComment = '', cover
             coverLetter,
         }),
     })
+    clearHttpGetCache('/api/interaction/responses')
+    return result
 }
 
 export async function updateResponseStatus(responseId, status, employerComment = '') {
-    const userId = await getRequiredUserId()
-    const query = toQuery({ userId })
-
-    return httpJson(`${API_BASE}/responses/${responseId}/status?${query}`, {
+    const result = await httpJson(`${API_BASE}/responses/${responseId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status, employerComment }),
     })
+    clearHttpGetCache('/api/interaction/responses')
+    return result
 }
 
 export async function getFavorites() {
     const userId = await getSessionUserIdFromApi()
     if (!userId) return []
 
-    return httpJson(`${API_BASE}/favorites?${toQuery({ userId })}`, {
+    return httpJson(`${API_BASE}/favorites`, {
         dedupe: true,
         cacheTtlMs: 15_000,
     })
 }
 
 export async function addToFavorites(opportunityId) {
-    const userId = await getRequiredUserId()
-
-    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
+    const result = await httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}`, {
         method: 'POST',
     })
+    clearHttpGetCache('/api/interaction/favorites')
+    return result
 }
 
 export async function removeFromFavorites(opportunityId) {
-    const userId = await getRequiredUserId()
-
-    return httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}?${toQuery({ userId })}`, {
+    const result = await httpJson(`${API_BASE}/favorites/opportunities/${opportunityId}`, {
         method: 'DELETE',
     })
+    clearHttpGetCache('/api/interaction/favorites')
+    return result
 }
 
 export async function addEmployerToFavorites(employerUserId) {
-    const userId = await getRequiredUserId()
-    return httpJson(`${API_BASE}/favorites/employers/${employerUserId}?${toQuery({ userId })}`, {
+    const result = await httpJson(`${API_BASE}/favorites/employers/${employerUserId}`, {
         method: 'POST',
     })
+    clearHttpGetCache('/api/interaction/favorites')
+    return result
 }
 
 export async function removeEmployerFromFavorites(employerUserId) {
-    const userId = await getRequiredUserId()
-    return httpJson(`${API_BASE}/favorites/employers/${employerUserId}?${toQuery({ userId })}`, {
+    const result = await httpJson(`${API_BASE}/favorites/employers/${employerUserId}`, {
         method: 'DELETE',
     })
+    clearHttpGetCache('/api/interaction/favorites')
+    return result
 }
 
 export async function createRecommendation({ opportunityId, toApplicantUserId, message = '' }) {
-    const currentUser = await getRequiredCurrentUser()
-
-    return httpJson(`${API_BASE}/recommendations?${toQuery({ currentUser })}`, {
+    const result = await httpJson(`${API_BASE}/recommendations`, {
         method: 'POST',
         body: JSON.stringify({
             opportunityId,
@@ -204,35 +205,37 @@ export async function createRecommendation({ opportunityId, toApplicantUserId, m
             message,
         }),
     })
+    clearHttpGetCache('/api/interaction/recommendations')
+    return result
 }
 
 export async function getIncomingRecommendations() {
-    const currentUser = await getCurrentUserQueryValue()
-    if (!currentUser) return []
+    const userId = await getSessionUserIdFromApi()
+    if (!userId) return []
 
-    return httpJson(`${API_BASE}/recommendations/incoming?${toQuery({ currentUser })}`)
+    return httpJson(`${API_BASE}/recommendations/incoming`, { dedupe: true, cacheTtlMs: 15_000 })
 }
 
 export async function getOutgoingRecommendations() {
-    const currentUser = await getCurrentUserQueryValue()
-    if (!currentUser) return []
+    const userId = await getSessionUserIdFromApi()
+    if (!userId) return []
 
-    return httpJson(`${API_BASE}/recommendations/outgoing?${toQuery({ currentUser })}`)
+    return httpJson(`${API_BASE}/recommendations/outgoing`, { dedupe: true, cacheTtlMs: 15_000 })
 }
 
 export async function updateRecommendationStatus(recommendationId, status) {
-    const currentUser = await getRequiredCurrentUser()
-
-    return httpJson(`${API_BASE}/recommendations/${recommendationId}/status?${toQuery({ currentUser })}`, {
+    const result = await httpJson(`${API_BASE}/recommendations/${recommendationId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
     })
+    clearHttpGetCache('/api/interaction/recommendations')
+    return result
 }
 
 export async function deleteRecommendation(recommendationId) {
-    const currentUser = await getRequiredCurrentUser()
-
-    return httpJson(`${API_BASE}/recommendations/${recommendationId}?${toQuery({ currentUser })}`, {
+    const result = await httpJson(`${API_BASE}/recommendations/${recommendationId}`, {
         method: 'DELETE',
     })
+    clearHttpGetCache('/api/interaction/recommendations')
+    return result
 }

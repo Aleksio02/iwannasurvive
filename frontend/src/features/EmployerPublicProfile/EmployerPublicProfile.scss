@@ -1,0 +1,80 @@
+.employer-public-profile {
+  min-height: calc(100vh - 64px);
+  background: #f4f7f7;
+  padding: 24px 0 48px;
+}
+
+.employer-public-profile__container {
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.employer-public-profile__back-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.employer-public-profile__back,
+.employer-public-profile__owner-link {
+  border: none;
+  background: transparent;
+  color: #0f5f68;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.employer-public-profile__state {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+  color: #4b5563;
+}
+
+.employer-public-profile__state--error {
+  color: #b91c1c;
+}
+
+.employer-profile--public-view h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #111827;
+}
+
+.employer-profile--public-view .employer-profile__logo-card {
+  position: relative;
+}
+
+.employer-profile--public-view .employer-profile__logo-image.is-loading {
+  opacity: 0;
+}
+
+.employer-profile--public-view .employer-profile__logo-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+
+  .loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #1fb6aa;
+    border-radius: 50%;
+    animation: employer-logo-spin 0.8s linear infinite;
+  }
+}
+
+@keyframes employer-logo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

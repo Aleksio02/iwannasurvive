@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { memo, Suspense, lazy, useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useLocation } from 'wouter'
 import { useToast } from '@/shared/hooks/use-toast'
 import DashboardLayout from '../DashboardLayout'
@@ -7,7 +7,6 @@ import Label from '@/shared/ui/Label'
 import Textarea from '@/shared/ui/Textarea'
 import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
-import LinksEditor from '@/shared/ui/LinksEditor'
 import Button from '@/shared/ui/Button'
 import {
     getCurrentSessionUser,
@@ -38,10 +37,17 @@ import {
 import {
     extractModerationFeedback,
 } from '@/features/Dashboard/EmployerDashboard/lib/employerDashboard.helpers'
-import { getCachedSavedFavorites, getSavedFavorites, removeEmployerFromSaved } from '@/shared/api/favorites'
+import {
+    getCachedSavedFavorites,
+    getSavedFavorites,
+    invalidateSavedFavoritesCache,
+    removeEmployerFromSaved,
+} from '@/shared/api/favorites'
+import { listOpportunities } from '@/shared/api/opportunities'
 import { ensureChatByResponse } from '@/shared/api/chats'
-import SavedFavoritesSection from './components/SavedFavoritesSection'
-import RecommendationsSection from './components/RecommendationsSection'
+const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
+const SavedFavoritesSection = lazy(() => import('./components/SavedFavoritesSection'))
+const RecommendationsSection = lazy(() => import('./components/RecommendationsSection'))
 import '../DashboardBase.scss'
 import './SeekerDashboard.scss'
 
@@ -67,6 +73,8 @@ const CONTACTS_BASED_VISIBILITY_OPTIONS = [
     { value: 'CONTACTS_ONLY', label: 'Только контактам' },
     { value: 'PRIVATE', label: 'Только мне' },
 ]
+const DASHBOARD_LIST_INITIAL_LIMIT = 12
+const DASHBOARD_LIST_PAGE_STEP = 12
 
 const DASHBOARD_TAB_ITEMS = [
     { key: 'profile', label: 'Профиль' },
@@ -146,6 +154,41 @@ function formatFileSize(sizeBytes) {
     if (sizeBytes < 1024) return `${sizeBytes} Б`
     if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} КБ`
     return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`
+}
+
+function formatDateValue(value) {
+    if (!value) return 'Дата не указана'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'Дата не указана'
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function getContactDirectionLabelValue(direction) {
+    switch (direction) {
+        case 'INCOMING':
+            return 'Входящий'
+        case 'OUTGOING':
+            return 'Исходящий'
+        case 'CONFIRMED':
+            return 'Подтверждённый'
+        default:
+            return 'Без направления'
+    }
+}
+
+function getContactStatusLabelValue(status) {
+    switch (status) {
+        case 'PENDING':
+            return 'Ожидает подтверждения'
+        case 'ACCEPTED':
+            return 'Подтверждён'
+        case 'DECLINED':
+            return 'Отклонён'
+        case 'BLOCKED':
+            return 'Заблокирован'
+        default:
+            return status || 'Без статуса'
+    }
 }
 
 function mapApplicantProfileToState(profileData = {}, currentUser = null) {
@@ -246,6 +289,123 @@ function buildContactHref(rawValue, preset) {
     }
 }
 
+const ApplicationCard = memo(function ApplicationCard({ app, onOpenOpportunity, onOpenChat }) {
+    const canOpenOpportunity = app.opportunityId !== null && app.opportunityId !== undefined
+
+    return (
+        <div
+            className="application-card"
+            onClick={() => canOpenOpportunity && onOpenOpportunity(app.opportunityId)}
+        >
+            <div className="application-card__content">
+                <h3>{app.position || app.title || 'Вакансия'}</h3>
+                <p className="application-card__company">{app.companyName}</p>
+                <p className="application-card__description">{app.message || 'Отклик отправлен'}</p>
+                <div className="application-card__footer">
+                    <span className={`status-badge status-${app.status?.toLowerCase() || 'pending'}`}>
+                        {app.status === 'SUBMITTED' && 'Отправлено'}
+                        {app.status === 'IN_REVIEW' && 'На рассмотрении'}
+                        {app.status === 'ACCEPTED' && 'Принято'}
+                        {app.status === 'REJECTED' && 'Отклонено'}
+                        {app.status === 'RESERVE' && 'В резерве'}
+                        {app.status === 'WITHDRAWN' && 'Отозвано'}
+                        {!app.status && 'Отправлено'}
+                    </span>
+                    <span className="application-card__date">
+                        {formatDateValue(app.appliedAt)}
+                    </span>
+                </div>
+                <button
+                    className="application-card__chat"
+                    onClick={(event) => void onOpenChat(event, app)}
+                    disabled={!app.chatSummary?.hasChat && !app.chatSummary?.canSend}
+                >
+                    Сообщение
+                    {app.chatSummary?.unreadCount > 0 && (
+                        <span>{app.chatSummary.unreadCount}</span>
+                    )}
+                </button>
+            </div>
+        </div>
+    )
+})
+
+const ContactCard = memo(function ContactCard({
+    contact,
+    contactsTab,
+    canRecommend,
+    onOpenProfile,
+    onOpenRecommendModal,
+    onAccept,
+    onDecline,
+    onRemoveOutgoing,
+    onRemoveConfirmed,
+}) {
+    const isPending = contact.status === 'PENDING'
+    const isAccepted = contact.status === 'ACCEPTED'
+
+    return (
+        <div className="contact-card">
+            <div className="contact-card__avatar">
+                {(contact.firstName?.[0] || '')}{(contact.lastName?.[0] || '')}
+            </div>
+
+            <div className="contact-card__info">
+                <h3>{contact.fullName || `${contact.firstName} ${contact.lastName}`.trim() || 'Пользователь'}</h3>
+                <p>
+                    {getContactDirectionLabelValue(contact.direction)} · {getContactStatusLabelValue(contact.status)}
+                </p>
+                <span className="contact-card__date">
+                    {formatDateValue(contact.createdAt)}
+                </span>
+                {contact.status === 'BLOCKED' && (
+                    <p>
+                        Запросы и рекомендации для этого контакта недоступны.
+                    </p>
+                )}
+            </div>
+
+            <div className="contact-card__actions">
+                <button
+                    className="contact-card__link"
+                    onClick={() => onOpenProfile(contact.id)}
+                >
+                    Профиль
+                </button>
+
+                {contactsTab === 'confirmed' && (
+                    <button
+                        className="contact-card__link"
+                        onClick={() => onOpenRecommendModal(contact.id)}
+                        disabled={!canRecommend}
+                    >
+                        Рекомендовать
+                    </button>
+                )}
+
+                {contactsTab === 'incoming' && isPending && (
+                    <>
+                        <button className="btn-approve" onClick={() => onAccept(contact.id)}>Принять</button>
+                        <button className="btn-reject" onClick={() => onDecline(contact.id)}>Отклонить</button>
+                    </>
+                )}
+
+                {contactsTab === 'outgoing' && isPending && (
+                    <button className="contact-card__remove" onClick={() => onRemoveOutgoing(contact.id)}>
+                        Отменить заявку
+                    </button>
+                )}
+
+                {contactsTab === 'confirmed' && isAccepted && (
+                    <button className="contact-card__remove" onClick={() => onRemoveConfirmed(contact.id)}>
+                        Удалить
+                    </button>
+                )}
+            </div>
+        </div>
+    )
+})
+
 function SeekerDashboard() {
     const [activeTab, setActiveTab] = useState('profile')
     const [contactsTab, setContactsTab] = useState('confirmed')
@@ -275,9 +435,8 @@ function SeekerDashboard() {
     const [isResumeFileUploading, setIsResumeFileUploading] = useState(false)
     const [isPortfolioFileUploading, setIsPortfolioFileUploading] = useState(false)
     const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('')
-    const [publicProfile, setPublicProfile] = useState(null)
+    const [isAvatarImageLoading, setIsAvatarImageLoading] = useState(false)
     const [hasApprovedPublicVersion, setHasApprovedPublicVersion] = useState(false)
-    const [profileVersionView, setProfileVersionView] = useState('current')
     const [moderationFeedback, setModerationFeedback] = useState(null)
     const [isModerationFeedbackLoading, setIsModerationFeedbackLoading] = useState(false)
 
@@ -325,6 +484,8 @@ function SeekerDashboard() {
         selectedContactId: '',
         message: '',
     })
+    const [recommendationOpportunityCatalog, setRecommendationOpportunityCatalog] = useState([])
+    const [isRecommendationModalPreparing, setIsRecommendationModalPreparing] = useState(false)
     const recommendationOverlayMouseDownStartedOutsideRef = useRef(false)
 
     const [isCitySearchOpen, setIsCitySearchOpen] = useState(false)
@@ -333,19 +494,14 @@ function SeekerDashboard() {
     const [cityActiveIndex, setCityActiveIndex] = useState(-1)
     const citySearchRef = useRef(null)
     const [, navigate] = useLocation()
+    const [visibleApplicationsCount, setVisibleApplicationsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
+    const [visibleContactsCount, setVisibleContactsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
 
     const moderationState = profile.moderationStatus || 'DRAFT'
     const canSubmitForModeration =
         moderationState === 'DRAFT' ||
         (moderationState === 'NEEDS_REVISION' && !hasApprovedPublicVersion)
-    const shouldShowVersionSwitch = Boolean(
-        hasApprovedPublicVersion &&
-        publicProfile &&
-        moderationState === 'PENDING_MODERATION'
-    )
-    const displayedProfile = shouldShowVersionSwitch && profileVersionView === 'public'
-        ? publicProfile
-        : profile
+    const displayedProfile = profile
 
     const formatDate = (dateString) => {
         if (!dateString) return 'Дата не указана'
@@ -381,17 +537,12 @@ function SeekerDashboard() {
     const applyWorkspaceFromApi = useCallback((workspaceData, currentUser) => {
         const currentProfile = workspaceData?.currentProfile || workspaceData
         const nextProfile = mapApplicantProfileToState(currentProfile || {}, currentUser)
-        const nextPublicProfile = workspaceData?.publicProfile
-            ? mapApplicantProfileToState(workspaceData.publicProfile, currentUser)
-            : null
-
         nextProfile.moderationStatus =
             workspaceData?.moderationStatus ||
             nextProfile.moderationStatus ||
             'DRAFT'
 
         setProfile(nextProfile)
-        setPublicProfile(nextPublicProfile)
         setHasApprovedPublicVersion(Boolean(workspaceData?.hasApprovedPublicVersion))
         setCitySearchQuery(nextProfile.cityName || '')
         setTempPortfolioLinks(linksToArray(nextProfile.portfolioLinks || []))
@@ -483,13 +634,14 @@ function SeekerDashboard() {
             const contactsList = await getSeekerContacts()
             setContacts(contactsList)
             setNetworkingBlockedMessage('')
+            return contactsList
         } catch (error) {
             if (isNetworkingBlockedError(error)) {
                 setContacts([])
                 setNetworkingBlockedMessage(
                     error?.message || 'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
                 )
-                return
+                return []
             }
 
             toast({
@@ -497,10 +649,68 @@ function SeekerDashboard() {
                 description: error?.message || 'Не удалось загрузить контакты',
                 variant: 'destructive',
             })
+            return []
         } finally {
             setIsContactsLoading(false)
         }
     }, [toast])
+
+    const ensureNetworkingLoaded = useCallback(async () => {
+        if (!user?.id) return
+
+        setIsContactsLoading(true)
+        setIsRecommendationsLoading(true)
+
+        try {
+            const [contactsItems, recommendationsItems] = await Promise.all([
+                getSeekerContacts().catch((error) => {
+                    if (isNetworkingBlockedError(error)) {
+                        return { blocked: true, message: error?.message || '' }
+                    }
+                    return []
+                }),
+                getSeekerRecommendations().catch((error) => {
+                    if (isNetworkingBlockedError(error)) {
+                        return { blocked: true, message: error?.message || '' }
+                    }
+                    return { incoming: [], outgoing: [] }
+                }),
+            ])
+
+            const networkingBlocked =
+                contactsItems?.blocked ||
+                recommendationsItems?.blocked
+
+            if (networkingBlocked) {
+                setContacts([])
+                setRecommendations({ incoming: [], outgoing: [] })
+                setNetworkingBlockedMessage(
+                    contactsItems?.message ||
+                    recommendationsItems?.message ||
+                    'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
+                )
+            } else {
+                setContacts(Array.isArray(contactsItems) ? contactsItems : [])
+                setRecommendations(
+                    recommendationsItems && typeof recommendationsItems === 'object'
+                        ? recommendationsItems
+                        : { incoming: [], outgoing: [] }
+                )
+                setNetworkingBlockedMessage('')
+            }
+
+            setHasLoadedNetworking(true)
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось загрузить нетворкинг',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsContactsLoading(false)
+            setIsRecommendationsLoading(false)
+        }
+    }, [toast, user?.id])
 
     const loadRecommendations = useCallback(async () => {
         setIsRecommendationsLoading(true)
@@ -551,9 +761,17 @@ function SeekerDashboard() {
                     return
                 }
 
-                const profileResult = currentUser?.id
-                    ? await getApplicantProfileWorkspace(currentUser.id)
-                    : await getApplicantProfile()
+                const [
+                    profileResult,
+                    applicationsItems,
+                    favoritesItems,
+                ] = await Promise.all([
+                    currentUser?.id
+                        ? getApplicantProfileWorkspace(currentUser.id)
+                        : getApplicantProfile(),
+                    getSeekerApplications().catch(() => []),
+                    getSavedFavorites().catch(() => getCachedSavedFavorites()),
+                ])
                 if (!isMounted) return
 
                 if (profileResult?.currentProfile) {
@@ -567,32 +785,17 @@ function SeekerDashboard() {
                     }))
                 }
 
-                setIsLoading(false)
+                setApplications(Array.isArray(applicationsItems) ? applicationsItems : [])
+                setSavedFavorites(
+                    favoritesItems && typeof favoritesItems === 'object'
+                        ? favoritesItems
+                        : getCachedSavedFavorites()
+                )
 
-                const applicationsPromise = getSeekerApplications()
-                    .then((items) => {
-                        if (!isMounted) return
-                        setApplications(items)
-                    })
-                    .catch(() => {
-                        if (!isMounted) return
-                        setApplications([])
-                    })
-
-                const favoritesPromise = getSavedFavorites()
-                    .then((items) => {
-                        if (!isMounted) return
-                        setSavedFavorites(items)
-                    })
-                    .catch(() => {
-                        if (!isMounted) return
-                        setSavedFavorites({
-                            opportunities: [],
-                            employers: [],
-                        })
-                    })
-
-                await Promise.allSettled([applicationsPromise, favoritesPromise])
+                setContacts([])
+                setRecommendations({ incoming: [], outgoing: [] })
+                setNetworkingBlockedMessage('')
+                setHasLoadedNetworking(false)
             } catch (error) {
                 if (error?.status === 401) {
                     setUser(null)
@@ -630,42 +833,126 @@ function SeekerDashboard() {
     }, [applyProfileFromApi, applyWorkspaceFromApi, toast])
 
     useEffect(() => {
-        if (!user?.id) return
+        if (!user?.id) return undefined
+        if (activeTab !== 'contacts' && activeTab !== 'recommendations' && activeTab !== 'saved') return undefined
+        if (hasLoadedNetworking) return undefined
 
-        const loadNetworking = async () => {
-            setNetworkingBlockedMessage('')
-            setHasLoadedNetworking(false)
+        void ensureNetworkingLoaded()
+    }, [activeTab, ensureNetworkingLoaded, hasLoadedNetworking, user?.id])
+
+    useEffect(() => {
+        if (!user?.id || activeTab !== 'saved') return undefined
+
+        let isMounted = true
+
+        const refreshSavedFavorites = async () => {
+            invalidateSavedFavoritesCache()
 
             try {
-                const [contactsList, recommendationsData] = await Promise.all([
-                    getSeekerContacts(),
-                    getSeekerRecommendations(),
-                ])
-
-                setContacts(contactsList)
-                setRecommendations(recommendationsData)
-            } catch (error) {
-                if (isNetworkingBlockedError(error)) {
-                    setContacts([])
-                    setRecommendations({ incoming: [], outgoing: [] })
-                    setNetworkingBlockedMessage(
-                        error?.message || 'Нетворкинг-функции доступны только после одобрения профиля соискателя куратором'
-                    )
-                    return
-                }
-
-                toast({
-                    title: 'Ошибка',
-                    description: error?.message || 'Не удалось загрузить нетворкинг-данные',
-                    variant: 'destructive',
-                })
-            } finally {
-                setHasLoadedNetworking(true)
+                const items = await getSavedFavorites()
+                if (!isMounted) return
+                setSavedFavorites(items)
+            } catch {
+                if (!isMounted) return
+                setSavedFavorites(getCachedSavedFavorites())
             }
         }
 
-        void loadNetworking()
-    }, [user?.id, toast])
+        void refreshSavedFavorites()
+
+        return () => {
+            isMounted = false
+        }
+    }, [activeTab, user?.id])
+
+    useEffect(() => {
+        if (!recommendationModal.isOpen) {
+            setRecommendationOpportunityCatalog([])
+            setIsRecommendationModalPreparing(false)
+            return undefined
+        }
+
+        if (!user?.id) return undefined
+
+        let isMounted = true
+
+        async function prepareRecommendationModal() {
+            setIsRecommendationModalPreparing(true)
+
+            try {
+                const networkingPromise = hasLoadedNetworking
+                    ? (contacts.length === 0 ? loadContacts() : Promise.resolve())
+                    : ensureNetworkingLoaded()
+
+                invalidateSavedFavoritesCache()
+
+                const [favoritesResult, catalogResponse] = await Promise.all([
+                    networkingPromise.then(() => getSavedFavorites()).catch(() => getCachedSavedFavorites()),
+                    listOpportunities({ limit: 50 }).catch(() => null),
+                ])
+
+                if (!isMounted) return
+
+                setSavedFavorites(
+                    favoritesResult && typeof favoritesResult === 'object'
+                        ? favoritesResult
+                        : getCachedSavedFavorites()
+                )
+
+                const catalogItems = Array.isArray(catalogResponse?.items)
+                    ? catalogResponse.items
+                    : Array.isArray(catalogResponse?.content)
+                        ? catalogResponse.content
+                        : Array.isArray(catalogResponse)
+                            ? catalogResponse
+                            : []
+
+                setRecommendationOpportunityCatalog(catalogItems)
+            } finally {
+                if (isMounted) {
+                    setIsRecommendationModalPreparing(false)
+                }
+            }
+        }
+
+        void prepareRecommendationModal()
+
+        return () => {
+            isMounted = false
+        }
+    }, [
+        contacts.length,
+        ensureNetworkingLoaded,
+        hasLoadedNetworking,
+        loadContacts,
+        recommendationModal.isOpen,
+        user?.id,
+    ])
+
+    useEffect(() => {
+        if (!user?.id) return undefined
+
+        const refreshSavedFavorites = async () => {
+            invalidateSavedFavoritesCache()
+
+            try {
+                const items = await getSavedFavorites()
+                setSavedFavorites(items)
+            } catch {
+                setSavedFavorites(getCachedSavedFavorites())
+            }
+        }
+
+        const handleFavoritesUpdated = () => {
+            void refreshSavedFavorites()
+        }
+
+        window.addEventListener('favorites-updated', handleFavoritesUpdated)
+
+        return () => {
+            window.removeEventListener('favorites-updated', handleFavoritesUpdated)
+        }
+    }, [user?.id])
 
     useEffect(() => {
         if (!user?.id || moderationState !== 'NEEDS_REVISION') {
@@ -739,12 +1026,6 @@ function SeekerDashboard() {
             URL.revokeObjectURL(avatarPreviewUrl)
         }
     }, [avatarPreviewUrl])
-
-    useEffect(() => {
-        if (!shouldShowVersionSwitch) {
-            setProfileVersionView('current')
-        }
-    }, [shouldShowVersionSwitch])
 
     const ensureDashboardTabVisible = useCallback((tabKey, behavior = 'smooth') => {
         const container = dashboardTabsRef.current
@@ -1075,7 +1356,7 @@ function SeekerDashboard() {
         }
     }
 
-    const handleAcceptContact = async (userId) => {
+    const handleAcceptContact = useCallback(async (userId) => {
         try {
             await acceptContact(userId)
             await loadContacts()
@@ -1090,9 +1371,9 @@ function SeekerDashboard() {
                 variant: 'destructive',
             })
         }
-    }
+    }, [loadContacts, loadRecommendations, toast])
 
-    const handleDeclineContact = async (userId) => {
+    const handleDeclineContact = useCallback(async (userId) => {
         try {
             await declineContact(userId)
             await loadContacts()
@@ -1107,9 +1388,9 @@ function SeekerDashboard() {
                 variant: 'destructive',
             })
         }
-    }
+    }, [loadContacts, loadRecommendations, toast])
 
-    const handleRemoveContact = async (userId, direction = 'CONFIRMED') => {
+    const handleRemoveContact = useCallback(async (userId, direction = 'CONFIRMED') => {
         try {
             await removeContact(userId)
             await loadContacts()
@@ -1126,7 +1407,7 @@ function SeekerDashboard() {
                 variant: 'destructive',
             })
         }
-    }
+    }, [loadContacts, loadRecommendations, toast])
 
     const handleSendRecommendation = async () => {
         if (!canSendRecommendation) {
@@ -1184,6 +1465,22 @@ function SeekerDashboard() {
             message: '',
         })
     }, [])
+
+    useEffect(() => {
+        if (!recommendationModal.isOpen) return undefined
+
+        const handleEscape = (event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            closeRecommendationModal()
+        }
+
+        document.addEventListener('keydown', handleEscape)
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape)
+        }
+    }, [closeRecommendationModal, recommendationModal.isOpen])
 
     const handleRecommendationOverlayMouseDown = (event) => {
         recommendationOverlayMouseDownStartedOutsideRef.current = event.target === event.currentTarget
@@ -1511,11 +1808,11 @@ function SeekerDashboard() {
     const isOutgoingContact = (contact) => contact.direction === 'OUTGOING'
     const isConfirmedContact = (contact) => contact.direction === 'CONFIRMED'
     const isBlockedContact = (contact) => contact.status === 'BLOCKED'
-    const canRecommendContact = (contact) =>
+    const canRecommendContact = useCallback((contact) =>
         isConfirmedContact(contact) &&
         contact.status === 'ACCEPTED' &&
         !isBlockedContact(contact) &&
-        !networkingBlockedMessage
+        !networkingBlockedMessage, [networkingBlockedMessage])
 
     const confirmedContacts = useMemo(
         () => contacts.filter(isConfirmedContact),
@@ -1538,6 +1835,16 @@ function SeekerDashboard() {
         return confirmedContacts
     }, [contactsTab, incomingContacts, outgoingContacts, confirmedContacts])
 
+    const visibleApplications = useMemo(
+        () => applications.slice(0, visibleApplicationsCount),
+        [applications, visibleApplicationsCount]
+    )
+
+    const visibleContacts = useMemo(
+        () => currentContacts.slice(0, visibleContactsCount),
+        [currentContacts, visibleContactsCount]
+    )
+
     const contactTabCount = useMemo(() => ({
         incoming: incomingContacts.length,
         outgoing: outgoingContacts.length,
@@ -1551,11 +1858,17 @@ function SeekerDashboard() {
     }, [recommendations, recommendationsTab])
 
     const recommendationContactsOptions = useMemo(() => {
-        return confirmedContacts.map((contact) => ({
-            value: String(contact.id),
-            label: contact.fullName || `${contact.firstName} ${contact.lastName}`.trim() || `Пользователь #${contact.id}`,
-        }))
-    }, [confirmedContacts])
+        const source = confirmedContacts.length > 0
+            ? confirmedContacts
+            : contacts.filter((contact) => contact.status === 'ACCEPTED')
+
+        return source
+            .filter((contact) => contact.id)
+            .map((contact) => ({
+                value: String(contact.id),
+                label: contact.fullName || `${contact.firstName} ${contact.lastName}`.trim() || `Пользователь #${contact.id}`,
+            }))
+    }, [confirmedContacts, contacts])
 
     const recommendationOpportunityOptions = useMemo(() => {
         const fromSaved = savedFavorites.opportunities
@@ -1572,16 +1885,31 @@ function SeekerDashboard() {
                 label: `${item.title || item.position} — ${item.companyName}`,
             }))
 
+        const fromCatalog = recommendationOpportunityCatalog
+            .map((item) => {
+                const opportunityId = item?.id ?? item?.opportunityId
+                if (!opportunityId) return null
+
+                const title = item?.title || item?.position || `Вакансия #${opportunityId}`
+                const companyName = item?.companyName || item?.employerName || 'Компания'
+
+                return {
+                    value: String(opportunityId),
+                    label: `${title} — ${companyName}`,
+                }
+            })
+            .filter(Boolean)
+
         const unique = new Map()
 
-        for (const option of [...fromSaved, ...fromApplications]) {
+        for (const option of [...fromSaved, ...fromApplications, ...fromCatalog]) {
             if (!unique.has(option.value)) {
                 unique.set(option.value, option)
             }
         }
 
         return Array.from(unique.values())
-    }, [savedFavorites.opportunities, applications])
+    }, [applications, recommendationOpportunityCatalog, savedFavorites.opportunities])
 
     const canSendRecommendation =
         !networkingBlockedMessage &&
@@ -1589,19 +1917,26 @@ function SeekerDashboard() {
         recommendationOpportunityOptions.length > 0
 
     const avatarOwnerUserId = displayedProfile.userId || profile.userId || user?.id
-    const avatarUrl = profileVersionView === 'current' && avatarPreviewUrl
-        ? avatarPreviewUrl
-        : (
+    const avatarUrl = avatarPreviewUrl || (
         displayedProfile.avatar && avatarOwnerUserId
             ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, displayedProfile.avatar.fileId)
             : null
     )
 
+    useEffect(() => {
+        if (!avatarUrl) {
+            setIsAvatarImageLoading(false)
+            return
+        }
+
+        setIsAvatarImageLoading(true)
+    }, [avatarUrl])
+
     const resumeFileUrl = profile.resumeFile && avatarOwnerUserId
         ? getFileDownloadUrlByUserAndFile('APPLICANT', avatarOwnerUserId, profile.resumeFile.fileId)
         : null
 
-    const handleOpenApplicationChat = async (event, application) => {
+    const handleOpenApplicationChat = useCallback(async (event, application) => {
         event.stopPropagation()
 
         const summary = application.chatSummary
@@ -1625,7 +1960,46 @@ function SeekerDashboard() {
         } catch (error) {
             toast({ title: 'Не удалось открыть чат', description: error.message, variant: 'destructive' })
         }
-    }
+    }, [navigate, toast])
+
+    const handleOpenOpportunity = useCallback((opportunityId) => {
+        navigate(`/opportunities/${opportunityId}`)
+    }, [navigate])
+
+    const handleOpenContactProfile = useCallback((contactId) => {
+        navigate(`/seekers/${contactId}`)
+    }, [navigate])
+
+    const handleOpenRecommendModal = useCallback((contactId) => {
+        setRecommendationModal((prev) => ({
+            ...prev,
+            isOpen: true,
+            selectedContactId: String(contactId),
+        }))
+    }, [])
+
+    const handleRemoveOutgoingContact = useCallback((contactId) => {
+        void handleRemoveContact(contactId, 'OUTGOING')
+    }, [handleRemoveContact])
+
+    const handleRemoveConfirmedContact = useCallback((contactId) => {
+        void handleRemoveContact(contactId, 'CONFIRMED')
+    }, [handleRemoveContact])
+
+    const renderSectionFallback = (message = 'Загрузка...') => (
+        <div className="dashboard-loading dashboard-loading--inner">
+            <div className="loading-spinner"></div>
+            <p>{message}</p>
+        </div>
+    )
+
+    useEffect(() => {
+        setVisibleApplicationsCount(DASHBOARD_LIST_INITIAL_LIMIT)
+    }, [applications.length])
+
+    useEffect(() => {
+        setVisibleContactsCount(DASHBOARD_LIST_INITIAL_LIMIT)
+    }, [contactsTab, currentContacts.length])
 
     if (isLoading && !profile.firstName) {
         return (
@@ -1708,7 +2082,23 @@ function SeekerDashboard() {
                             >
                                 <div className="profile-card__avatar-initials">
                                     {avatarUrl ? (
-                                        <img src={avatarUrl} alt="Аватар" className="profile-card__avatar-photo" />
+                                        <>
+                                            <img
+                                                src={avatarUrl}
+                                                alt="Аватар"
+                                                className={`profile-card__avatar-photo ${isAvatarImageLoading ? 'is-loading' : ''}`}
+                                                loading="eager"
+                                                decoding="async"
+                                                fetchPriority="high"
+                                                onLoad={() => setIsAvatarImageLoading(false)}
+                                                onError={() => setIsAvatarImageLoading(false)}
+                                            />
+                                            {isAvatarImageLoading && (
+                                                <div className="profile-card__avatar-loader" aria-hidden="true">
+                                                    <div className="loading-spinner" />
+                                                </div>
+                                            )}
+                                        </>
                                     ) : getInitials(displayedProfile) !== '?' ? (
                                         getInitials(displayedProfile)
                                     ) : (
@@ -1743,7 +2133,7 @@ function SeekerDashboard() {
                                                         : 'Загрузить фото профиля'}
                                             </button>
 
-                                            {profileVersionView === 'current' && profile.avatar && (
+                                            {profile.avatar && (
                                                 <button
                                                     type="button"
                                                     className="profile-card__avatar-action profile-card__avatar-action--danger"
@@ -1800,30 +2190,6 @@ function SeekerDashboard() {
                                         </button>
                                     )}
                                 </div>
-
-                                {shouldShowVersionSwitch && (
-                                    <>
-                                        <div className="profile-card__moderation-hint">
-                                            Текущая версия профиля ожидает проверки. Публичная версия — то, что уже видят пользователи платформы.
-                                        </div>
-                                        <div className="profile-card__version-switch">
-                                            <button
-                                                type="button"
-                                                className={`profile-card__version-switch-btn ${profileVersionView === 'current' ? 'is-active' : ''}`}
-                                                onClick={() => setProfileVersionView('current')}
-                                            >
-                                                Текущая версия
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className={`profile-card__version-switch-btn ${profileVersionView === 'public' ? 'is-active' : ''}`}
-                                                onClick={() => setProfileVersionView('public')}
-                                            >
-                                                Публичная версия
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
 
                                 {moderationState === 'NEEDS_REVISION' && (
                                     <div className="profile-card__revision-card">
@@ -2167,13 +2533,15 @@ function SeekerDashboard() {
 
                                     {isEditingPortfolio ? (
                                         <div className="info-block__edit">
-                                            <LinksEditor
-                                                label=""
-                                                rows={tempPortfolioLinks}
-                                                setRows={setTempPortfolioLinks}
-                                                placeholderTitle="Название"
-                                                placeholderUrl="https://..."
-                                            />
+                                            <Suspense fallback={renderSectionFallback('Загрузка редактора портфолио...')}>
+                                                <LinksEditor
+                                                    label=""
+                                                    rows={tempPortfolioLinks}
+                                                    setRows={setTempPortfolioLinks}
+                                                    placeholderTitle="Название"
+                                                    placeholderUrl="https://..."
+                                                />
+                                            </Suspense>
 
                                             <div className="info-block__file-tools">
                                                 <Button
@@ -2387,60 +2755,44 @@ function SeekerDashboard() {
                             </div>
                         ) : (
                             <div className="applications-list">
-                                {applications.map((app, index) => {
+                                {visibleApplications.map((app, index) => {
                                     const appKey = app.id ?? `${app.opportunityId ?? 'unknown'}-${app.createdAt ?? index}`
-                                    const canOpenOpportunity = app.opportunityId !== null && app.opportunityId !== undefined
 
                                     return (
-                                        <div
+                                        <ApplicationCard
                                             key={appKey}
-                                            className="application-card"
-                                            onClick={() => canOpenOpportunity && navigate(`/opportunities/${app.opportunityId}`)}
-                                        >
-                                            <div className="application-card__content">
-                                                <h3>{app.position || app.title || 'Вакансия'}</h3>
-                                                <p className="application-card__company">{app.companyName}</p>
-                                                <p className="application-card__description">{app.message || 'Отклик отправлен'}</p>
-                                                <div className="application-card__footer">
-                                                    <span className={`status-badge status-${app.status?.toLowerCase() || 'pending'}`}>
-                                                        {app.status === 'SUBMITTED' && 'Отправлено'}
-                                                        {app.status === 'IN_REVIEW' && 'На рассмотрении'}
-                                                        {app.status === 'ACCEPTED' && 'Принято'}
-                                                        {app.status === 'REJECTED' && 'Отклонено'}
-                                                        {app.status === 'RESERVE' && 'В резерве'}
-                                                        {app.status === 'WITHDRAWN' && 'Отозвано'}
-                                                        {!app.status && 'Отправлено'}
-                                                    </span>
-                                                    <span className="application-card__date">
-                                                        {formatDate(app.appliedAt)}
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    className="application-card__chat"
-                                                    onClick={(event) => void handleOpenApplicationChat(event, app)}
-                                                    disabled={!app.chatSummary?.hasChat && !app.chatSummary?.canSend}
-                                                >
-                                                    Сообщение
-                                                    {app.chatSummary?.unreadCount > 0 && (
-                                                        <span>{app.chatSummary.unreadCount}</span>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </div>
+                                            app={app}
+                                            onOpenOpportunity={handleOpenOpportunity}
+                                            onOpenChat={handleOpenApplicationChat}
+                                        />
                                     )
                                 })}
+                            </div>
+                        )}
+                        {visibleApplications.length < applications.length && (
+                            <div className="section-footer">
+                                <button
+                                    type="button"
+                                    className="btn-secondary-small"
+                                    onClick={() => setVisibleApplicationsCount((prev) => prev + DASHBOARD_LIST_PAGE_STEP)}
+                                >
+                                    Показать ещё
+                                </button>
                             </div>
                         )}
                     </div>
                 )}
 
                 {activeTab === 'saved' && (
-                    <SavedFavoritesSection
-                        favorites={savedFavorites}
-                        onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
-                        onRemoveOpportunity={handleRemoveSaved}
-                        onRemoveEmployer={handleRemoveSavedEmployer}
-                    />
+                    <Suspense fallback={renderSectionFallback('Загрузка раздела избранного...')}>
+                        <SavedFavoritesSection
+                            favorites={savedFavorites}
+                            onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
+                            onOpenEmployer={(employerUserId) => navigate(`/employers/${employerUserId}`)}
+                            onRemoveOpportunity={handleRemoveSaved}
+                            onRemoveEmployer={handleRemoveSavedEmployer}
+                        />
+                    </Suspense>
                 )}
 
                 {activeTab === 'contacts' && (
@@ -2500,95 +2852,58 @@ function SeekerDashboard() {
                             </div>
                         ) : (
                             <div className="contacts-list">
-                                {currentContacts.map((contact) => (
-                                    <div key={contact.id} className="contact-card">
-                                        <div className="contact-card__avatar">
-                                            {(contact.firstName?.[0] || '')}{(contact.lastName?.[0] || '')}
-                                        </div>
-
-                                        <div className="contact-card__info">
-                                            <h3>{contact.fullName || `${contact.firstName} ${contact.lastName}`.trim() || 'Пользователь'}</h3>
-                                            <p>
-                                                {getContactDirectionLabel(contact.direction)} · {getContactStatusLabel(contact.status)}
-                                            </p>
-                                            <span className="contact-card__date">
-                                                {formatDate(contact.createdAt)}
-                                            </span>
-                                            {isBlockedContact(contact) && (
-                                                <p>
-                                                    Запросы и рекомендации для этого контакта недоступны.
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div className="contact-card__actions">
-                                            <button
-                                                className="contact-card__link"
-                                                onClick={() => navigate(`/seekers/${contact.id}`)}
-                                            >
-                                                Профиль
-                                            </button>
-
-                                            <button
-                                                className="contact-card__link"
-                                                onClick={() =>
-                                                    setRecommendationModal((prev) => ({
-                                                        ...prev,
-                                                        isOpen: true,
-                                                        selectedContactId: String(contact.id),
-                                                    }))
-                                                }
-                                                disabled={!canRecommendContact(contact)}
-                                            >
-                                                Рекомендовать
-                                            </button>
-
-                                            {contactsTab === 'incoming' && contact.status === 'PENDING' && (
-                                                <>
-                                                    <button className="btn-approve" onClick={() => handleAcceptContact(contact.id)}>Принять</button>
-                                                    <button className="btn-reject" onClick={() => handleDeclineContact(contact.id)}>Отклонить</button>
-                                                </>
-                                            )}
-
-                                            {contactsTab === 'outgoing' && contact.status === 'PENDING' && (
-                                                <button className="contact-card__remove" onClick={() => handleRemoveContact(contact.id, 'OUTGOING')}>
-                                                    Отменить заявку
-                                                </button>
-                                            )}
-
-                                            {contactsTab === 'confirmed' && contact.status === 'ACCEPTED' && (
-                                                <button className="contact-card__remove" onClick={() => handleRemoveContact(contact.id, 'CONFIRMED')}>
-                                                    Удалить
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
+                                {visibleContacts.map((contact) => (
+                                    <ContactCard
+                                        key={contact.id}
+                                        contact={contact}
+                                        contactsTab={contactsTab}
+                                        canRecommend={canRecommendContact(contact)}
+                                        onOpenProfile={handleOpenContactProfile}
+                                        onOpenRecommendModal={handleOpenRecommendModal}
+                                        onAccept={handleAcceptContact}
+                                        onDecline={handleDeclineContact}
+                                        onRemoveOutgoing={handleRemoveOutgoingContact}
+                                        onRemoveConfirmed={handleRemoveConfirmedContact}
+                                    />
                                 ))}
+                            </div>
+                        )}
+                        {visibleContacts.length < currentContacts.length && (
+                            <div className="section-footer">
+                                <button
+                                    type="button"
+                                    className="btn-secondary-small"
+                                    onClick={() => setVisibleContactsCount((prev) => prev + DASHBOARD_LIST_PAGE_STEP)}
+                                >
+                                    Показать ещё
+                                </button>
                             </div>
                         )}
                     </div>
                 )}
 
                 {activeTab === 'recommendations' && (
-                    <RecommendationsSection
-                        recommendations={recommendations}
-                        recommendationsTab={recommendationsTab}
-                        setRecommendationsTab={setRecommendationsTab}
-                        currentRecommendations={currentRecommendations}
-                        networkingBlockedMessage={networkingBlockedMessage}
-                        isRecommendationsLoading={isRecommendationsLoading}
-                        onOpenCreateModal={() =>
-                            setRecommendationModal({
-                                isOpen: true,
-                                selectedOpportunityId: '',
-                                selectedContactId: '',
-                                message: '',
-                            })
-                        }
-                        onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
-                        onDeleteRecommendation={handleDeleteRecommendation}
-                        onRefreshRecommendations={loadRecommendations}
-                    />
+                    <Suspense fallback={renderSectionFallback('Загрузка рекомендаций...')}>
+                        <RecommendationsSection
+                            recommendations={recommendations}
+                            recommendationsTab={recommendationsTab}
+                            setRecommendationsTab={setRecommendationsTab}
+                            currentRecommendations={currentRecommendations}
+                            networkingBlockedMessage={networkingBlockedMessage}
+                            isRecommendationsLoading={isRecommendationsLoading}
+                            onOpenCreateModal={() =>
+                                setRecommendationModal({
+                                    isOpen: true,
+                                    selectedOpportunityId: '',
+                                    selectedContactId: '',
+                                    message: '',
+                                })
+                            }
+                            onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
+                            onDeleteRecommendation={handleDeleteRecommendation}
+                            onRefreshRecommendations={loadRecommendations}
+                        />
+                    </Suspense>
                 )}
             </div>
 
@@ -2621,15 +2936,18 @@ function SeekerDashboard() {
                             </div>
                         )}
 
-                        <div className="modal__field">
+                        <div className="modal__field modal__field--contacts">
                             <Label>Контакт</Label>
-                            {recommendationContactsOptions.length > 0 ? (
+                            {isRecommendationModalPreparing ? (
+                                <div className="modal__placeholder-box">Загрузка контактов...</div>
+                            ) : recommendationContactsOptions.length > 0 ? (
                                 <CustomSelect
+                                    inModal
                                     value={recommendationModal.selectedContactId}
                                     onChange={(value) =>
                                         setRecommendationModal((prev) => ({
                                             ...prev,
-                                            selectedContactId: value,
+                                            selectedContactId: value === null || value === undefined ? '' : String(value),
                                         }))
                                     }
                                     options={recommendationContactsOptions}
@@ -2641,15 +2959,18 @@ function SeekerDashboard() {
                             )}
                         </div>
 
-                        <div className="modal__field">
+                        <div className="modal__field modal__field--opportunities">
                             <Label>Возможность</Label>
-                            {recommendationOpportunityOptions.length > 0 ? (
+                            {isRecommendationModalPreparing ? (
+                                <div className="modal__placeholder-box">Загрузка возможностей...</div>
+                            ) : recommendationOpportunityOptions.length > 0 ? (
                                 <CustomSelect
+                                    inModal
                                     value={recommendationModal.selectedOpportunityId}
                                     onChange={(value) =>
                                         setRecommendationModal((prev) => ({
                                             ...prev,
-                                            selectedOpportunityId: value,
+                                            selectedOpportunityId: value === null || value === undefined ? '' : String(value),
                                         }))
                                     }
                                     options={recommendationOpportunityOptions}
@@ -2673,7 +2994,6 @@ function SeekerDashboard() {
                                     }))
                                 }
                                 placeholder="Напишите, почему вы рекомендуете эту возможность"
-                                disabled={!canSendRecommendation}
                             />
                         </div>
 
@@ -2687,14 +3007,7 @@ function SeekerDashboard() {
                             </button>
                             <button
                                 className="btn-secondary-small"
-                                onClick={() =>
-                                    setRecommendationModal({
-                                        isOpen: false,
-                                        selectedOpportunityId: '',
-                                        selectedContactId: '',
-                                        message: '',
-                                    })
-                                }
+                                onClick={closeRecommendationModal}
                             >
                                 Отмена
                             </button>

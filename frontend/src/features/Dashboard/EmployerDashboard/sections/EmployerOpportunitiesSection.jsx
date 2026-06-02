@@ -5,10 +5,9 @@ import OpportunityStatusManager from '../components/OpportunityStatusManager'
 import { OPPORTUNITY_LABELS } from '@/shared/api/opportunities'
 import { formatDate } from '../lib/employerDashboard.helpers'
 
-import linkIcon from '@/assets/icons/link.svg'
-
 function EmployerOpportunitiesSection({
                                           isVerified,
+                                          isLoading = false,
                                           opportunitySearchTerm,
                                           setOpportunitySearchTerm,
                                           opportunityFilterStatus,
@@ -77,7 +76,9 @@ function EmployerOpportunitiesSection({
                 </div>
             </div>
 
-            {filteredOpportunities.length === 0 ? (
+            {isLoading ? (
+                <p className="employer-empty">Загрузка публикаций...</p>
+            ) : filteredOpportunities.length === 0 ? (
                 <p className="employer-empty">
                     {isVerified ? 'Пока нет публикаций' : 'После верификации вы сможете публиковать вакансии и мероприятия'}
                 </p>
@@ -89,7 +90,9 @@ function EmployerOpportunitiesSection({
                         const canClose = ['PUBLISHED', 'PLANNED'].includes(normalizedStatus)
                         const canReturnToDraft = ['PUBLISHED', 'REJECTED', 'CLOSED', 'PLANNED'].includes(normalizedStatus)
                         const canRestoreFromArchive = normalizedStatus === 'ARCHIVED'
-                        const canArchive = normalizedStatus !== 'ARCHIVED'
+                        const canArchiveDirectly = ['CLOSED', 'REJECTED'].includes(normalizedStatus)
+                        const canArchiveViaClose = normalizedStatus === 'PUBLISHED'
+                        const canArchive = canArchiveDirectly || canArchiveViaClose
                         const requirementsText = String(detailedOpportunity.requirements || '').trim()
                         const descriptionText = String(
                             detailedOpportunity.fullDescription || detailedOpportunity.shortDescription || ''
@@ -105,7 +108,9 @@ function EmployerOpportunitiesSection({
                                 <p className="employer-opportunities__type">
                                     {OPPORTUNITY_LABELS.type[opp.type] || opp.type} • {OPPORTUNITY_LABELS.workFormat[opp.workFormat] || opp.workFormat}
                                 </p>
-                                <p className="employer-opportunities__description">{opp.shortDescription}</p>
+                                {String(opp.shortDescription || '').trim() && (
+                                    <p className="employer-opportunities__description">{opp.shortDescription}</p>
+                                )}
                                 <div className="employer-opportunities__skills">
                                     {opp.tags?.map((tag) => (
                                         <span key={tag.id} className="skill-tag">
@@ -171,84 +176,73 @@ function EmployerOpportunitiesSection({
                                     {canArchive && (
                                         <button
                                             className="employer-opportunities__delete"
-                                            onClick={() => onDeleteOpportunity(opp.id, opp.title)}
+                                            onClick={() => onDeleteOpportunity(opp.id, opp.title, normalizedStatus)}
                                         >
                                             В архив
                                         </button>
                                     )}
                                 </div>
-
-                                {expandedOpportunityId === opp.id && (
-                                    <div className="employer-opportunities__details">
-                                        <h4>Подробности</h4>
-                                        {requirementsText && (
-                                            <p><strong>Требования:</strong> {requirementsText}</p>
-                                        )}
-                                        {descriptionText && (
-                                            <p><strong>Описание:</strong> {descriptionText}</p>
-                                        )}
-                                        <p>
-                                            <strong>Уровень:</strong> {OPPORTUNITY_LABELS.grade[detailedOpportunity.grade] || detailedOpportunity.grade || '—'}
-                                        </p>
-                                        <p>
-                                            <strong>Занятость:</strong> {OPPORTUNITY_LABELS.employmentType[detailedOpportunity.employmentType] || detailedOpportunity.employmentType || '—'}
-                                        </p>
-                                        {isOfficeBasedWorkFormat && cityLabel && (
-                                            <p><strong>Город:</strong> {cityLabel}</p>
-                                        )}
-                                        {isOfficeBasedWorkFormat && officeLabel && (
-                                            <p><strong>Офис:</strong> {officeLabel}</p>
-                                        )}
-                                        {detailedOpportunity.type === 'EVENT' && (
-                                            <p>
-                                                <strong>Дата мероприятия:</strong> {formatDate(detailedOpportunity.eventDate)}
-                                            </p>
-                                        )}
-                                        {detailedOpportunity.type !== 'EVENT' && detailedOpportunity.expiresAt && (
-                                            <p><strong>Срок действия:</strong> {formatDate(detailedOpportunity.expiresAt)}</p>
-                                        )}
-
-                                        {detailedOpportunity.resourceLinks?.length > 0 && (
-                                            <div className="links-list">
-                                                {detailedOpportunity.resourceLinks.map((item, index) => (
-                                                    <a
-                                                        key={`${item.url}-${index}`}
-                                                        href={item.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="link-item"
-                                                    >
-                                                        <img src={linkIcon} alt="" className="icon-small"/>
-                                                        <span>{item.label || item.url}</span>
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {detailedOpportunity.media && detailedOpportunity.media.length > 0 && (
-                                            <div className="media-preview">
-                                                <div className="media-preview__title">
-                                                    <strong>Медиафайлы:</strong>
-                                                </div>
-                                                <div className="media-preview__list">
-                                                    {detailedOpportunity.media.slice(0, 3).map((item) => (
-                                                        <div key={item.attachmentId} className="media-preview__item">
-                                                            {item.mediaType?.startsWith('image/') ? (
-                                                                <img src={item.downloadUrl} alt={item.originalFileName} />
-                                                            ) : (
-                                                                <span>Файл {item.originalFileName}</span>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                    {detailedOpportunity.media.length > 3 && (
-                                                        <span>+ ещё {detailedOpportunity.media.length - 3}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
+
+                            {expandedOpportunityId === opp.id && (
+                                <div className="employer-opportunities__details">
+                                    <h4>Подробности</h4>
+                                    {requirementsText && (
+                                        <div className="employer-opportunities__details-block">
+                                            <strong>Требования:</strong>
+                                            <p className="employer-opportunities__details-text">{requirementsText}</p>
+                                        </div>
+                                    )}
+                                    {descriptionText && descriptionText !== String(opp.shortDescription || '').trim() && (
+                                        <div className="employer-opportunities__details-block">
+                                            <strong>Полное описание:</strong>
+                                            <p className="employer-opportunities__details-text">{descriptionText}</p>
+                                        </div>
+                                    )}
+                                    <p>
+                                        <strong>Уровень:</strong> {OPPORTUNITY_LABELS.grade[detailedOpportunity.grade] || detailedOpportunity.grade || '—'}
+                                    </p>
+                                    <p>
+                                        <strong>Занятость:</strong> {OPPORTUNITY_LABELS.employmentType[detailedOpportunity.employmentType] || detailedOpportunity.employmentType || '—'}
+                                    </p>
+                                    {isOfficeBasedWorkFormat && cityLabel && (
+                                        <p><strong>Город:</strong> {cityLabel}</p>
+                                    )}
+                                    {isOfficeBasedWorkFormat && officeLabel && (
+                                        <p><strong>Офис:</strong> {officeLabel}</p>
+                                    )}
+                                    {detailedOpportunity.type === 'EVENT' && (
+                                        <p>
+                                            <strong>Дата мероприятия:</strong> {formatDate(detailedOpportunity.eventDate)}
+                                        </p>
+                                    )}
+                                    {detailedOpportunity.type !== 'EVENT' && detailedOpportunity.expiresAt && (
+                                        <p><strong>Срок действия:</strong> {formatDate(detailedOpportunity.expiresAt)}</p>
+                                    )}
+
+                                    {detailedOpportunity.media && detailedOpportunity.media.length > 0 && (
+                                        <div className="media-preview">
+                                            <div className="media-preview__title">
+                                                <strong>Медиафайлы:</strong>
+                                            </div>
+                                            <div className="media-preview__list">
+                                                {detailedOpportunity.media.slice(0, 3).map((item) => (
+                                                    <div key={item.attachmentId} className="media-preview__item">
+                                                        {item.mediaType?.startsWith('image/') ? (
+                                                            <img src={item.downloadUrl} alt={item.originalFileName} />
+                                                        ) : (
+                                                            <span>Файл {item.originalFileName}</span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {detailedOpportunity.media.length > 3 && (
+                                                    <span>+ ещё {detailedOpportunity.media.length - 3}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )})}
                 </div>

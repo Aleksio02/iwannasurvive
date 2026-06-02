@@ -24,6 +24,7 @@ class OpportunityConverter(
     fun toListItem(source: OpportunityDto): OpportunityListItem {
         return OpportunityListItem(
             id = requireNotNull(source.id),
+            employerUserId = source.employerUserId,
             title = source.title,
             shortDescription = source.shortDescription,
             companyName = source.companyName,
