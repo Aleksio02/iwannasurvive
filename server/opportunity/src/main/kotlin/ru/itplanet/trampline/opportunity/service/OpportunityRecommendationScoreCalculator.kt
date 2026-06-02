@@ -9,6 +9,7 @@ import ru.itplanet.trampline.commons.model.interaction.InternalApplicantOpportun
 import ru.itplanet.trampline.commons.model.profile.InternalApplicantRecommendationContextResponse
 import ru.itplanet.trampline.opportunity.ai.config.AiRecommendationExplanationProperties
 import ru.itplanet.trampline.opportunity.dao.dto.OpportunityDto
+import ru.itplanet.trampline.opportunity.model.RecommendationMatchKind
 import ru.itplanet.trampline.opportunity.model.RecommendationMatchLevel
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import java.time.OffsetDateTime
@@ -41,16 +42,39 @@ class OpportunityRecommendationScoreCalculator(
         val tips = missingSkills.map { "Можно подтянуть $it" }.toMutableList()
         val opportunityId = checkNotNull(opportunity.id)
         val isFavorite = opportunityId in signals.favoriteOpportunityIds
-        val hasRequiredSkillMatch = matchedSkills.isNotEmpty() &&
-            (skillRatio >= properties.minSkillCoverage.coerceAtLeast(0.0) ||
-                matchedSkills.size >= properties.minSkillMatches.coerceAtLeast(1))
+        val strongSkillMatch =
+            matchedSkills.size >= properties.strongSkillMatches.coerceAtLeast(1) ||
+                skillRatio >= properties.strongSkillCoverage.coerceAtLeast(0.0) ||
+                (techTags.size == 1 && matchedSkills.size == 1)
+        val partialSkillMatch =
+            matchedSkills.isNotEmpty() &&
+                skillRatio >= properties.minPartialSkillCoverage.coerceAtLeast(0.0) &&
+                techTags.size <= properties.maxPartialSkillTags.coerceAtLeast(1)
+        val sameCityOfficeOrHybrid = when (opportunity.workFormat) {
+            WorkFormat.OFFICE, WorkFormat.HYBRID -> applicant.cityId != null && applicant.cityId == resolveCityId(opportunity)
+            WorkFormat.REMOTE, WorkFormat.ONLINE -> false
+        }
+        val hasSupportingSignal =
+            matchedInterests.isNotEmpty() ||
+                sameCityOfficeOrHybrid ||
+                isEntryLevelOpportunity(opportunity) ||
+                opportunity.workFormat == WorkFormat.REMOTE ||
+                opportunity.workFormat == WorkFormat.ONLINE
         val isEligible = isFavorite || when (opportunity.type) {
-            OpportunityType.VACANCY, OpportunityType.INTERNSHIP -> applicant.openToWork && hasRequiredSkillMatch
+            OpportunityType.VACANCY, OpportunityType.INTERNSHIP -> applicant.openToWork &&
+                (strongSkillMatch || (partialSkillMatch && hasSupportingSignal))
             OpportunityType.MENTORING -> matchedSkills.isNotEmpty() ||
                 (applicant.interests.isNotEmpty() && matchedInterests.isNotEmpty())
             OpportunityType.EVENT -> applicant.openToEvents &&
                 (matchedSkills.isNotEmpty() || matchedInterests.isNotEmpty())
         }
+        val matchKind = determineMatchKind(
+            isFavorite = isFavorite,
+            strongSkillMatch = strongSkillMatch,
+            partialSkillMatch = partialSkillMatch,
+            matchedSkills = matchedSkills,
+            matchedInterests = matchedInterests,
+        )
 
         if (!isEligible) {
             return OpportunityRecommendationScore(
@@ -63,19 +87,28 @@ class OpportunityRecommendationScoreCalculator(
                 improvementTips = tips.take(properties.maxImprovementTips.coerceAtLeast(0)),
                 isFavorite = isFavorite,
                 isEligible = false,
+                matchKind = RecommendationMatchKind.NONE,
             )
         }
 
-        var score = (60 * skillRatio).roundToInt()
-        if (matchedSkills.isNotEmpty()) {
-            reasons += "Совпали навыки ${matchedSkills.take(3).joinToString(" и ")}"
+        var score = if (matchedSkills.isEmpty()) {
+            0
+        } else {
+            35 + (25 * skillRatio).roundToInt()
         }
-        if (matchedSkills.size >= 2) {
+        if (matchedSkills.isNotEmpty()) {
+            reasons += if (strongSkillMatch || matchedSkills.size > 1) {
+                "Совпали навыки ${matchedSkills.take(3).joinToString(" и ")}"
+            } else {
+                "Совпал навык ${matchedSkills.first()}"
+            }
+        }
+        if (strongSkillMatch) {
             score += 5
         }
         score += when (opportunity.type) {
             OpportunityType.VACANCY, OpportunityType.INTERNSHIP ->
-                if (matchedSkills.isNotEmpty()) (10 * interestRatio).roundToInt() else 0
+                if (matchedSkills.isNotEmpty()) (8 * interestRatio).roundToInt() else 0
             OpportunityType.MENTORING, OpportunityType.EVENT -> (15 * interestRatio).roundToInt()
         }
         if (matchedInterests.isNotEmpty()) {
@@ -125,11 +158,33 @@ class OpportunityRecommendationScoreCalculator(
             improvementTips = tips.take(properties.maxImprovementTips.coerceAtLeast(0)),
             isFavorite = isFavorite,
             isEligible = true,
+            matchKind = matchKind,
         )
     }
 
     private fun resolveCityId(opportunity: OpportunityDto): Long? {
         return opportunity.cityId ?: opportunity.location?.cityId
+    }
+
+    private fun isEntryLevelOpportunity(opportunity: OpportunityDto): Boolean {
+        return opportunity.grade == Grade.INTERN || opportunity.grade == Grade.JUNIOR
+    }
+
+    private fun determineMatchKind(
+        isFavorite: Boolean,
+        strongSkillMatch: Boolean,
+        partialSkillMatch: Boolean,
+        matchedSkills: List<String>,
+        matchedInterests: List<String>,
+    ): RecommendationMatchKind {
+        return when {
+            isFavorite && matchedSkills.isEmpty() && matchedInterests.isEmpty() -> RecommendationMatchKind.FAVORITE
+            strongSkillMatch -> RecommendationMatchKind.STRONG_SKILL_MATCH
+            partialSkillMatch -> RecommendationMatchKind.PARTIAL_SKILL_MATCH
+            matchedInterests.isNotEmpty() -> RecommendationMatchKind.INTEREST_MATCH
+            isFavorite -> RecommendationMatchKind.FAVORITE
+            else -> RecommendationMatchKind.NONE
+        }
     }
 }
 
@@ -143,4 +198,5 @@ data class OpportunityRecommendationScore(
     val improvementTips: List<String>,
     val isFavorite: Boolean,
     val isEligible: Boolean,
+    val matchKind: RecommendationMatchKind,
 )

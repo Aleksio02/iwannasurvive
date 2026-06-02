@@ -20,6 +20,7 @@ import ru.itplanet.trampline.opportunity.model.PersonalizedOpportunityRecommenda
 import ru.itplanet.trampline.opportunity.model.PersonalizedRecommendationExplanation
 import ru.itplanet.trampline.opportunity.model.RecommendationEmptyReason
 import ru.itplanet.trampline.opportunity.model.RecommendationExplanationSource
+import ru.itplanet.trampline.opportunity.model.RecommendationMatchKind
 import ru.itplanet.trampline.opportunity.model.RecommendationProfileHints
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -78,13 +79,7 @@ class PersonalizedOpportunityRecommendationService(
             opportunity to scoreCalculator.calculate(opportunity, applicant, signals, now)
         }
 
-        val qualified = scored
-            .filter { (_, score) -> score.isEligible }
-            .filter { (_, score) -> score.score >= properties.minScore.coerceAtLeast(0) }
-            .sortedWith(
-                compareByDescending<Pair<OpportunityDto, OpportunityRecommendationScore>> { it.second.score }
-                    .thenByDescending { it.first.publishedAt },
-            )
+        val qualified = qualifyPersonalizedRecommendations(scored, properties.minScore)
 
         val items = qualified.take(limit).map { (opportunity, score) ->
                 val fallback = PersonalizedRecommendationExplanation(
@@ -159,4 +154,19 @@ class PersonalizedOpportunityRecommendationService(
     private companion object {
         val logger = LoggerFactory.getLogger(PersonalizedOpportunityRecommendationService::class.java)
     }
+}
+
+internal fun qualifyPersonalizedRecommendations(
+    scored: List<Pair<OpportunityDto, OpportunityRecommendationScore>>,
+    minScore: Int,
+): List<Pair<OpportunityDto, OpportunityRecommendationScore>> {
+    return scored
+        .filter { (_, score) -> score.isEligible }
+        .filter { (_, score) -> score.score >= minScore.coerceAtLeast(0) }
+        .sortedWith(
+            compareByDescending<Pair<OpportunityDto, OpportunityRecommendationScore>> { it.second.score }
+                .thenByDescending { it.second.isFavorite }
+                .thenByDescending { it.second.matchKind == RecommendationMatchKind.STRONG_SKILL_MATCH }
+                .thenByDescending { it.first.publishedAt },
+        )
 }

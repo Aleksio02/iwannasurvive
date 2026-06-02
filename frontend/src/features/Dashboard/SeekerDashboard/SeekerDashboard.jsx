@@ -524,13 +524,6 @@ function SeekerDashboard() {
     const hasSkills = profileSkills.length > 0
     const hasInterests = profileInterests.length > 0
 
-    const formatDate = (dateString) => {
-        if (!dateString) return 'Дата не указана'
-        const date = new Date(dateString)
-        if (Number.isNaN(date.getTime())) return 'Дата не указана'
-        return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-    }
-
     const linksToArray = (linksArray) => {
         if (!linksArray || !Array.isArray(linksArray)) return []
         return linksArray.map((item, index) => ({
@@ -1471,7 +1464,7 @@ function SeekerDashboard() {
                 variant: 'destructive',
             })
         }
-    }, [loadContacts, loadRecommendations, toast])
+    }, [loadContacts, toast])
 
     const handleDeclineContact = useCallback(async (userId) => {
         try {
@@ -1488,7 +1481,7 @@ function SeekerDashboard() {
                 variant: 'destructive',
             })
         }
-    }, [loadContacts, loadRecommendations, toast])
+    }, [loadContacts, toast])
 
     const handleRemoveContact = useCallback(async (userId, direction = 'CONFIRMED') => {
         try {
@@ -1507,7 +1500,7 @@ function SeekerDashboard() {
                 variant: 'destructive',
             })
         }
-    }, [loadContacts, loadRecommendations, toast])
+    }, [loadContacts, toast])
 
     const handleSendRecommendation = async () => {
         if (!canSendRecommendation) {
@@ -1874,34 +1867,6 @@ function SeekerDashboard() {
                 </div>
             </div>
         )
-    }
-
-    const getContactStatusLabel = (status) => {
-        switch (status) {
-            case 'PENDING':
-                return 'Ожидает ответа'
-            case 'ACCEPTED':
-                return 'Подтверждён'
-            case 'DECLINED':
-                return 'Отклонён'
-            case 'BLOCKED':
-                return 'Заблокирован'
-            default:
-                return status || 'Неизвестно'
-        }
-    }
-
-    const getContactDirectionLabel = (direction) => {
-        switch (direction) {
-            case 'INCOMING':
-                return 'Входящий'
-            case 'OUTGOING':
-                return 'Исходящий'
-            case 'CONFIRMED':
-                return 'Подтверждённый'
-            default:
-                return 'Без направления'
-        }
     }
 
     const isIncomingContact = (contact) => contact.direction === 'INCOMING'
