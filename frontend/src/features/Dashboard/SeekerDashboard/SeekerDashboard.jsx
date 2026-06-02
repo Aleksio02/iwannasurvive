@@ -523,19 +523,6 @@ function SeekerDashboard() {
     )
     const hasSkills = profileSkills.length > 0
     const hasInterests = profileInterests.length > 0
-    const hasCity = Boolean(profile.cityId || profile.cityName)
-    const hasResumeSignal =
-        Boolean(profile.resumeText?.trim()) ||
-        Boolean(profile.resumeFile) ||
-        (Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0) ||
-        (Array.isArray(profile.portfolioFiles) && profile.portfolioFiles.length > 0)
-    const readinessItems = [
-        { label: 'навыки', isComplete: hasSkills },
-        { label: 'интересы', isComplete: hasInterests },
-        { label: 'город', isComplete: hasCity },
-        { label: 'резюме или портфолио', isComplete: hasResumeSignal },
-    ]
-    const missingProfileItems = readinessItems.filter((item) => !item.isComplete)
 
     const formatDate = (dateString) => {
         if (!dateString) return 'Дата не указана'
@@ -2377,9 +2364,9 @@ function SeekerDashboard() {
                         </div>
 
                         <div className="profile-overview-grid">
-                            <section ref={tagsOverviewRef} className="profile-overview-card">
+                            <section ref={tagsOverviewRef} className="profile-overview-card profile-overview-card--wide">
                                 <div className="profile-overview-card__header">
-                                    <h3>{hasSkills || hasInterests ? 'Навыки и интересы' : 'Навыки'}</h3>
+                                    <h3>Навыки и интересы</h3>
                                     {!isEditingTags && (
                                         <button
                                             type="button"
@@ -2419,81 +2406,61 @@ function SeekerDashboard() {
                                                 onInterestTagIdsChange={setDraftInterestTagIds}
                                                 disabled={isSavingTags}
                                                 compact
+                                                layout="columns"
                                                 skillInputRef={tagsSkillInputRef}
                                             />
                                         )}
 
                                         <div className="profile-overview-card__editor-actions">
-                                            <Button
+                                            <button
                                                 type="button"
                                                 className="btn-primary-small"
                                                 onClick={handleSaveTags}
                                                 disabled={isTagsLoading || Boolean(tagsError) || isSavingTags}
                                             >
                                                 {isSavingTags ? 'Сохраняем...' : 'Сохранить'}
-                                            </Button>
+                                            </button>
                                             <button
                                                 type="button"
                                                 className="btn-secondary-small"
                                                 onClick={handleCancelTagsEdit}
                                                 disabled={isSavingTags}
                                             >
-                                                Отмена
+                                                Отменить
                                             </button>
                                         </div>
                                     </div>
-                                ) : hasSkills || hasInterests ? (
-                                    <div className="profile-overview-card__groups">
-                                        {hasSkills && (
-                                            <div>
-                                                <span className="profile-overview-card__label">Навыки</span>
-                                                <div className="profile-overview-card__chips">
-                                                    {profileSkills.slice(0, 6).map((tag) => (
-                                                        <span key={tag.id || tag.name}>{tag.name}</span>
-                                                    ))}
-                                                    {profileSkills.length > 6 && <span>+{profileSkills.length - 6}</span>}
-                                                </div>
-                                            </div>
-                                        )}
-                                        {hasInterests && (
-                                            <div>
-                                                <span className="profile-overview-card__label">Интересы</span>
-                                                <div className="profile-overview-card__chips">
-                                                    {profileInterests.slice(0, 6).map((tag) => (
-                                                        <span key={tag.id || tag.name}>{tag.name}</span>
-                                                    ))}
-                                                    {profileInterests.length > 6 && <span>+{profileInterests.length - 6}</span>}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
                                 ) : (
-                                    <div className="profile-overview-card__empty">
-                                        <p>Добавьте технологии для рекомендаций.</p>
+                                    <div className="profile-overview-card__columns">
+                                        <div className="profile-overview-card__group">
+                                            <span className="profile-overview-card__label">Навыки</span>
+                                            {hasSkills ? (
+                                                <div className="profile-overview-card__chips">
+                                                    {profileSkills.slice(0, 8).map((tag) => (
+                                                        <span key={tag.id || tag.name}>{tag.name}</span>
+                                                    ))}
+                                                    {profileSkills.length > 8 && <span>+{profileSkills.length - 8}</span>}
+                                                </div>
+                                            ) : (
+                                                <span className="profile-overview-card__empty-text">Не указаны</span>
+                                            )}
+                                        </div>
+                                        <div className="profile-overview-card__group">
+                                            <span className="profile-overview-card__label">Интересы</span>
+                                            {hasInterests ? (
+                                                <div className="profile-overview-card__chips">
+                                                    {profileInterests.slice(0, 8).map((tag) => (
+                                                        <span key={tag.id || tag.name}>{tag.name}</span>
+                                                    ))}
+                                                    {profileInterests.length > 8 && <span>+{profileInterests.length - 8}</span>}
+                                                </div>
+                                            ) : (
+                                                <span className="profile-overview-card__empty-text">Не указаны</span>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </section>
-
-                            {missingProfileItems.length > 0 && (
-                                <section className="profile-readiness-card">
-                                    <h3>Профиль</h3>
-                                    <p>Не заполнено: {missingProfileItems.map((item) => item.label).join(', ')}</p>
-                                    <button
-                                        type="button"
-                                        className="profile-overview-card__action"
-                                        onClick={() => {
-                                            if (!hasSkills || !hasInterests) {
-                                                void openTagsEditor()
-                                                return
-                                            }
-
-                                            setIsEditing(true)
-                                        }}
-                                    >
-                                        Доработать
-                                    </button>
-                                </section>
-                            )}
                         </div>
 
                         {isEditing && (

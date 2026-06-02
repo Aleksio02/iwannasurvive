@@ -1698,6 +1698,7 @@ function ProfileEdit() {
                                         selectedInterestTagIds={selectedInterestTagIds}
                                         onSkillTagIdsChange={setSelectedSkillTagIds}
                                         onInterestTagIdsChange={setSelectedInterestTagIds}
+                                        layout="stacked"
                                         skillInputRef={skillSearchInputRef}
                                     />
                                 </section>
