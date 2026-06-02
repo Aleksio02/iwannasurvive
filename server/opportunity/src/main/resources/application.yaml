@@ -79,6 +79,10 @@ app:
       min-score: ${AI_RECOMMENDATION_MIN_SCORE:55}
       min-skill-matches: ${AI_RECOMMENDATION_MIN_SKILL_MATCHES:1}
       min-skill-coverage: ${AI_RECOMMENDATION_MIN_SKILL_COVERAGE:0.30}
+      strong-skill-matches: ${AI_RECOMMENDATION_STRONG_SKILL_MATCHES:2}
+      strong-skill-coverage: ${AI_RECOMMENDATION_STRONG_SKILL_COVERAGE:0.60}
+      min-partial-skill-coverage: ${AI_RECOMMENDATION_MIN_PARTIAL_SKILL_COVERAGE:0.30}
+      max-partial-skill-tags: ${AI_RECOMMENDATION_MAX_PARTIAL_SKILL_TAGS:3}
       max-reasons: 3
       max-improvement-tips: 3
     yandex-gpt:
