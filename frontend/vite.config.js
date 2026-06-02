@@ -13,6 +13,14 @@ export default defineConfig(({ mode }) => {
   const geoTarget = env.VITE_GEO_PROXY_TARGET || 'http://localhost:8084'
   const mediaTarget = env.VITE_MEDIA_PROXY_TARGET || 'http://localhost:8091'
 
+  const interactionProxy = {
+    target: interactionTarget,
+    changeOrigin: true,
+    secure: false,
+    cookieDomainRewrite: '',
+    cookiePathRewrite: '',
+  }
+
   return {
     plugins: [react()],
     resolve: {
@@ -93,26 +101,15 @@ export default defineConfig(({ mode }) => {
           secure: false,
         },
 
-        '/api/interaction': {
-          target: interactionTarget,
-          changeOrigin: true,
-          secure: false,
-        },
-        '/api/employer/responses': {
-          target: interactionTarget,
-          changeOrigin: true,
-          secure: false,
-        },
-        '/api/chats': {
-          target: interactionTarget,
-          changeOrigin: true,
-          secure: false,
-        },
+        '/api/interaction': interactionProxy,
+        '/api/employer/responses': interactionProxy,
+        '/api/chats': interactionProxy,
         '/ws': {
-          target: interactionTarget,
-          changeOrigin: true,
-          secure: false,
+          ...interactionProxy,
           ws: true,
+          configure: (proxy) => {
+            proxy.on('error', () => {})
+          },
         },
 
         '/api/moderation': {

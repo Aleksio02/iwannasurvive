@@ -3,14 +3,20 @@ import { createPortal } from 'react-dom'
 import Label from '../Label'
 import './CustomSelect.scss'
 
+function normalizeSelectValue(value) {
+    if (value === null || value === undefined) return ''
+    return String(value)
+}
+
 function CustomSelect({
                           label,
                           value,
                           onChange,
-                          options,
+                          options = [],
                           placeholder = 'Выберите',
                           error,
                           required = false,
+                          inModal = false,
                       }) {
     const [isOpen, setIsOpen] = useState(false)
     const [activeIndex, setActiveIndex] = useState(-1)
@@ -20,10 +26,9 @@ function CustomSelect({
     const buttonRef = useRef(null)
     const menuRef = useRef(null)
 
-    const selected = options.find((o) => o.value === value)
-    const isInModalContext = Boolean(
-        buttonRef.current?.closest('.modal, .modal-overlay, .seeker-dashboard-modal, .employer-verification-modal, [role="dialog"]')
-    )
+    const normalizedValue = normalizeSelectValue(value)
+    const selected = options.find((o) => normalizeSelectValue(o.value) === normalizedValue)
+    const safeOptions = Array.isArray(options) ? options : []
 
     useEffect(() => {
         const onDocClick = (e) => {
@@ -37,7 +42,7 @@ function CustomSelect({
     }, [])
 
     useEffect(() => {
-        if (!isOpen) return
+        if (!isOpen || inModal) return
 
         const updatePosition = () => {
             if (!buttonRef.current) return
@@ -50,7 +55,14 @@ function CustomSelect({
         }
 
         updatePosition()
-        const closeOnScroll = () => setIsOpen(false)
+
+        const closeOnScroll = (event) => {
+            if (menuRef.current?.contains(event.target) || buttonRef.current?.contains(event.target)) {
+                return
+            }
+            setIsOpen(false)
+        }
+
         window.addEventListener('resize', updatePosition)
         window.addEventListener('scroll', closeOnScroll, true)
 
@@ -58,20 +70,29 @@ function CustomSelect({
             window.removeEventListener('resize', updatePosition)
             window.removeEventListener('scroll', closeOnScroll, true)
         }
+    }, [inModal, isOpen])
+
+    useEffect(() => {
+        if (!isOpen) {
+            setMenuPosition(null)
+            setActiveIndex(-1)
+        }
     }, [isOpen])
 
     const handleKeyDown = (event) => {
+        if (!safeOptions.length) return
+
         if (event.key === 'ArrowDown') {
             event.preventDefault()
             if (!isOpen) setIsOpen(true)
-            setActiveIndex((prev) => (prev + 1) % options.length)
+            setActiveIndex((prev) => (prev + 1) % safeOptions.length)
         } else if (event.key === 'ArrowUp') {
             event.preventDefault()
             if (!isOpen) setIsOpen(true)
-            setActiveIndex((prev) => (prev <= 0 ? options.length - 1 : prev - 1))
+            setActiveIndex((prev) => (prev <= 0 ? safeOptions.length - 1 : prev - 1))
         } else if (event.key === 'Enter' && isOpen && activeIndex >= 0) {
             event.preventDefault()
-            onChange(options[activeIndex].value)
+            onChange(safeOptions[activeIndex].value)
             setIsOpen(false)
         } else if (event.key === 'Escape') {
             setIsOpen(false)
@@ -81,42 +102,63 @@ function CustomSelect({
     const displayText = selected?.label || placeholder
     const truncatedText = displayText.length > 40 ? displayText.slice(0, 37) + '...' : displayText
 
-    const menu = isOpen && menuPosition && createPortal(
+    const menuItems = safeOptions.map((option, idx) => (
+        <button
+            key={`${option.value}-${idx}`}
+            type="button"
+            className={`custom-select__item ${
+                normalizedValue === normalizeSelectValue(option.value) ? 'is-selected' : ''
+            } ${idx === activeIndex ? 'is-active' : ''}`}
+            onMouseEnter={() => setActiveIndex(idx)}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+                onChange(option.value)
+                setIsOpen(false)
+            }}
+            title={option.label}
+        >
+            {option.label}
+        </button>
+    ))
+
+    const inlineMenu = inModal && isOpen ? (
         <div
             ref={menuRef}
-            className={`custom-select__menu custom-select__menu--portal ${isInModalContext ? 'custom-select__menu--modal' : ''}`.trim()}
+            className="custom-select__menu custom-select__menu--inline"
             role="listbox"
-            style={{
-                position: 'fixed',
-                top: `${menuPosition.top}px`,
-                left: `${menuPosition.left}px`,
-                width: `${menuPosition.width}px`,
-            }}
         >
-            {options.map((option, idx) => (
-                <button
-                    key={option.value}
-                    type="button"
-                    className={`custom-select__item ${
-                        value === option.value ? 'is-selected' : ''
-                    } ${idx === activeIndex ? 'is-active' : ''}`}
-                    onMouseEnter={() => setActiveIndex(idx)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                        onChange(option.value)
-                        setIsOpen(false)
-                    }}
-                    title={option.label}
-                >
-                    {option.label}
-                </button>
-            ))}
-        </div>,
-        document.body
-    )
+            {menuItems.length > 0 ? menuItems : (
+                <div className="custom-select__empty">Нет вариантов</div>
+            )}
+        </div>
+    ) : null
+
+    const portalMenu = !inModal && isOpen && menuPosition
+        ? createPortal(
+            <div
+                ref={menuRef}
+                className="custom-select__menu custom-select__menu--portal"
+                role="listbox"
+                style={{
+                    position: 'fixed',
+                    top: `${menuPosition.top}px`,
+                    left: `${menuPosition.left}px`,
+                    width: `${menuPosition.width}px`,
+                }}
+            >
+                {menuItems.length > 0 ? menuItems : (
+                    <div className="custom-select__empty">Нет вариантов</div>
+                )}
+            </div>,
+            document.body
+        )
+        : null
 
     return (
-        <div className="custom-select" ref={rootRef}>
+        <div
+            className={`custom-select ${inModal ? 'custom-select--modal' : ''} ${isOpen ? 'is-open' : ''}`.trim()}
+            ref={rootRef}
+        >
             {label && (
                 <Label>
                     {label}
@@ -133,13 +175,16 @@ function CustomSelect({
                     onKeyDown={handleKeyDown}
                     aria-expanded={isOpen}
                     title={displayText}
+                    disabled={safeOptions.length === 0}
                 >
                     <span className="custom-select__text">{truncatedText}</span>
                     <span className={`custom-select__arrow ${isOpen ? 'is-open' : ''}`}>▾</span>
                 </button>
+
+                {inlineMenu}
             </div>
 
-            {menu}
+            {portalMenu}
             {error && <p className="field-error">{error}</p>}
         </div>
     )

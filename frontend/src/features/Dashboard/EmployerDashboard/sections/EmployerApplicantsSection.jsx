@@ -15,6 +15,7 @@ function EmployerApplicantsSection({
                                        responseFilters,
                                        setResponseFilters,
                                        responsesPage,
+                                       isLoading = false,
                                        onLoadEmployerResponsesData,
                                        onUpdateApplicationStatus,
                                        onOpenApplicant,
@@ -73,7 +74,9 @@ function EmployerApplicantsSection({
                 </div>
             </div>
 
-            {responsesPage.items.length === 0 ? (
+            {isLoading ? (
+                <p className="employer-empty">Загрузка откликов...</p>
+            ) : responsesPage.items.length === 0 ? (
                 <p className="employer-empty">Пока нет откликов</p>
             ) : (
                 <div className="employer-applicants__list">

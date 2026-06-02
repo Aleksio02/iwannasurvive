@@ -208,6 +208,7 @@
             0 12px 26px rgba(31, 182, 170, 0.18);
     overflow: hidden;
     flex-shrink: 0;
+    position: relative;
   }
 
   &__avatar-image {
@@ -215,7 +216,36 @@
     height: 100%;
     object-fit: cover;
     display: block;
+
+    &.is-loading {
+      opacity: 0;
+    }
   }
+
+  &__avatar-loader {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.28);
+    pointer-events: none;
+
+    .loading-spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: applicant-avatar-spin 0.8s linear infinite;
+    }
+  }
+
+@keyframes applicant-avatar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
   &__avatar-fallback-icon {
     width: 42px;

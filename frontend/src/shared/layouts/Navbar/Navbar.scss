@@ -43,8 +43,11 @@
 }
 
 .navbar__logo-icon {
+  width: 32px;
   height: 32px;
-  width: auto;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
 }
 
 .navbar__logo-text {

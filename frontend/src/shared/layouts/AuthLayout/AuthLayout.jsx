@@ -1,5 +1,5 @@
 import { Link } from 'wouter'
-import brandMark from '@/assets/icons/brand-mark.svg'
+import brandMark from '@/assets/icons/brand-mark.png'
 import './AuthLayout.scss'
 
 function AuthLayout({ children }) {

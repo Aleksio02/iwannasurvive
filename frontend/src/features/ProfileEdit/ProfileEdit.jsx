@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import { useToast } from '@/shared/hooks/use-toast'
 import { RUSSIAN_UNIVERSITIES } from '@/shared/lib/constants/universities'
@@ -38,12 +38,13 @@ import Input from '@/shared/ui/Input'
 import Label from '@/shared/ui/Label'
 import Textarea from '@/shared/ui/Textarea'
 import Autocomplete from '@/shared/ui/Autocomplete'
-import LinksEditor from '@/shared/ui/LinksEditor'
 import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
 import './ProfileEdit.scss'
+
+const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
 
 const VISIBILITY_OPTIONS = [
     { value: 'PUBLIC', label: 'Публично' },
@@ -1718,7 +1719,9 @@ function ProfileEdit() {
                                             />
                                         </div>
 
-                                        <LinksEditor label="Портфолио" rows={portfolioRows} setRows={setPortfolioRows} />
+                                        <Suspense fallback={<div className="field-hint">Загрузка редактора портфолио...</div>}>
+                                            <LinksEditor label="Портфолио" rows={portfolioRows} setRows={setPortfolioRows} />
+                                        </Suspense>
                                         {renderContactEditor(
                                             'Социальные сети',
                                             socialRows,

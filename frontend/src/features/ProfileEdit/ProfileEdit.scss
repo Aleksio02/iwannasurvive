@@ -291,14 +291,15 @@
   align-items: center;
   justify-content: center;
   min-width: 34px;
+  width: 34px;
   height: 34px;
-  padding: 0 8px;
+  padding: 0;
   border-radius: 999px;
   background: rgba(31, 182, 170, 0.12);
   color: #159a90;
   font-size: 12px;
   font-weight: 800;
-  line-height: 34px;
+  line-height: 1;
   flex-shrink: 0;
   text-align: center;
   align-self: center;
@@ -342,18 +343,15 @@
   align-items: center;
   gap: 10px;
 
-  strong,
-  span {
-    display: block;
-  }
-
   strong {
+    display: block;
     margin-bottom: 4px;
     color: #0f172a;
     font-size: 14px;
   }
 
-  span {
+  > div span {
+    display: block;
     color: #64748b;
     font-size: 12px;
     line-height: 1.45;

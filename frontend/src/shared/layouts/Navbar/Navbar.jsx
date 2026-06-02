@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter'
-import { useState, useEffect } from 'react'
-import brandMark from '@/assets/icons/brand-mark.svg'
+import { useState, useEffect, useRef } from 'react'
+import brandMark from '@/assets/icons/brand-mark.png'
 import { getCurrentUserInfo, logoutUser } from '@/shared/api/auth'
 import { getApplicantProfile, getEmployerProfile } from '@/shared/api/profile'
 import { getChatDialogs } from '@/shared/api/chats'
@@ -20,6 +20,7 @@ function Navbar() {
     const [isCheckingSession, setIsCheckingSession] = useState(!!getSessionUser())
     const [unreadChatCount, setUnreadChatCount] = useState(0)
     const { eventVersion } = useChatRealtime()
+    const lastUnreadRefreshAtRef = useRef(0)
 
     const loadUserData = async () => {
         const localUser = getSessionUser()
@@ -137,7 +138,13 @@ function Navbar() {
         let refreshTimer = null
 
         const refreshUnreadCount = () => {
-            getChatDialogs({ unreadOnly: true, limit: 100 })
+            const now = Date.now()
+            if (now - lastUnreadRefreshAtRef.current < 1500) {
+                return
+            }
+            lastUnreadRefreshAtRef.current = now
+
+            getChatDialogs({ unreadOnly: true, limit: 100, cacheTtlMs: 4_000 })
                 .then((page) => {
                     if (!isActive) return
                     const total = (page?.items || []).reduce((sum, dialog) => sum + (dialog.unreadCount || 0), 0)

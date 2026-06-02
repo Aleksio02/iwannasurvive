@@ -49,7 +49,7 @@ class InteractionController(
         @Valid @RequestBody request: OpportunityResponseStatusUpdateRequest,
     ): OpportunityResponseResponse = interactionService.updateApplicationStatus(id, userId, request)
 
-    @GetMapping("/responses/my")
+    @GetMapping("/responses/my", "/applications/my")
     fun getMyResponses(
         @CurrentUser userId: Long,
     ): List<OpportunityResponseResponse> {

@@ -52,6 +52,11 @@ function escapeHtml(value) {
         .replaceAll("'", '&#039;')
 }
 
+function normalizeOpportunityId(id) {
+    if (id === null || id === undefined) return ''
+    return String(id)
+}
+
 function markerSvg(color) {
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
         <svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">
@@ -206,7 +211,7 @@ export default function YandexOpportunityMap({
     const lastPointsSignatureRef = useRef('')
     const onOpenCardRef = useRef(onOpenCard)
     const onCenterChangeRef = useRef(onCenterChange)
-    const didInitialFitRef = useRef(false)
+    const didInitialCenterRef = useRef(false)
     const [isTouchMode, setIsTouchMode] = useState(false)
     const [isMapReady, setIsMapReady] = useState(false)
 
@@ -389,32 +394,33 @@ export default function YandexOpportunityMap({
                 })
 
                 map.geoObjects.add(placemark)
-                placemarksRef.current.set(point.id, placemark)
+                placemarksRef.current.set(normalizeOpportunityId(point.id), placemark)
             })
 
-        const pointsChanged = lastPointsSignatureRef.current !== pointsSignature
+        if (!didInitialCenterRef.current) {
+            suppressCenterEventRef.current = true
 
-        if (!focusedOpportunityId && (pointsChanged || !didInitialFitRef.current)) {
-            if (map.geoObjects.getLength() > 0) {
-                suppressCenterEventRef.current = true
-                map.setBounds(map.geoObjects.getBounds(), {
-                    checkZoomRange: true,
-                    zoomMargin: 40,
-                })
+            const focusedPlacemark = focusedOpportunityId
+                ? placemarksRef.current.get(normalizeOpportunityId(focusedOpportunityId))
+                : null
+            const geoPoints = points.filter((point) => point.latitude && point.longitude)
 
-                setTimeout(() => {
-                    suppressCenterEventRef.current = false
-                }, 300)
-            } else if (!didInitialFitRef.current) {
-                suppressCenterEventRef.current = true
-                map.setCenter(center, 5)
-
-                setTimeout(() => {
-                    suppressCenterEventRef.current = false
-                }, 300)
+            if (focusedPlacemark) {
+                const coords = focusedPlacemark.geometry.getCoordinates()
+                map.setCenter(coords, 14, { checkZoomRange: true })
+            } else if (geoPoints.length === 1) {
+                map.setCenter([geoPoints[0].latitude, geoPoints[0].longitude], 14, { checkZoomRange: true })
+            } else {
+                map.setCenter([55.751244, 37.618423], 5)
             }
 
-            didInitialFitRef.current = true
+            setTimeout(() => {
+                suppressCenterEventRef.current = false
+            }, 300)
+
+            didInitialCenterRef.current = true
+            lastPointsSignatureRef.current = pointsSignature
+        } else if (lastPointsSignatureRef.current !== pointsSignature) {
             lastPointsSignatureRef.current = pointsSignature
         }
 
@@ -426,7 +432,7 @@ export default function YandexOpportunityMap({
 
         const tryFocus = (attempt = 0) => {
             const map = mapRef.current
-            const placemark = placemarksRef.current.get(focusedOpportunityId)
+            const placemark = placemarksRef.current.get(normalizeOpportunityId(focusedOpportunityId))
 
             if (!map || !placemark) {
                 if (attempt < 8) {
@@ -441,13 +447,30 @@ export default function YandexOpportunityMap({
             try {
                 map.container.fitToViewport()
                 const coords = placemark.geometry.getCoordinates()
+                const ymapsApi = ymapsRef.current
 
                 suppressCenterEventRef.current = true
-                map.setCenter(coords, 14, { duration: 350, checkZoomRange: true })
+
+                if (ymapsApi?.util?.bounds) {
+                    const bounds = ymapsApi.util.bounds.fromPoints([coords])
+                    map.setBounds(bounds, {
+                        checkZoomRange: true,
+                        zoomMargin: [120, 120, 120, 120],
+                        duration: 350,
+                    }).then(() => {
+                        if (map.getZoom() > 14) {
+                            map.setZoom(14, { duration: 200, checkZoomRange: true })
+                        }
+                    }).catch(() => {
+                        map.setCenter(coords, 14, { duration: 350, checkZoomRange: true })
+                    })
+                } else {
+                    map.setCenter(coords, 14, { duration: 350, checkZoomRange: true })
+                }
 
                 setTimeout(() => {
                     suppressCenterEventRef.current = false
-                }, 400)
+                }, 450)
 
                 if (!isTouchMode) {
                     placemark.balloon.open()

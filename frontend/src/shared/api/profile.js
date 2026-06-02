@@ -29,10 +29,16 @@ import {
     updateResponseStatus as updateInteractionResponseStatus,
 } from './interaction'
 import {
+    getLocalFavoriteOpportunityIds,
+    setLocalFavoriteOpportunityIds,
+} from '@/shared/lib/utils/favoriteStorage'
+import { invalidateSavedFavoritesCache } from './favorites'
+import {
     getSessionUserFromApi,
     getSessionUserIdFromApi,
     getRequiredCurrentUserPayload,
     clearSessionUserCache,
+    httpJson,
 } from './http'
 import { translateStatusTokensInText } from '@/shared/lib/utils/statusLabels'
 
@@ -1037,8 +1043,23 @@ export async function getEmployerProfile() {
         return null
     }
 
+    return getPublicEmployerProfile(userId)
+}
+
+export async function getPublicEmployerProfile(userId, options = {}) {
+    const normalizedUserId = Number(userId)
+    if (!Number.isFinite(normalizedUserId) || normalizedUserId <= 0) {
+        return null
+    }
+
+    const currentUserId = await getSessionUserIdFromApi()
+    const query = currentUserId ? `?currentUserId=${currentUserId}` : ''
+
     try {
-        const data = await apiRequest(`${API_BASE}/profile/employer/${userId}?currentUserId=${userId}`)
+        const data = await httpJson(`${API_BASE}/profile/employer/${normalizedUserId}${query}`, {
+            dedupe: true,
+            cacheTtlMs: options.cacheTtlMs ?? 30_000,
+        })
         return normalizeEmployerProfile(data)
     } catch (error) {
         if (error.status === 404) {
@@ -1154,6 +1175,50 @@ export async function deleteEmployerLocation(locationId) {
 
 // ========== INTERACTION API: СОИСКАТЕЛЬ ==========
 
+function mapProfileApplicationSummary(application, index) {
+    const opportunityId = application.opportunityId ?? application.opportunity?.id ?? null
+    const fallbackTitle = opportunityId ? `Вакансия #${opportunityId}` : `Отклик #${application.id ?? index + 1}`
+
+    return {
+        id: application.id ?? `${opportunityId ?? 'unknown'}-${application.createdAt ?? index}`,
+        opportunityId,
+        position: application.opportunityTitle || application.title || fallbackTitle,
+        title: application.opportunityTitle || application.title || fallbackTitle,
+        companyName: application.companyName || 'Компания',
+        status: application.status || 'SUBMITTED',
+        message: application.employerComment || application.applicantComment || 'Отклик отправлен',
+        appliedAt: application.createdAt,
+        createdAt: application.createdAt,
+        chatSummary: application.chatSummary || null,
+    }
+}
+
+async function getApplicantApplicationsViaProfile(userId) {
+    const normalizedUserId = Number(userId)
+    if (!Number.isFinite(normalizedUserId) || normalizedUserId <= 0) {
+        return []
+    }
+
+    const requestProfileApplications = async (querySuffix) => {
+        const data = await apiRequest(
+            `${API_BASE}/profile/applicant/${normalizedUserId}/applications?${querySuffix}`
+        )
+        if (!Array.isArray(data)) return []
+        return data.map(mapProfileApplicationSummary)
+    }
+
+    try {
+        const currentUser = encodeURIComponent(JSON.stringify(await getRequiredCurrentUserPayload()))
+        return await requestProfileApplications(`currentUser=${currentUser}`)
+    } catch (error) {
+        if (![401, 403, 404, 500, 502, 503].includes(error?.status) && error?.status !== 0) {
+            throw error
+        }
+
+        return requestProfileApplications(`currentUserId=${normalizedUserId}`)
+    }
+}
+
 export async function getSeekerContacts() {
     try {
         const contacts = await getContacts()
@@ -1172,7 +1237,7 @@ export async function getSeekerContacts() {
             return []
         }
 
-        if ([500, 503].includes(error?.status)) {
+        if ([403, 404, 500, 502, 503].includes(error?.status) || error?.status === 0) {
             return []
         }
 
@@ -1196,31 +1261,50 @@ export async function removeContact(contactUserId) {
     return removeContactApi(contactUserId)
 }
 
+function mapInteractionApplications(responses) {
+    if (!Array.isArray(responses)) return []
+
+    return responses.map((response, index) => {
+        const opportunityId = response.opportunityId ?? response.opportunity?.id ?? null
+        const fallbackTitle = opportunityId ? `Вакансия #${opportunityId}` : `Отклик #${response.id ?? index + 1}`
+
+        return {
+            id: response.id ?? `${opportunityId ?? 'unknown'}-${response.createdAt ?? index}`,
+            opportunityId,
+            position: response.opportunityTitle || response.opportunity?.title || fallbackTitle,
+            title: response.opportunityTitle || response.opportunity?.title || fallbackTitle,
+            companyName: response.companyName || 'Компания',
+            status: response.status || 'SUBMITTED',
+            message: response.employerComment || response.applicantComment || 'Отклик отправлен',
+            appliedAt: response.createdAt,
+            createdAt: response.createdAt,
+            chatSummary: response.chatSummary || null,
+        }
+    })
+}
+
 export async function getSeekerApplications() {
+    const userId = await getSessionUserIdFromApi()
+    if (!userId) return []
+
+    try {
+        return await getApplicantApplicationsViaProfile(userId)
+    } catch (profileError) {
+        if (![401, 403, 404, 500, 502, 503].includes(profileError?.status) && profileError?.status !== 0) {
+            throw profileError
+        }
+    }
+
     try {
         const responses = await getMyResponses()
-        if (!Array.isArray(responses)) return []
-
-        return responses.map((r, index) => {
-            const opportunityId = r.opportunityId ?? r.opportunity?.id ?? null
-            const fallbackTitle = opportunityId ? `Вакансия #${opportunityId}` : `Отклик #${r.id ?? index + 1}`
-
-            return {
-                id: r.id ?? `${opportunityId ?? 'unknown'}-${r.createdAt ?? index}`,
-                opportunityId,
-                position: r.opportunityTitle || r.opportunity?.title || fallbackTitle,
-                title: r.opportunityTitle || r.opportunity?.title || fallbackTitle,
-                companyName: r.companyName || 'Компания',
-                status: r.status || 'SUBMITTED',
-                message: r.employerComment || r.applicantComment || 'Отклик отправлен',
-                appliedAt: r.createdAt,
-                createdAt: r.createdAt,
-                chatSummary: r.chatSummary || null,
-            }
-        })
+        return mapInteractionApplications(responses)
     } catch (error) {
-        if ([401, 403, 500, 503].includes(error.status)) {
-            return []
+        if ([401, 403, 404, 500, 502, 503].includes(error.status) || error.status === 0) {
+            try {
+                return await getApplicantApplicationsViaProfile(userId)
+            } catch {
+                return []
+            }
         }
 
         throw error
@@ -1274,7 +1358,7 @@ export async function getSeekerSaved() {
             })
             .filter((item) => item.id !== null && item.id !== undefined)
     } catch (error) {
-        if ([401, 403, 500, 503].includes(error.status)) {
+        if ([401, 403, 404, 500, 502, 503].includes(error.status) || error.status === 0) {
             return []
         }
 
@@ -1283,8 +1367,25 @@ export async function getSeekerSaved() {
 }
 
 export async function addToSaved(opportunity) {
-    const opportunityId = typeof opportunity === 'object' ? opportunity.id : opportunity
-    const result = await addToFavorites(opportunityId)
+    const opportunityId = Number(typeof opportunity === 'object' ? opportunity.id : opportunity)
+    let result = null
+
+    try {
+        result = await addToFavorites(opportunityId)
+    } catch (error) {
+        if (![404, 0, 502, 503].includes(error?.status)) {
+            throw error
+        }
+    }
+
+    if (Number.isFinite(opportunityId) && opportunityId > 0) {
+        const nextIds = getLocalFavoriteOpportunityIds()
+        if (!nextIds.includes(opportunityId)) {
+            setLocalFavoriteOpportunityIds([...nextIds, opportunityId])
+        }
+    }
+
+    invalidateSavedFavoritesCache()
 
     window.dispatchEvent(new CustomEvent('favorites-updated', {
         detail: { action: 'added', opportunityId }
@@ -1294,10 +1395,27 @@ export async function addToSaved(opportunity) {
 }
 
 export async function removeFromSaved(opportunityId) {
-    const result = await removeFromFavorites(opportunityId)
+    const normalizedId = Number(opportunityId)
+    let result = null
+
+    try {
+        result = await removeFromFavorites(normalizedId)
+    } catch (error) {
+        if (![404, 0, 502, 503].includes(error?.status)) {
+            throw error
+        }
+    }
+
+    if (Number.isFinite(normalizedId) && normalizedId > 0) {
+        setLocalFavoriteOpportunityIds(
+            getLocalFavoriteOpportunityIds().filter((id) => id !== normalizedId)
+        )
+    }
+
+    invalidateSavedFavoritesCache()
 
     window.dispatchEvent(new CustomEvent('favorites-updated', {
-        detail: { action: 'removed', opportunityId }
+        detail: { action: 'removed', opportunityId: normalizedId }
     }))
 
     return result
@@ -1319,7 +1437,7 @@ export async function getSeekerRecommendations() {
             throw error
         }
 
-        if ([401, 500, 503].includes(error.status)) {
+        if ([401, 403, 404, 500, 502, 503].includes(error.status) || error.status === 0) {
             return { incoming: [], outgoing: [] }
         }
 

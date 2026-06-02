@@ -12,6 +12,7 @@ import java.time.OffsetDateTime
 
 data class OpportunityListItem(
     val id: Long,
+    val employerUserId: Long?,
     val title: String,
     val shortDescription: String,
     val companyName: String,

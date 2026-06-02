@@ -20,6 +20,7 @@ import {
     removeEmployerFromSaved,
 } from '@/shared/api/favorites'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
+import { isOpportunityFavoriteLocally } from '@/shared/lib/utils/favoriteStorage'
 import './OpportunityDetailPage.scss'
 
 import locationIcon from '@/assets/icons/location.svg'
@@ -212,13 +213,15 @@ export default function OpportunityDetailPage() {
                 return
             }
 
+            setIsFavorite(isOpportunityFavoriteLocally(params.id, currentUser))
+
             try {
                 const favorites = await getSavedFavorites()
                 if (!isMounted) return
 
                 const existsInSaved = Array.isArray(favorites?.opportunities)
                     ? favorites.opportunities.some((saved) => Number(saved.id) === Number(params.id))
-                    : false
+                    : isOpportunityFavoriteLocally(params.id, currentUser)
 
                 const existsEmployerInSaved = Array.isArray(favorites?.employers) && item?.employerUserId
                     ? favorites.employers.some((saved) => Number(saved.id) === Number(item.employerUserId))
@@ -380,7 +383,7 @@ export default function OpportunityDetailPage() {
 
         try {
             if (nextFavoriteState) {
-                await addEmployerToSaved(item.employerUserId)
+                await addEmployerToSaved(item.employerUserId, item.companyName)
                 toast({
                     title: 'Работодатель добавлен в избранное',
                     description: `«${item.companyName}» сохранён в избранных работодателях`,

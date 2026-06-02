@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useRoute } from 'wouter'
 import Navbar from '@/shared/layouts/Navbar'
 import Button from '@/shared/ui/Button'
@@ -11,6 +11,7 @@ import {
     declineContact,
     removeContact,
 } from '@/shared/api/profile'
+import { useResolvedProfileImageUrl } from '@/shared/hooks/useResolvedProfileImageUrl'
 import './ApplicantPublicProfile.scss'
 
 import userAvatarIcon from '@/assets/icons/user-avatar.svg'
@@ -75,9 +76,24 @@ async function apiRequest(url) {
     return data
 }
 
+const applicantPublicProfileCache = new Map()
+
 async function getApplicantPublicProfile(userId, currentUserId) {
+    const cacheKey = `${userId}:${currentUserId || 'guest'}`
+    if (applicantPublicProfileCache.has(cacheKey)) {
+        return applicantPublicProfileCache.get(cacheKey)
+    }
+
     const query = currentUserId ? `?currentUserId=${currentUserId}` : ''
-    return apiRequest(`/api/profile/applicant/${userId}${query}`)
+    const request = apiRequest(`/api/profile/applicant/${userId}${query}`)
+    applicantPublicProfileCache.set(cacheKey, request)
+
+    try {
+        return await request
+    } catch (error) {
+        applicantPublicProfileCache.delete(cacheKey)
+        throw error
+    }
 }
 
 async function getApplicantPublicApplications(userId, currentUserId) {
@@ -116,11 +132,6 @@ function getFullName(profile) {
 
 function getInitials(profile) {
     return `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`.toUpperCase()
-}
-
-function getApplicantFileUrl(userId, fileId) {
-    if (!userId || !fileId) return null
-    return `/api/profile/applicant/${userId}/files/${fileId}`
 }
 
 function renderContactValue(contact) {
@@ -280,6 +291,21 @@ export default function ApplicantPublicProfile() {
 
     const applicantId = params?.id ? Number(params.id) : null
     const isOwner = Boolean(currentUserId && applicantId && currentUserId === applicantId)
+    const avatarOwnerUserId = profile?.userId || applicantId
+    const avatarFileId = profile?.avatar?.fileId || null
+    const {
+        displayUrl: avatarDisplayUrl,
+        isLoading: isAvatarImageLoading,
+        setIsLoading: setIsAvatarImageLoading,
+    } = useResolvedProfileImageUrl('APPLICANT', avatarOwnerUserId, avatarFileId)
+
+    const handleAvatarImageRef = useCallback((node) => {
+        if (!node) return
+
+        if (node.complete) {
+            setIsAvatarImageLoading(false)
+        }
+    }, [setIsAvatarImageLoading])
 
     useEffect(() => {
         if (!match) return
@@ -323,6 +349,7 @@ export default function ApplicantPublicProfile() {
 
                 setProfile(profileData)
                 setViewerContacts(loadedViewerContacts)
+                setIsLoading(false)
 
                 const viewerRelationship = findViewerRelationship(loadedViewerContacts, applicantId)
                 const isAcceptedContactViewer = isAcceptedRelationship(viewerRelationship)
@@ -377,7 +404,7 @@ export default function ApplicantPublicProfile() {
                 }
 
                 if (tasks.length > 0) {
-                    await Promise.all(tasks)
+                    void Promise.all(tasks)
                 }
             } catch (loadError) {
                 if (!isMounted) return
@@ -867,10 +894,6 @@ export default function ApplicantPublicProfile() {
         )
     }
 
-    const avatarUrl = profile?.avatar?.fileId
-        ? getApplicantFileUrl(profile.userId || applicantId, profile.avatar.fileId)
-        : null
-
     const resumeFileUrl = profile?.resumeFile?.fileId
         ? getApplicantFileUrl(profile.userId || applicantId, profile.resumeFile.fileId)
         : null
@@ -953,12 +976,24 @@ export default function ApplicantPublicProfile() {
                     <div className="applicant-public-profile__grid">
                         <section className="applicant-public-profile__hero-card">
                             <div className="applicant-public-profile__avatar">
-                                {avatarUrl ? (
-                                    <img
-                                        src={avatarUrl}
-                                        alt={getFullName(profile) || 'Аватар соискателя'}
-                                        className="applicant-public-profile__avatar-image"
-                                    />
+                                {avatarDisplayUrl ? (
+                                    <>
+                                        <img
+                                            key={avatarDisplayUrl}
+                                            ref={handleAvatarImageRef}
+                                            src={avatarDisplayUrl}
+                                            alt={getFullName(profile) || 'Аватар соискателя'}
+                                            className={`applicant-public-profile__avatar-image ${isAvatarImageLoading ? 'is-loading' : ''}`}
+                                            decoding="async"
+                                            onLoad={() => setIsAvatarImageLoading(false)}
+                                            onError={() => setIsAvatarImageLoading(false)}
+                                        />
+                                        {isAvatarImageLoading && (
+                                            <div className="applicant-public-profile__avatar-loader" aria-hidden="true">
+                                                <div className="loading-spinner" />
+                                            </div>
+                                        )}
+                                    </>
                                 ) : getInitials(profile) ? (
                                     getInitials(profile)
                                 ) : (
