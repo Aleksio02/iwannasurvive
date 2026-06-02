@@ -43,6 +43,7 @@ import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
+import ApplicantTagsEditor from './components/ApplicantTagsEditor'
 import './ProfileEdit.scss'
 
 const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
@@ -369,8 +370,6 @@ function ProfileEdit() {
     const [availableTags, setAvailableTags] = useState([])
     const [selectedSkillTagIds, setSelectedSkillTagIds] = useState([])
     const [selectedInterestTagIds, setSelectedInterestTagIds] = useState([])
-    const [skillSearch, setSkillSearch] = useState('')
-    const [interestSearch, setInterestSearch] = useState('')
     const [tagsLoadError, setTagsLoadError] = useState('')
     const [areApplicantTagsLoaded, setAreApplicantTagsLoaded] = useState(false)
     const [isSkillsSectionHighlighted, setIsSkillsSectionHighlighted] = useState(false)
@@ -653,50 +652,6 @@ function ProfileEdit() {
         [employerLocations, selectedLocationId]
     )
 
-    const skillOptions = useMemo(
-        () => availableTags.filter((tag) =>
-            tag.category === 'TECH' &&
-            tag.isActive !== false &&
-            tag.moderationStatus !== 'REJECTED'
-        ),
-        [availableTags]
-    )
-
-    const interestOptions = useMemo(
-        () => availableTags.filter((tag) =>
-            tag.category === 'DIRECTION' &&
-            tag.isActive !== false &&
-            tag.moderationStatus !== 'REJECTED'
-        ),
-        [availableTags]
-    )
-
-    const selectedSkills = useMemo(
-        () => skillOptions.filter((tag) => selectedSkillTagIds.includes(tag.id)),
-        [selectedSkillTagIds, skillOptions]
-    )
-
-    const selectedInterests = useMemo(
-        () => interestOptions.filter((tag) => selectedInterestTagIds.includes(tag.id)),
-        [selectedInterestTagIds, interestOptions]
-    )
-
-    const filteredSkillOptions = useMemo(
-        () => skillOptions
-            .filter((tag) => !selectedSkillTagIds.includes(tag.id))
-            .filter((tag) => tag.name.toLowerCase().includes(skillSearch.trim().toLowerCase()))
-            .slice(0, 12),
-        [selectedSkillTagIds, skillOptions, skillSearch]
-    )
-
-    const filteredInterestOptions = useMemo(
-        () => interestOptions
-            .filter((tag) => !selectedInterestTagIds.includes(tag.id))
-            .filter((tag) => tag.name.toLowerCase().includes(interestSearch.trim().toLowerCase()))
-            .slice(0, 10),
-        [interestOptions, interestSearch, selectedInterestTagIds]
-    )
-
     const updateContactRowsState = (setRows, id, patch) => {
         setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)))
     }
@@ -708,84 +663,6 @@ function ProfileEdit() {
     const addContactRowsState = (setRows, presetId = 'website') => {
         setRows((prev) => [...prev, createContactLinkRow(presetId)])
     }
-
-    const addApplicantTag = (tagId, selectedIds, setSelectedIds, maxCount, label) => {
-        if (selectedIds.includes(tagId)) return
-        if (selectedIds.length >= maxCount) {
-            toast({
-                title: `Можно выбрать до ${maxCount} ${label}`,
-                variant: 'destructive',
-            })
-            return
-        }
-        setSelectedIds((prev) => [...prev, tagId])
-    }
-
-    const removeApplicantTag = (tagId, setSelectedIds) => {
-        setSelectedIds((prev) => prev.filter((id) => id !== tagId))
-    }
-
-    const renderApplicantTagSelector = ({
-        label,
-        helper,
-        placeholder,
-        search,
-        setSearch,
-        inputRef,
-        selectedTags,
-        availableOptions,
-        selectedIds,
-        setSelectedIds,
-        maxCount,
-        countLabel,
-    }) => (
-        <div className="profile-tags-selector">
-            <div>
-                <Label>{label}</Label>
-                <p className="profile-tags-selector__helper">{helper}</p>
-            </div>
-
-            {selectedTags.length > 0 && (
-                <div className="profile-tags-selector__selected">
-                    {selectedTags.map((tag) => (
-                        <span key={tag.id} className="profile-tags-selector__chip">
-                            {tag.name}
-                            <button
-                                type="button"
-                                onClick={() => removeApplicantTag(tag.id, setSelectedIds)}
-                                aria-label={`Удалить ${tag.name}`}
-                            >
-                                ×
-                            </button>
-                        </span>
-                    ))}
-                </div>
-            )}
-
-            <Input
-                ref={inputRef}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={placeholder}
-            />
-
-            {availableOptions.length > 0 && (
-                <div className="profile-tags-selector__options">
-                    {availableOptions.map((tag) => (
-                        <button
-                            key={tag.id}
-                            type="button"
-                            onClick={() => addApplicantTag(tag.id, selectedIds, setSelectedIds, maxCount, countLabel)}
-                        >
-                            + {tag.name}
-                        </button>
-                    ))}
-                </div>
-            )}
-
-            <span className="profile-tags-selector__counter">{selectedIds.length} / {maxCount}</span>
-        </div>
-    )
 
     const renderContactEditor = (
         label,
@@ -1815,34 +1692,14 @@ function ProfileEdit() {
 
                                     {tagsLoadError && <p className="field-hint">{tagsLoadError}</p>}
 
-                                    {renderApplicantTagSelector({
-                                        label: 'Навыки',
-                                        helper: 'Выберите технологии — по ним будут строиться персональные рекомендации.',
-                                        placeholder: 'Найти навык: Kotlin, Java, SQL...',
-                                        search: skillSearch,
-                                        setSearch: setSkillSearch,
-                                        inputRef: skillSearchInputRef,
-                                        selectedTags: selectedSkills,
-                                        availableOptions: filteredSkillOptions,
-                                        selectedIds: selectedSkillTagIds,
-                                        setSelectedIds: setSelectedSkillTagIds,
-                                        maxCount: 12,
-                                        countLabel: 'навыков',
-                                    })}
-
-                                    {renderApplicantTagSelector({
-                                        label: 'Интересы',
-                                        helper: 'Выберите направления, которые вам интересны.',
-                                        placeholder: 'Найти направление: Backend, QA, Data Science...',
-                                        search: interestSearch,
-                                        setSearch: setInterestSearch,
-                                        selectedTags: selectedInterests,
-                                        availableOptions: filteredInterestOptions,
-                                        selectedIds: selectedInterestTagIds,
-                                        setSelectedIds: setSelectedInterestTagIds,
-                                        maxCount: 8,
-                                        countLabel: 'интересов',
-                                    })}
+                                    <ApplicantTagsEditor
+                                        availableTags={availableTags}
+                                        selectedSkillTagIds={selectedSkillTagIds}
+                                        selectedInterestTagIds={selectedInterestTagIds}
+                                        onSkillTagIdsChange={setSelectedSkillTagIds}
+                                        onInterestTagIdsChange={setSelectedInterestTagIds}
+                                        skillInputRef={skillSearchInputRef}
+                                    />
                                 </section>
                             </>
                         )}

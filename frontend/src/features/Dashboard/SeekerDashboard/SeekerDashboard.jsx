@@ -43,8 +43,9 @@ import {
     invalidateSavedFavoritesCache,
     removeEmployerFromSaved,
 } from '@/shared/api/favorites'
-import { listOpportunities } from '@/shared/api/opportunities'
+import { listOpportunities, listTags } from '@/shared/api/opportunities'
 import { ensureChatByResponse } from '@/shared/api/chats'
+import ApplicantTagsEditor from '@/features/ProfileEdit/components/ApplicantTagsEditor'
 const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
 const SavedFavoritesSection = lazy(() => import('./components/SavedFavoritesSection'))
 const RecommendationsSection = lazy(() => import('./components/RecommendationsSection'))
@@ -416,6 +417,13 @@ function SeekerDashboard() {
     const [isEditingResume, setIsEditingResume] = useState(false)
     const [isEditingPortfolio, setIsEditingPortfolio] = useState(false)
     const [isEditingContacts, setIsEditingContacts] = useState(false)
+    const [isEditingTags, setIsEditingTags] = useState(false)
+    const [availableTags, setAvailableTags] = useState([])
+    const [isTagsLoading, setIsTagsLoading] = useState(false)
+    const [tagsError, setTagsError] = useState('')
+    const [draftSkillTagIds, setDraftSkillTagIds] = useState([])
+    const [draftInterestTagIds, setDraftInterestTagIds] = useState([])
+    const [isSavingTags, setIsSavingTags] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [isContactsLoading, setIsContactsLoading] = useState(false)
     const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(false)
@@ -430,6 +438,9 @@ function SeekerDashboard() {
     const portfolioFileInputRef = useRef(null)
     const dashboardTabsRef = useRef(null)
     const dashboardTabButtonRefs = useRef({})
+    const tagsOverviewRef = useRef(null)
+    const tagsSkillInputRef = useRef(null)
+    const hasOpenedSkillsFromQueryRef = useRef(false)
 
     const [isAvatarUploading, setIsAvatarUploading] = useState(false)
     const [isResumeFileUploading, setIsResumeFileUploading] = useState(false)
@@ -496,20 +507,20 @@ function SeekerDashboard() {
     const [, navigate] = useLocation()
     const [visibleApplicationsCount, setVisibleApplicationsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
     const [visibleContactsCount, setVisibleContactsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
-    const getProfileEditUrl = (focus) => {
-        const params = new URLSearchParams()
-        if (focus) params.set('focus', focus)
-        params.set('returnTo', '/seeker')
-        return `/profile/edit?${params.toString()}`
-    }
 
     const moderationState = profile.moderationStatus || 'DRAFT'
     const canSubmitForModeration =
         moderationState === 'DRAFT' ||
         (moderationState === 'NEEDS_REVISION' && !hasApprovedPublicVersion)
     const displayedProfile = profile
-    const profileSkills = Array.isArray(profile.skills) ? profile.skills : []
-    const profileInterests = Array.isArray(profile.interests) ? profile.interests : []
+    const profileSkills = useMemo(
+        () => Array.isArray(profile.skills) ? profile.skills : [],
+        [profile.skills]
+    )
+    const profileInterests = useMemo(
+        () => Array.isArray(profile.interests) ? profile.interests : [],
+        [profile.interests]
+    )
     const hasSkills = profileSkills.length > 0
     const hasInterests = profileInterests.length > 0
     const hasCity = Boolean(profile.cityId || profile.cityName)
@@ -556,6 +567,85 @@ function SeekerDashboard() {
         setTempPortfolioLinks(linksToArray(nextProfile.portfolioLinks || []))
         setTempContactLinks(linksToArray(nextProfile.contactLinks || []))
     }, [])
+
+    const loadAvailableTags = useCallback(async () => {
+        setIsTagsLoading(true)
+        setTagsError('')
+
+        try {
+            const tags = await listTags()
+            setAvailableTags(Array.isArray(tags) ? tags : [])
+        } catch (error) {
+            setTagsError(error?.message || 'Не удалось загрузить навыки')
+        } finally {
+            setIsTagsLoading(false)
+        }
+    }, [])
+
+    const openTagsEditor = useCallback(async () => {
+        setDraftSkillTagIds(profileSkills.map((tag) => tag.id).filter(Boolean))
+        setDraftInterestTagIds(profileInterests.map((tag) => tag.id).filter(Boolean))
+        setIsEditingTags(true)
+
+        if (availableTags.length === 0 && !isTagsLoading) {
+            await loadAvailableTags()
+        }
+
+        window.setTimeout(() => {
+            tagsOverviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            tagsSkillInputRef.current?.focus({ preventScroll: true })
+        }, 0)
+    }, [availableTags.length, isTagsLoading, loadAvailableTags, profileInterests, profileSkills])
+
+    const handleCancelTagsEdit = () => {
+        setDraftSkillTagIds(profileSkills.map((tag) => tag.id).filter(Boolean))
+        setDraftInterestTagIds(profileInterests.map((tag) => tag.id).filter(Boolean))
+        setIsEditingTags(false)
+    }
+
+    const handleSaveTags = async () => {
+        setIsSavingTags(true)
+
+        try {
+            const updatedProfile = await updateApplicantProfile({
+                ...profile,
+                skillTagIds: draftSkillTagIds,
+                interestTagIds: draftInterestTagIds,
+            })
+
+            applyProfileFromApi({ ...profile, ...updatedProfile }, user)
+            setIsEditingTags(false)
+            toast({
+                title: 'Навыки сохранены',
+                description: 'Профиль обновлён',
+            })
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось сохранить навыки и интересы',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsSavingTags(false)
+        }
+    }
+
+    useEffect(() => {
+        const shouldOpenSkillsEditor = new URLSearchParams(window.location.search).get('edit') === 'skills'
+
+        if (
+            !shouldOpenSkillsEditor ||
+            isLoading ||
+            !profile.userId ||
+            hasOpenedSkillsFromQueryRef.current
+        ) {
+            return
+        }
+
+        hasOpenedSkillsFromQueryRef.current = true
+        setActiveTab('profile')
+        void openTagsEditor()
+    }, [isLoading, openTagsEditor, profile.userId])
 
     const applyWorkspaceFromApi = useCallback((workspaceData, currentUser) => {
         const currentProfile = workspaceData?.currentProfile || workspaceData
@@ -2287,19 +2377,72 @@ function SeekerDashboard() {
                         </div>
 
                         <div className="profile-overview-grid">
-                            <section className="profile-overview-card">
+                            <section ref={tagsOverviewRef} className="profile-overview-card">
                                 <div className="profile-overview-card__header">
                                     <h3>{hasSkills || hasInterests ? 'Навыки и интересы' : 'Навыки'}</h3>
-                                    <button
-                                        type="button"
-                                        className="profile-overview-card__action"
-                                        onClick={() => navigate(getProfileEditUrl('skills'))}
-                                    >
-                                        {hasSkills || hasInterests ? 'Изменить' : 'Добавить'}
-                                    </button>
+                                    {!isEditingTags && (
+                                        <button
+                                            type="button"
+                                            className="profile-overview-card__action"
+                                            onClick={() => void openTagsEditor()}
+                                        >
+                                            {hasSkills || hasInterests ? 'Изменить' : 'Добавить'}
+                                        </button>
+                                    )}
                                 </div>
 
-                                {hasSkills || hasInterests ? (
+                                {isEditingTags ? (
+                                    <div className="profile-overview-card__editor">
+                                        {isTagsLoading && (
+                                            <p className="profile-overview-card__status">Загружаем навыки...</p>
+                                        )}
+
+                                        {!isTagsLoading && tagsError && (
+                                            <div className="profile-overview-card__status">
+                                                <p>{tagsError}</p>
+                                                <button
+                                                    type="button"
+                                                    className="profile-overview-card__action"
+                                                    onClick={() => void loadAvailableTags()}
+                                                >
+                                                    Повторить
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {!isTagsLoading && !tagsError && (
+                                            <ApplicantTagsEditor
+                                                availableTags={availableTags}
+                                                selectedSkillTagIds={draftSkillTagIds}
+                                                selectedInterestTagIds={draftInterestTagIds}
+                                                onSkillTagIdsChange={setDraftSkillTagIds}
+                                                onInterestTagIdsChange={setDraftInterestTagIds}
+                                                disabled={isSavingTags}
+                                                compact
+                                                skillInputRef={tagsSkillInputRef}
+                                            />
+                                        )}
+
+                                        <div className="profile-overview-card__editor-actions">
+                                            <Button
+                                                type="button"
+                                                className="btn-primary-small"
+                                                onClick={handleSaveTags}
+                                                disabled={isTagsLoading || Boolean(tagsError) || isSavingTags}
+                                            >
+                                                {isSavingTags ? 'Сохраняем...' : 'Сохранить'}
+                                            </Button>
+                                            <button
+                                                type="button"
+                                                className="btn-secondary-small"
+                                                onClick={handleCancelTagsEdit}
+                                                disabled={isSavingTags}
+                                            >
+                                                Отмена
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : hasSkills || hasInterests ? (
                                     <div className="profile-overview-card__groups">
                                         {hasSkills && (
                                             <div>
@@ -2326,7 +2469,7 @@ function SeekerDashboard() {
                                     </div>
                                 ) : (
                                     <div className="profile-overview-card__empty">
-                                        <p>Добавьте технологии для персональных рекомендаций.</p>
+                                        <p>Добавьте технологии для рекомендаций.</p>
                                     </div>
                                 )}
                             </section>
@@ -2338,7 +2481,14 @@ function SeekerDashboard() {
                                     <button
                                         type="button"
                                         className="profile-overview-card__action"
-                                        onClick={() => navigate(getProfileEditUrl(hasSkills ? undefined : 'skills'))}
+                                        onClick={() => {
+                                            if (!hasSkills || !hasInterests) {
+                                                void openTagsEditor()
+                                                return
+                                            }
+
+                                            setIsEditing(true)
+                                        }}
                                     >
                                         Доработать
                                     </button>
