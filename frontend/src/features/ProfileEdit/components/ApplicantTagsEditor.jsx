@@ -93,6 +93,7 @@ function ApplicantTagsEditor({
     onInterestTagIdsChange,
     disabled = false,
     compact = false,
+    layout = 'stacked',
     skillInputRef,
 }) {
     const [limitError, setLimitError] = useState('')
@@ -114,7 +115,7 @@ function ApplicantTagsEditor({
     )
 
     return (
-        <div className={`applicant-tags-editor ${compact ? 'is-compact' : ''}`}>
+        <div className={`applicant-tags-editor applicant-tags-editor--${layout} ${compact ? 'is-compact' : ''}`}>
             <ApplicantTagSelector
                 label="Навыки"
                 placeholder="Найти навык"
