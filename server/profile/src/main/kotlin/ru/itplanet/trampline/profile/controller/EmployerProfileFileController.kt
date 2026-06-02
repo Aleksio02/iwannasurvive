@@ -57,6 +57,6 @@ class EmployerProfileFileController(
             )
         }
 
-        return profileService.deleteEmployerFile(currentUser.userId, fileId)
+        return profileService.deleteEmployerFileUniversal(currentUser.userId, fileId)
     }
 }
