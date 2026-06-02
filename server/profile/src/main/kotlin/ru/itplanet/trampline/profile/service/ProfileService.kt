@@ -25,7 +25,7 @@ interface ProfileService {
     fun patchEmployerCompany(userId: Long, request: EmployerCompanyPatchRequest): EmployerProfile
     fun submitEmployerProfileForModeration(userId: Long): EmployerProfile
     fun putEmployerLogo(userId: Long, file: MultipartFile): EmployerProfile
-    fun deleteEmployerFile(userId: Long, fileId: Long): EmployerProfile
+    fun deleteEmployerFileUniversal(userId: Long, fileId: Long): EmployerProfile
 
     fun searchApplicants(currentUserId: Long, request: GetApplicantProfileListRequest): ApplicantProfileSearchPage
     fun getApplicantProfile(currentUserId: Long?, targetUserId: Long): ApplicantProfile

@@ -31,6 +31,7 @@ import ru.itplanet.trampline.profile.converter.EmployerProfileConverter
 import ru.itplanet.trampline.profile.dao.ApplicantProfileDao
 import ru.itplanet.trampline.profile.dao.ApplicantTagDao
 import ru.itplanet.trampline.profile.dao.EmployerProfileDao
+import ru.itplanet.trampline.profile.dao.EmployerVerificationDao
 import ru.itplanet.trampline.profile.dao.dto.ApplicantProfileDto
 import ru.itplanet.trampline.profile.dao.dto.ApplicantTagDto
 import ru.itplanet.trampline.profile.dao.dto.EmployerProfileDto
@@ -69,7 +70,8 @@ class ProfileServiceImpl(
     private val objectMapper: ObjectMapper,
     private val employerProfilePatchService: EmployerProfileDomainPatchService,
     private val applicantProfileDomainPatchService: ApplicantProfileDomainPatchService,
-) : ProfileService {
+    private val employerVerificationDao: EmployerVerificationDao,
+    ) : ProfileService {
 
     @Transactional
     override fun patchApplicantProfile(
@@ -373,14 +375,11 @@ class ProfileServiceImpl(
         )
     }
 
-    override fun deleteEmployerFile(
-        userId: Long,
-        fileId: Long,
-    ): EmployerProfile {
+    override fun deleteEmployerFileUniversal(userId: Long, fileId: Long): EmployerProfile {
         val profile = loadEmployerProfileDto(userId)
 
-        val attachments = runMediaAction(
-            logMessage = "Не удалось получить список файлов работодателя userId=$userId",
+        val profileAttachments = runMediaAction(
+            logMessage = "Не удалось получить файлы профиля работодателя userId=$userId",
             errorMessage = "Не удалось получить файлы профиля работодателя",
             code = "employer_files_load_failed",
         ) {
@@ -390,22 +389,54 @@ class ProfileServiceImpl(
             )
         }
 
-        val attachment = attachments.firstOrNull { currentAttachment ->
-            currentAttachment.fileId == fileId && currentAttachment.attachmentRole in employerDownloadRoles
-        } ?: throw ProfileNotFoundException(
-            message = "Файл работодателя не найден",
-            code = "employer_file_not_found",
-        )
-
-        runMediaAction(
-            logMessage = "Не удалось удалить файл работодателя fileId=$fileId, userId=$userId",
-            errorMessage = "Не удалось удалить файл работодателя",
-            code = "employer_file_delete_failed",
-        ) {
-            mediaServiceClient.deleteAttachment(attachment.attachmentId)
+        val profileAttachment = profileAttachments.firstOrNull { it.fileId == fileId }
+        if (profileAttachment != null) {
+            // Удаляем из профиля
+            runMediaAction(
+                logMessage = "Не удалось удалить файл профиля fileId=$fileId, userId=$userId",
+                errorMessage = "Не удалось удалить файл профиля",
+                code = "employer_profile_file_delete_failed",
+            ) {
+                mediaServiceClient.deleteAttachment(profileAttachment.attachmentId)
+            }
+            return buildEmployerProfile(profile)
         }
 
-        return buildEmployerProfile(profileDto = profile)
+        // 3. Если не нашли в профиле, ищем среди верификаций
+        val verifications = employerVerificationDao.findByEmployerUserId(userId)
+        for (verification in verifications) {
+            val verificationAttachments = runMediaAction(
+                logMessage = "Не удалось получить файлы верификации verificationId=${verification.id}",
+                errorMessage = "Не удалось получить файлы верификации",
+                code = "employer_verification_files_load_failed",
+            ) {
+                verification.id?.let {
+                    mediaServiceClient.getAttachments(
+                        entityType = FileAttachmentEntityType.EMPLOYER_VERIFICATION,
+                        entityId = it,
+                    )
+                }
+            }
+
+            val verificationAttachment = verificationAttachments?.firstOrNull { it.fileId == fileId }
+            if (verificationAttachment != null) {
+                // Удаляем attachment верификации
+                runMediaAction(
+                    logMessage = "Не удалось удалить файл верификации fileId=$fileId, verificationId=${verification.id}",
+                    errorMessage = "Не удалось удалить файл верификации",
+                    code = "employer_verification_file_delete_failed",
+                ) {
+                    mediaServiceClient.deleteAttachment(verificationAttachment.attachmentId)
+                }
+                return buildEmployerProfile(profile)
+            }
+        }
+
+        // 4. Файл не найден
+        throw ProfileNotFoundException(
+            message = "Файл работодателя не найден или недоступен для удаления",
+            code = "employer_file_not_found",
+        )
     }
 
     @Transactional(readOnly = true)
