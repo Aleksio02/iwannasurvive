@@ -333,6 +333,9 @@ function ProfileEdit() {
     const applicantCityCacheRef = useRef(new Map())
     const locationCityCacheRef = useRef(new Map())
     const locationAddressCacheRef = useRef(new Map())
+    const skillsSectionRef = useRef(null)
+    const skillSearchInputRef = useRef(null)
+    const hasFocusedSkillsRef = useRef(false)
 
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
@@ -363,6 +366,8 @@ function ProfileEdit() {
     const [skillSearch, setSkillSearch] = useState('')
     const [interestSearch, setInterestSearch] = useState('')
     const [tagsLoadError, setTagsLoadError] = useState('')
+    const [areApplicantTagsLoaded, setAreApplicantTagsLoaded] = useState(false)
+    const [isSkillsSectionHighlighted, setIsSkillsSectionHighlighted] = useState(false)
 
     const [companyName, setCompanyName] = useState('')
     const [legalName, setLegalName] = useState('')
@@ -427,6 +432,7 @@ function ProfileEdit() {
 
     const role = user?.role
     const isEmployer = role === 'EMPLOYER'
+    const shouldFocusSkills = new URLSearchParams(window.location.search).get('focus') === 'skills'
 
     useEffect(() => {
         if (!user?.id && !user?.userId) return
@@ -528,21 +534,25 @@ function ProfileEdit() {
         if ((!user?.id && !user?.userId) || isEmployer) {
             setAvailableTags([])
             setTagsLoadError('')
+            setAreApplicantTagsLoaded(false)
             return
         }
 
         let isCancelled = false
+        setAreApplicantTagsLoaded(false)
         listTags()
             .then((items) => {
                 if (!isCancelled) {
                     setAvailableTags(Array.isArray(items) ? items : [])
                     setTagsLoadError('')
+                    setAreApplicantTagsLoaded(true)
                 }
             })
             .catch(() => {
                 if (!isCancelled) {
                     setAvailableTags([])
                     setTagsLoadError('Не удалось загрузить список навыков')
+                    setAreApplicantTagsLoaded(true)
                 }
             })
 
@@ -550,6 +560,34 @@ function ProfileEdit() {
             isCancelled = true
         }
     }, [isEmployer, user?.id, user?.userId])
+
+    useEffect(() => {
+        if (
+            !shouldFocusSkills ||
+            isEmployer ||
+            isProfileLoading ||
+            !areApplicantTagsLoaded ||
+            hasFocusedSkillsRef.current
+        ) {
+            return
+        }
+
+        setIsSkillsSectionHighlighted(true)
+
+        const focusTimer = window.setTimeout(() => {
+            hasFocusedSkillsRef.current = true
+            skillsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            skillSearchInputRef.current?.focus({ preventScroll: true })
+        }, 0)
+        const highlightTimer = window.setTimeout(() => {
+            setIsSkillsSectionHighlighted(false)
+        }, 1800)
+
+        return () => {
+            window.clearTimeout(focusTimer)
+            window.clearTimeout(highlightTimer)
+        }
+    }, [areApplicantTagsLoaded, isEmployer, isProfileLoading, shouldFocusSkills])
 
     useEffect(() => {
         if (user && isEmployer && !companyName) {
@@ -685,6 +723,7 @@ function ProfileEdit() {
         placeholder,
         search,
         setSearch,
+        inputRef,
         selectedTags,
         availableOptions,
         selectedIds,
@@ -716,6 +755,7 @@ function ProfileEdit() {
             )}
 
             <Input
+                ref={inputRef}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={placeholder}
@@ -1749,7 +1789,10 @@ function ProfileEdit() {
                                     />
                                 </div>
 
-                                <section className="profile-tags-section">
+                                <section
+                                    ref={skillsSectionRef}
+                                    className={`profile-tags-section ${isSkillsSectionHighlighted ? 'is-highlighted' : ''}`}
+                                >
                                     <div>
                                         <h3>Навыки и интересы</h3>
                                         <p>Добавьте основные технологии и направления, чтобы рекомендации стали точнее.</p>
@@ -1763,6 +1806,7 @@ function ProfileEdit() {
                                         placeholder: 'Найти навык: Kotlin, Java, SQL...',
                                         search: skillSearch,
                                         setSearch: setSkillSearch,
+                                        inputRef: skillSearchInputRef,
                                         selectedTags: selectedSkills,
                                         availableOptions: filteredSkillOptions,
                                         selectedIds: selectedSkillTagIds,

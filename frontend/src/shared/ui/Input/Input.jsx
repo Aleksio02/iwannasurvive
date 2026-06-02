@@ -1,6 +1,7 @@
+import { forwardRef } from 'react'
 import './Input.scss'
 
-function Input({
+const Input = forwardRef(function Input({
                    id,
                    type = 'text',
                    value,
@@ -10,9 +11,10 @@ function Input({
                    className = '',
                    name,
                    ...rest
-               }) {
+               }, ref) {
     return (
         <input
+            ref={ref}
             id={id}
             name={name}
             type={type}
@@ -24,6 +26,6 @@ function Input({
             {...rest}
         />
     )
-}
+})
 
 export default Input

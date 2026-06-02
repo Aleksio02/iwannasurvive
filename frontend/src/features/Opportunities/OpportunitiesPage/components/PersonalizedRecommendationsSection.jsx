@@ -1,8 +1,11 @@
 import Button from '@/shared/ui/Button'
 import { OPPORTUNITY_LABELS } from '@/shared/api/opportunities'
+import { Link } from 'wouter'
 
 function PersonalizedRecommendationsSection({
     items,
+    emptyReason,
+    profileHints,
     isLoading,
     error,
     isOpen,
@@ -13,12 +16,36 @@ function PersonalizedRecommendationsSection({
     onToggleFavorite,
     favoriteOpportunities,
 }) {
+    const needsProfileSkills = profileHints?.hasSkills === false
+    const emptyState = {
+        PROFILE_SIGNALS_MISSING: {
+            title: 'Добавьте навыки, чтобы получить рекомендации',
+            text: 'Без навыков и интересов рекомендации будут неточными, поэтому мы не показываем общий каталог как подборку.',
+            action: 'Добавить навыки',
+        },
+        NO_ELIGIBLE_MATCHES: {
+            title: 'Пока нет точных совпадений',
+            text: 'Мы не нашли возможностей, которые достаточно хорошо совпадают с профилем. Каталог ниже доступен как обычно.',
+            action: 'Уточнить профиль',
+        },
+        NO_ACTIVE_CANDIDATES: {
+            title: 'Сейчас нет активных возможностей',
+            text: 'Загляните позже или посмотрите каталог ниже.',
+        },
+    }[emptyReason] || {
+        title: 'Пока нет персональных рекомендаций',
+        text: 'Добавьте навыки и интересы в профиль — так мы сможем подобрать подходящие возможности.',
+        action: 'Заполнить профиль',
+    }
+
     const subtitle = isLoading
         ? 'Подбираем подходящие возможности...'
         : hasRequested && items.length > 0
             ? `Нашли ${items.length} подходящих возможностей по профилю.`
             : hasRequested && !error
-                ? 'Заполните навыки и интересы в профиле — рекомендации станут точнее.'
+                ? needsProfileSkills
+                    ? 'Добавьте навыки в профиль — рекомендации станут точнее.'
+                    : 'Уточните профиль, чтобы находить больше точных совпадений.'
                 : 'Подберём возможности по навыкам, интересам и данным профиля.'
 
     return (
@@ -53,7 +80,13 @@ function PersonalizedRecommendationsSection({
 
                     {!isLoading && !error && hasRequested && items.length === 0 && (
                         <div className="personalized-recommendations__state">
-                            Пока нет персональных рекомендаций. Добавьте навыки и интересы в профиль.
+                            <strong>{emptyState.title}</strong>
+                            <span>{emptyState.text}</span>
+                            {emptyState.action && (
+                                <Link href="/profile/edit?focus=skills" className="personalized-recommendations__profile-link">
+                                    {emptyState.action}
+                                </Link>
+                            )}
                         </div>
                     )}
 

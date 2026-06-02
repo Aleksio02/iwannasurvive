@@ -1445,6 +1445,18 @@
 
   }
 
+  &__profile-link {
+    align-self: flex-start;
+    margin-top: 6px;
+    color: #0f5f68;
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
   &__grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

@@ -39,66 +39,78 @@ class OpportunityRecommendationScoreCalculator(
         val interestRatio = if (directionTags.isEmpty()) 0.0 else matchedInterests.size.toDouble() / directionTags.size
         val reasons = mutableListOf<String>()
         val tips = missingSkills.map { "Можно подтянуть $it" }.toMutableList()
+        val opportunityId = checkNotNull(opportunity.id)
+        val isFavorite = opportunityId in signals.favoriteOpportunityIds
+        val hasRequiredSkillMatch = matchedSkills.isNotEmpty() &&
+            (skillRatio >= properties.minSkillCoverage.coerceAtLeast(0.0) ||
+                matchedSkills.size >= properties.minSkillMatches.coerceAtLeast(1))
+        val isEligible = isFavorite || when (opportunity.type) {
+            OpportunityType.VACANCY, OpportunityType.INTERNSHIP -> applicant.openToWork && hasRequiredSkillMatch
+            OpportunityType.MENTORING -> matchedSkills.isNotEmpty() ||
+                (applicant.interests.isNotEmpty() && matchedInterests.isNotEmpty())
+            OpportunityType.EVENT -> applicant.openToEvents &&
+                (matchedSkills.isNotEmpty() || matchedInterests.isNotEmpty())
+        }
 
-        var score = (50 * skillRatio).roundToInt()
+        if (!isEligible) {
+            return OpportunityRecommendationScore(
+                score = 0,
+                matchLevel = RecommendationMatchLevel.LOW,
+                matchedSkills = matchedSkills,
+                matchedInterests = matchedInterests,
+                missingSkills = missingSkills,
+                reasons = emptyList(),
+                improvementTips = tips.take(properties.maxImprovementTips.coerceAtLeast(0)),
+                isFavorite = isFavorite,
+                isEligible = false,
+            )
+        }
+
+        var score = (60 * skillRatio).roundToInt()
         if (matchedSkills.isNotEmpty()) {
             reasons += "Совпали навыки ${matchedSkills.take(3).joinToString(" и ")}"
         }
-        score += (15 * interestRatio).roundToInt()
+        if (matchedSkills.size >= 2) {
+            score += 5
+        }
+        score += when (opportunity.type) {
+            OpportunityType.VACANCY, OpportunityType.INTERNSHIP ->
+                if (matchedSkills.isNotEmpty()) (10 * interestRatio).roundToInt() else 0
+            OpportunityType.MENTORING, OpportunityType.EVENT -> (15 * interestRatio).roundToInt()
+        }
         if (matchedInterests.isNotEmpty()) {
             reasons += "Совпало направление ${matchedInterests.take(2).joinToString(" и ")}"
         }
 
-        var sameCityOfficeOrHybrid = false
         when (opportunity.workFormat) {
             WorkFormat.REMOTE, WorkFormat.ONLINE -> {
-                score += 5
+                score += 4
                 reasons += "Формат удалённый — можно откликнуться из любого города"
             }
             WorkFormat.OFFICE, WorkFormat.HYBRID -> if (applicant.cityId != null && applicant.cityId == resolveCityId(opportunity)) {
-                sameCityOfficeOrHybrid = true
-                score += 15
+                score += 10
                 reasons += "Город совпадает с твоим профилем"
             }
         }
 
         when (opportunity.grade) {
             Grade.INTERN, Grade.JUNIOR -> {
-                score += 10
+                score += 8
                 reasons += "Подходит для junior-уровня"
             }
-            Grade.MIDDLE -> score += 3
+            Grade.MIDDLE -> score += 2
             Grade.SENIOR, null -> Unit
         }
 
-        val hasOpenFlagMatch = when {
-            opportunity.type == OpportunityType.EVENT && applicant.openToEvents -> true
-            opportunity.type != OpportunityType.EVENT && applicant.openToWork -> true
-            else -> false
-        }
-        if (hasOpenFlagMatch) {
-            score += 5
-        }
-
-        val opportunityId = checkNotNull(opportunity.id)
-        val isFavorite = opportunityId in signals.favoriteOpportunityIds
         if (isFavorite) {
             score += 10
-            reasons += "Ты уже добавил эту возможность в избранное"
+            reasons += "Ты добавил эту возможность в избранное"
         }
         if (opportunity.publishedAt?.isAfter(now.minusDays(14)) == true) {
-            score += 5
+            score += 3
         }
 
         val boundedScore = score.coerceAtMost(100)
-        val hasPrimarySignal = matchedSkills.isNotEmpty() || matchedInterests.isNotEmpty() || isFavorite
-        if (hasPrimarySignal && hasOpenFlagMatch) {
-            reasons += if (opportunity.type == OpportunityType.EVENT) {
-                "Ты открыт к карьерным событиям"
-            } else {
-                "Ты открыт к вакансиям и стажировкам"
-            }
-        }
         return OpportunityRecommendationScore(
             score = boundedScore,
             matchLevel = when {
@@ -112,7 +124,7 @@ class OpportunityRecommendationScoreCalculator(
             reasons = reasons.take(properties.maxReasons.coerceAtLeast(0)),
             improvementTips = tips.take(properties.maxImprovementTips.coerceAtLeast(0)),
             isFavorite = isFavorite,
-            hasPersonalSignal = hasPrimarySignal || (sameCityOfficeOrHybrid && boundedScore >= properties.minScore + 10),
+            isEligible = true,
         )
     }
 
@@ -130,5 +142,5 @@ data class OpportunityRecommendationScore(
     val reasons: List<String>,
     val improvementTips: List<String>,
     val isFavorite: Boolean,
-    val hasPersonalSignal: Boolean,
+    val isEligible: Boolean,
 )

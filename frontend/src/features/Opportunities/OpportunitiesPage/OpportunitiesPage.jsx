@@ -393,6 +393,8 @@ function OpportunitiesPage() {
     const [focusedOpportunityId, setFocusedOpportunityId] = useState(null)
     const [tags, setTags] = useState([])
     const [personalizedRecommendations, setPersonalizedRecommendations] = useState([])
+    const [recommendationsEmptyReason, setRecommendationsEmptyReason] = useState(null)
+    const [recommendationsProfileHints, setRecommendationsProfileHints] = useState(null)
     const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(false)
     const [recommendationsError, setRecommendationsError] = useState('')
     const [isRecommendationsOpen, setIsRecommendationsOpen] = useState(false)
@@ -417,6 +419,8 @@ function OpportunitiesPage() {
 
     const resetPersonalizedRecommendations = useCallback(() => {
         setPersonalizedRecommendations([])
+        setRecommendationsEmptyReason(null)
+        setRecommendationsProfileHints(null)
         setRecommendationsError('')
         setIsRecommendationsLoading(false)
         setIsRecommendationsOpen(false)
@@ -533,9 +537,13 @@ function OpportunitiesPage() {
         try {
             const data = await listPersonalizedOpportunityRecommendations()
             setPersonalizedRecommendations(data?.items || [])
+            setRecommendationsEmptyReason(data?.emptyReason || null)
+            setRecommendationsProfileHints(data?.profileHints || null)
             setHasRequestedRecommendations(true)
         } catch (requestError) {
             setPersonalizedRecommendations([])
+            setRecommendationsEmptyReason(null)
+            setRecommendationsProfileHints(null)
             setRecommendationsError(requestError?.message || 'Не удалось загрузить рекомендации')
             setHasRequestedRecommendations(true)
         } finally {
@@ -1135,6 +1143,8 @@ function OpportunitiesPage() {
                 {isApplicant && (
                     <PersonalizedRecommendationsSection
                         items={personalizedRecommendations}
+                        emptyReason={recommendationsEmptyReason}
+                        profileHints={recommendationsProfileHints}
                         isLoading={isRecommendationsLoading}
                         error={recommendationsError}
                         isOpen={isRecommendationsOpen}
