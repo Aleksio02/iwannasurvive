@@ -10,6 +10,10 @@ function PersonalizedRecommendationsSection({
     onToggleFavorite,
     favoriteOpportunities,
 }) {
+    if (!isLoading && error && items.length === 0) {
+        return null
+    }
+
     return (
         <section className="personalized-recommendations">
             <div className="personalized-recommendations__heading">
@@ -23,12 +27,6 @@ function PersonalizedRecommendationsSection({
                 <div className="personalized-recommendations__state">Подбираем рекомендации...</div>
             )}
 
-            {!isLoading && error && (
-                <div className="personalized-recommendations__state personalized-recommendations__state--error">
-                    Не удалось загрузить рекомендации
-                </div>
-            )}
-
             {!isLoading && !error && items.length === 0 && (
                 <div className="personalized-recommendations__state">
                     <strong>Пока нет персональных рекомендаций</strong>
@@ -36,7 +34,7 @@ function PersonalizedRecommendationsSection({
                 </div>
             )}
 
-            {!isLoading && !error && items.length > 0 && (
+            {!isLoading && items.length > 0 && (
                 <div className="personalized-recommendations__grid">
                     {items.map((item) => {
                         const opportunity = item.opportunity
