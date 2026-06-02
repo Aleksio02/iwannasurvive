@@ -273,6 +273,7 @@ function EmployerDashboard() {
     const [isSuggestingTags, setIsSuggestingTags] = useState(false)
     const [isGeneratingDescription, setIsGeneratingDescription] = useState(false)
     const [aiDescriptionNotes, setAiDescriptionNotes] = useState('')
+    const [isAiDescriptionOpen, setIsAiDescriptionOpen] = useState(false)
 
     const [employerLocations, setEmployerLocations] = useState([])
     const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
@@ -782,6 +783,7 @@ function EmployerDashboard() {
         setEditingOpportunityId(null)
         setResourceRows([createLinkRow()])
         setAiDescriptionNotes('')
+        setIsAiDescriptionOpen(false)
         setOpportunityForm({
             title: '',
             shortDescription: '',
@@ -2548,7 +2550,12 @@ function EmployerDashboard() {
                         dashboardTabButtonRefs.current.create = node
                     }}
                     className={`dashboard-tabs__btn ${activeTab === 'create' ? 'is-active' : ''}`}
-                    onClick={() => setActiveTab('create')}
+                    onClick={() => {
+                        if (activeTab !== 'create') {
+                            setIsAiDescriptionOpen(false)
+                        }
+                        setActiveTab('create')
+                    }}
                     disabled={!isVerified}
                 >
                     {opportunityMode === 'edit' ? 'Редактирование' : 'Создать'}
@@ -2609,6 +2616,7 @@ function EmployerDashboard() {
                             setEditingOpportunityId(opportunity.id)
                             setOpportunityMode('edit')
                             setAiDescriptionNotes('')
+                            setIsAiDescriptionOpen(false)
                             setOpportunityMedia(opportunity.media || [])
                             setResourceRows(
                                 opportunity.resourceLinks?.length > 0
@@ -2678,6 +2686,7 @@ function EmployerDashboard() {
                         isSuggestingTags={isSuggestingTags}
                         isGeneratingDescription={isGeneratingDescription}
                         aiDescriptionNotes={aiDescriptionNotes}
+                        isAiDescriptionOpen={isAiDescriptionOpen}
                         employerLocations={employerLocations}
                         resourceRows={resourceRows}
                         setResourceRows={setResourceRows}
@@ -2685,6 +2694,7 @@ function EmployerDashboard() {
                         onSaveOpportunity={handleSaveOpportunity}
                         onSuggestTags={handleSuggestOpportunityTags}
                         onChangeAiDescriptionNotes={setAiDescriptionNotes}
+                        onToggleAiDescription={() => setIsAiDescriptionOpen((prev) => !prev)}
                         onGenerateDescription={handleGenerateOpportunityDescription}
                         onChangeOpportunityForm={setOpportunityForm}
                         media={opportunityMedia}

@@ -1355,8 +1355,17 @@ $section-title-size: 19px;
 }
 
 .employer-create-form__ai-description-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.employer-create-form__ai-description-copy {
   display: grid;
+  flex: 1;
   gap: 4px;
+  min-width: 0;
 }
 
 .employer-create-form__ai-description-title {
@@ -1373,8 +1382,35 @@ $section-title-size: 19px;
   line-height: 1.5;
 }
 
-.employer-create-form__ai-description-button {
+.employer-create-form .employer-create-form__ai-description-generate {
   justify-self: flex-start;
+  align-self: flex-start;
+  width: auto;
+  max-width: max-content;
+}
+
+.employer-create-form .employer-create-form__ai-description-toggle {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  width: auto;
+  max-width: max-content;
+  white-space: nowrap;
+}
+
+.employer-create-form__ai-description-body {
+  display: grid;
+  gap: 12px;
+}
+
+.employer-create-form__ai-description-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 10px;
+  background: #fffaf0;
+  color: #9a6700;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .employer-create-form__actions,
@@ -1870,8 +1906,15 @@ $section-title-size: 19px;
 }
 
 @media (max-width: 640px) {
-  .employer-create-form__ai-description-button,
+  .employer-create-form__ai-description-header {
+    display: grid;
+    gap: 12px;
+  }
+
+  .employer-create-form .employer-create-form__ai-description-generate,
+  .employer-create-form .employer-create-form__ai-description-toggle,
   .employer-create-form__suggest-tags-button {
+    max-width: none;
     width: 100%;
   }
 
