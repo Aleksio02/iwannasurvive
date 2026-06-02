@@ -1345,6 +1345,38 @@ $section-title-size: 19px;
   flex-shrink: 0;
 }
 
+.employer-create-form__ai-description-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid $gray-200;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+}
+
+.employer-create-form__ai-description-header {
+  display: grid;
+  gap: 4px;
+}
+
+.employer-create-form__ai-description-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: $gray-800;
+}
+
+.employer-create-form__ai-description-text {
+  margin: 0;
+  color: $gray-600;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.employer-create-form__ai-description-button {
+  justify-self: flex-start;
+}
+
 .employer-create-form__actions,
 .modal__actions {
   display: flex;
@@ -1838,6 +1870,7 @@ $section-title-size: 19px;
 }
 
 @media (max-width: 640px) {
+  .employer-create-form__ai-description-button,
   .employer-create-form__suggest-tags-button {
     width: 100%;
   }

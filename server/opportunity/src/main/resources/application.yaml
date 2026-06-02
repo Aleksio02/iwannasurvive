@@ -59,6 +59,14 @@ app:
       max-candidate-tags: 300
       max-suggestions: 7
       timeout-ms: 10000
+    description-generation:
+      enabled: ${AI_DESCRIPTION_GENERATION_ENABLED:false}
+      prompt-version: ai-opportunity-description-v1
+      max-input-chars: 6000
+      max-notes-chars: 2000
+      max-short-description-chars: 1000
+      max-full-description-chars: 4000
+      max-requirements-chars: 2000
     yandex-gpt:
       endpoint: ${YANDEX_AI_ENDPOINT:https://llm.api.cloud.yandex.net/foundationModels/v1/completion}
       folder-id: ${YANDEX_AI_FOLDER_ID:}

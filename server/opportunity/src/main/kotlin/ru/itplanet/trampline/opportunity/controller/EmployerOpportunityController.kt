@@ -20,14 +20,17 @@ import ru.itplanet.trampline.commons.annotation.CurrentUser
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.opportunity.ai.service.AiTagSuggestionService
+import ru.itplanet.trampline.opportunity.ai.service.AiOpportunityDescriptionService
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityCard
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityEditPayload
 import ru.itplanet.trampline.opportunity.model.EmployerOpportunityListItem
 import ru.itplanet.trampline.opportunity.model.OpportunityPage
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerOpportunityRequest
+import ru.itplanet.trampline.opportunity.model.request.AiOpportunityDescriptionRequest
 import ru.itplanet.trampline.opportunity.model.request.AiTagSuggestionRequest
 import ru.itplanet.trampline.opportunity.model.request.GetEmployerOpportunityListRequest
 import ru.itplanet.trampline.opportunity.model.response.AiTagSuggestionResponse
+import ru.itplanet.trampline.opportunity.model.response.AiOpportunityDescriptionResponse
 import ru.itplanet.trampline.opportunity.service.EmployerOpportunityMediaService
 import ru.itplanet.trampline.opportunity.service.EmployerOpportunityModerationService
 import ru.itplanet.trampline.opportunity.service.EmployerOpportunityService
@@ -40,6 +43,7 @@ class EmployerOpportunityController(
     private val employerOpportunityModerationService: EmployerOpportunityModerationService,
     private val employerOpportunityMediaService: EmployerOpportunityMediaService,
     private val aiTagSuggestionService: AiTagSuggestionService,
+    private val aiOpportunityDescriptionService: AiOpportunityDescriptionService,
 ) {
 
     @PostMapping
@@ -81,6 +85,14 @@ class EmployerOpportunityController(
         @CurrentUser currentUserId: Long,
     ): AiTagSuggestionResponse {
         return aiTagSuggestionService.suggest(request)
+    }
+
+    @PostMapping("/ai/generate-description")
+    fun generateDescription(
+        @Valid @RequestBody request: AiOpportunityDescriptionRequest,
+        @CurrentUser currentUserId: Long,
+    ): AiOpportunityDescriptionResponse {
+        return aiOpportunityDescriptionService.generate(request)
     }
 
     @PostMapping(
