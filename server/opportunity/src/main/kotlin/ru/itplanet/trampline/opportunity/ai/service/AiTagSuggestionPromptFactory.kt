@@ -22,6 +22,7 @@ class AiTagSuggestionPromptFactory(
         Анализируй только title, shortDescription, fullDescription и requirements.
         Верни ровно один валидный JSON-объект.
         Без Markdown, code fences, комментариев и текста до или после JSON.
+        Ответ должен начинаться с символа { и заканчиваться символом }. Не используй ```json, Markdown и поясняющий текст.
     """.trimIndent()
 
     fun userPrompt(input: SanitizedAiTagSuggestionInput, allowedTags: List<AllowedTag>): String = """
@@ -43,5 +44,6 @@ class AiTagSuggestionPromptFactory(
         - если подходящих тегов нет, верни {"tags":[]};
         - reason короткий, на русском;
         - не добавляй name в ответ, backend возьмёт name из БД.
+        - ответ должен начинаться с символа { и заканчиваться символом }. Не используй ```json, Markdown и поясняющий текст.
     """.trimIndent()
 }
