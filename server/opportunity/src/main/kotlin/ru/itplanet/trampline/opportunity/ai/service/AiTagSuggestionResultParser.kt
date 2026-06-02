@@ -11,10 +11,11 @@ import ru.itplanet.trampline.opportunity.model.response.AiTagSuggestionResponse
 class AiTagSuggestionResultParser(
     private val objectMapper: ObjectMapper,
     private val properties: AiTagSuggestionProperties,
+    private val jsonExtractor: AiJsonExtractor,
 ) {
     fun parse(text: String, allowedTags: List<AllowedTag>): AiTagSuggestionResponse {
         val tagsById = allowedTags.associateBy(AllowedTag::id)
-        val parsedTags = objectMapper.readTree(extractJsonObject(text)).path("tags")
+        val parsedTags = objectMapper.readTree(jsonExtractor.extractJsonObject(text)).path("tags")
 
         require(parsedTags.isArray) { "AI-провайдер вернул некорректный ответ" }
 
@@ -36,52 +37,5 @@ class AiTagSuggestionResultParser(
             .take(properties.maxSuggestions.coerceAtLeast(0))
 
         return AiTagSuggestionResponse(suggestions)
-    }
-
-    private fun extractJsonObject(text: String): String {
-        val trimmedText = text.trim()
-        val normalizedText = if (trimmedText.startsWith("```")) {
-            trimmedText
-                .substringAfter('\n', missingDelimiterValue = "")
-                .removeSuffix("```")
-                .trim()
-        } else {
-            trimmedText
-        }
-
-        val startIndex = normalizedText.indexOf('{')
-        if (startIndex == -1) {
-            throw IllegalArgumentException("AI-провайдер вернул ответ без JSON-объекта")
-        }
-
-        var depth = 0
-        var isInsideString = false
-        var isEscaped = false
-
-        for (index in startIndex until normalizedText.length) {
-            val character = normalizedText[index]
-
-            if (isInsideString) {
-                when {
-                    isEscaped -> isEscaped = false
-                    character == '\\' -> isEscaped = true
-                    character == '"' -> isInsideString = false
-                }
-                continue
-            }
-
-            when (character) {
-                '"' -> isInsideString = true
-                '{' -> depth += 1
-                '}' -> {
-                    depth -= 1
-                    if (depth == 0) {
-                        return normalizedText.substring(startIndex, index + 1)
-                    }
-                }
-            }
-        }
-
-        throw IllegalArgumentException("AI-провайдер вернул ответ без JSON-объекта")
     }
 }

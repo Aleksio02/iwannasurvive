@@ -22,12 +22,16 @@ function EmployerOpportunityForm({
                                      errors,
                                      techTags,
                                      isSuggestingTags,
+                                     isGeneratingDescription,
+                                     aiDescriptionNotes,
                                      employerLocations,
                                      resourceRows,
                                      setResourceRows,
                                      onResetOpportunityForm,
                                      onSaveOpportunity,
                                      onSuggestTags,
+                                     onChangeAiDescriptionNotes,
+                                     onGenerateDescription,
                                      onChangeOpportunityForm,
                                      media,
                                      mediaOpportunityId,
@@ -165,6 +169,32 @@ function EmployerOpportunityForm({
                         placeholder="Будет подставлен из офиса"
                     />
                 </div>
+            </div>
+
+            <div className="employer-create-form__ai-description-card">
+                <div className="employer-create-form__ai-description-header">
+                    <h3 className="employer-create-form__ai-description-title">Сгенерировать описание</h3>
+                    <p className="employer-create-form__ai-description-text">
+                        Добавьте короткие тезисы — ИИ подготовит краткое и полное описание. Проверьте результат перед публикацией.
+                    </p>
+                </div>
+                <div className="employer-create-form__field">
+                    <Label>Тезисы для ИИ</Label>
+                    <Textarea
+                        rows={3}
+                        maxLength={2000}
+                        value={aiDescriptionNotes}
+                        onChange={(e) => onChangeAiDescriptionNotes(e.target.value)}
+                        placeholder="Например: стажировка 3 месяца, backend-сервисы, наставник, code review"
+                    />
+                </div>
+                <Button
+                    className="button--outline employer-create-form__ai-description-button"
+                    onClick={onGenerateDescription}
+                    disabled={isLoading || isGeneratingDescription}
+                >
+                    {isGeneratingDescription ? 'Генерируем...' : 'Сгенерировать описание с помощью ИИ'}
+                </Button>
             </div>
 
             <div className="employer-create-form__field">

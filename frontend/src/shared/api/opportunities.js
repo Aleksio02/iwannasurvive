@@ -172,6 +172,16 @@ export async function suggestOpportunityTags(payload) {
     })
 }
 
+export async function generateOpportunityDescription(payload) {
+    const currentUserId = getRequiredUserId()
+    const query = toQuery({ currentUserId })
+
+    return httpJson(`${API_BASE}/employer/opportunities/ai/generate-description?${query}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
+}
+
 export async function closeEmployerOpportunity(id) {
     const currentUserId = getRequiredUserId()
     const query = toQuery({ currentUserId })
