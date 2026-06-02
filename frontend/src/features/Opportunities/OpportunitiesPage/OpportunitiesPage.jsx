@@ -534,7 +534,6 @@ function OpportunitiesPage() {
             })
             .catch((requestError) => {
                 if (!mounted) return
-                console.error('Failed to load personalized recommendations:', requestError)
                 setPersonalizedRecommendations([])
                 setRecommendationsError(requestError?.message || 'Не удалось загрузить рекомендации')
             })

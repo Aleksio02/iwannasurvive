@@ -59,10 +59,15 @@ class OpportunityRecommendationScoreCalculator(
             Grade.SENIOR, null -> Unit
         }
 
-        if ((opportunity.type == OpportunityType.EVENT && applicant.openToEvents) ||
-            (opportunity.type != OpportunityType.EVENT && applicant.openToWork)
-        ) {
-            score += 10
+        when {
+            opportunity.type == OpportunityType.EVENT && applicant.openToEvents -> {
+                score += 10
+                reasons += "Ты открыт к карьерным событиям"
+            }
+            opportunity.type != OpportunityType.EVENT && applicant.openToWork -> {
+                score += 10
+                reasons += "Ты открыт к вакансиям и стажировкам"
+            }
         }
 
         val opportunityId = checkNotNull(opportunity.id)
