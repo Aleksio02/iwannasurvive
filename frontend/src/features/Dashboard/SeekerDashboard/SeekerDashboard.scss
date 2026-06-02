@@ -236,8 +236,7 @@ $transition: all 0.2s ease;
   }
 }
 
-.profile-overview-card__groups,
-.profile-readiness-card__items {
+.profile-overview-card__groups {
   display: grid;
   gap: 12px;
 }
@@ -263,7 +262,7 @@ $transition: all 0.2s ease;
     background: #edf8f7;
     color: $primary-dark;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
   }
 }
 
@@ -274,25 +273,6 @@ $transition: all 0.2s ease;
   strong {
     color: $gray-800;
     font-size: 14px;
-  }
-}
-
-.profile-readiness-card__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: $gray-700;
-  font-size: 13px;
-
-  strong {
-    color: $gray-500;
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  strong.is-complete {
-    color: #15803d;
   }
 }
 

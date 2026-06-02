@@ -287,6 +287,12 @@ function createEmptyEmployerLocationForm() {
     }
 }
 
+function normalizeReturnTo(value, role) {
+    const fallback = role === 'EMPLOYER' ? '/employer' : '/seeker'
+    if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback
+    return value
+}
+
 function ProfileEdit() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
@@ -432,7 +438,9 @@ function ProfileEdit() {
 
     const role = user?.role
     const isEmployer = role === 'EMPLOYER'
-    const shouldFocusSkills = new URLSearchParams(window.location.search).get('focus') === 'skills'
+    const searchParams = new URLSearchParams(window.location.search)
+    const shouldFocusSkills = searchParams.get('focus') === 'skills'
+    const returnTo = normalizeReturnTo(searchParams.get('returnTo'), role)
 
     useEffect(() => {
         if (!user?.id && !user?.userId) return
@@ -1463,7 +1471,7 @@ function ProfileEdit() {
                     }
                 }
 
-                navigate('/employer')
+                navigate(returnTo)
             } else {
                 const applicantProfileData = {
                     firstName: firstName.trim(),
@@ -1496,7 +1504,7 @@ function ProfileEdit() {
                     description: 'Ваши данные успешно обновлены',
                 })
 
-                navigate('/seeker')
+                navigate(returnTo)
             }
         } catch (error) {
             console.error('[ProfileEdit] Ошибка сохранения:', error)
@@ -1526,6 +1534,13 @@ function ProfileEdit() {
         <div className="profile-edit">
             <Card className="profile-edit__card">
                 <CardHeader>
+                    <button
+                        type="button"
+                        className="profile-edit__back"
+                        onClick={() => navigate(returnTo)}
+                    >
+                        ← Назад
+                    </button>
                     <CardTitle>
                         {isEmployer ? 'Профиль компании' : 'Личная информация'}
                     </CardTitle>
@@ -2027,13 +2042,23 @@ function ProfileEdit() {
                             </div>
                         )}
 
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting
-                                ? 'Сохранение...'
-                                : isEmployer
-                                    ? 'Сохранить и перейти в кабинет'
-                                    : 'Сохранить профиль'}
-                        </Button>
+                        <div className="profile-edit-form__actions">
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting
+                                    ? 'Сохранение...'
+                                    : isEmployer
+                                        ? 'Сохранить и перейти в кабинет'
+                                        : 'Сохранить профиль'}
+                            </Button>
+                            <Button
+                                type="button"
+                                className="button--ghost"
+                                onClick={() => navigate(returnTo)}
+                                disabled={isSubmitting}
+                            >
+                                Отмена
+                            </Button>
+                        </div>
                     </form>
                 </CardContent>
             </Card>

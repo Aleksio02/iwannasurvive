@@ -496,6 +496,12 @@ function SeekerDashboard() {
     const [, navigate] = useLocation()
     const [visibleApplicationsCount, setVisibleApplicationsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
     const [visibleContactsCount, setVisibleContactsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
+    const getProfileEditUrl = (focus) => {
+        const params = new URLSearchParams()
+        if (focus) params.set('focus', focus)
+        params.set('returnTo', '/seeker')
+        return `/profile/edit?${params.toString()}`
+    }
 
     const moderationState = profile.moderationStatus || 'DRAFT'
     const canSubmitForModeration =
@@ -513,12 +519,12 @@ function SeekerDashboard() {
         (Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0) ||
         (Array.isArray(profile.portfolioFiles) && profile.portfolioFiles.length > 0)
     const readinessItems = [
-        { label: 'Навыки', isComplete: hasSkills },
-        { label: 'Интересы', isComplete: hasInterests },
-        { label: 'Город', isComplete: hasCity },
-        { label: 'Резюме или портфолио', isComplete: hasResumeSignal },
+        { label: 'навыки', isComplete: hasSkills },
+        { label: 'интересы', isComplete: hasInterests },
+        { label: 'город', isComplete: hasCity },
+        { label: 'резюме или портфолио', isComplete: hasResumeSignal },
     ]
-    const isProfileReady = readinessItems.every((item) => item.isComplete)
+    const missingProfileItems = readinessItems.filter((item) => !item.isComplete)
 
     const formatDate = (dateString) => {
         if (!dateString) return 'Дата не указана'
@@ -2283,16 +2289,13 @@ function SeekerDashboard() {
                         <div className="profile-overview-grid">
                             <section className="profile-overview-card">
                                 <div className="profile-overview-card__header">
-                                    <div>
-                                        <h3>Навыки и интересы</h3>
-                                        <p>Используем эти данные, чтобы подбирать более точные рекомендации.</p>
-                                    </div>
+                                    <h3>{hasSkills || hasInterests ? 'Навыки и интересы' : 'Навыки'}</h3>
                                     <button
                                         type="button"
                                         className="profile-overview-card__action"
-                                        onClick={() => navigate('/profile/edit?focus=skills')}
+                                        onClick={() => navigate(getProfileEditUrl('skills'))}
                                     >
-                                        {hasSkills || hasInterests ? 'Редактировать' : 'Добавить навыки'}
+                                        {hasSkills || hasInterests ? 'Изменить' : 'Добавить'}
                                     </button>
                                 </div>
 
@@ -2323,37 +2326,24 @@ function SeekerDashboard() {
                                     </div>
                                 ) : (
                                     <div className="profile-overview-card__empty">
-                                        <strong>Добавьте навыки</strong>
-                                        <p>Укажите технологии и направления, чтобы рекомендации были точнее и не превращались в общий список возможностей.</p>
+                                        <p>Добавьте технологии для персональных рекомендаций.</p>
                                     </div>
                                 )}
                             </section>
 
-                            <section className="profile-readiness-card">
-                                <div>
-                                    <h3>Готовность профиля</h3>
-                                    <p>Чем подробнее профиль, тем точнее рекомендации и отклики работодателей.</p>
-                                </div>
-                                <div className="profile-readiness-card__items">
-                                    {readinessItems.map((item) => (
-                                        <div key={item.label} className="profile-readiness-card__item">
-                                            <span>{item.label}</span>
-                                            <strong className={item.isComplete ? 'is-complete' : ''}>
-                                                {item.isComplete ? 'Заполнено' : 'Не заполнено'}
-                                            </strong>
-                                        </div>
-                                    ))}
-                                </div>
-                                {!isProfileReady && (
+                            {missingProfileItems.length > 0 && (
+                                <section className="profile-readiness-card">
+                                    <h3>Профиль</h3>
+                                    <p>Не заполнено: {missingProfileItems.map((item) => item.label).join(', ')}</p>
                                     <button
                                         type="button"
                                         className="profile-overview-card__action"
-                                        onClick={() => navigate(hasSkills ? '/profile/edit' : '/profile/edit?focus=skills')}
+                                        onClick={() => navigate(getProfileEditUrl(hasSkills ? undefined : 'skills'))}
                                     >
-                                        {hasSkills ? 'Доработать профиль' : 'Добавить навыки'}
+                                        Доработать
                                     </button>
-                                )}
-                            </section>
+                                </section>
+                            )}
                         </div>
 
                         {isEditing && (
