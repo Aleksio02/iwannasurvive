@@ -395,6 +395,8 @@ function OpportunitiesPage() {
     const [personalizedRecommendations, setPersonalizedRecommendations] = useState([])
     const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(false)
     const [recommendationsError, setRecommendationsError] = useState('')
+    const [isRecommendationsOpen, setIsRecommendationsOpen] = useState(false)
+    const [hasRequestedRecommendations, setHasRequestedRecommendations] = useState(false)
 
     const [pendingMapCenter, setPendingMapCenter] = useState(null)
     const [appliedMapCenter, setAppliedMapCenter] = useState(null)
@@ -413,6 +415,14 @@ function OpportunitiesPage() {
 
     const isApplicant = currentUser?.role === 'APPLICANT'
 
+    const resetPersonalizedRecommendations = useCallback(() => {
+        setPersonalizedRecommendations([])
+        setRecommendationsError('')
+        setIsRecommendationsLoading(false)
+        setIsRecommendationsOpen(false)
+        setHasRequestedRecommendations(false)
+    }, [])
+
     const debouncedSearch = useDebounce(filters.search, 500)
     const debouncedSkills = useDebounce(filters.skillsQuery, 500)
 
@@ -423,6 +433,7 @@ function OpportunitiesPage() {
 
     useEffect(() => {
         const unsubscribe = subscribeSessionChange((nextUser) => {
+            resetPersonalizedRecommendations()
             setCurrentUser(nextUser)
 
             if (!nextUser?.id) {
@@ -438,7 +449,7 @@ function OpportunitiesPage() {
         })
 
         return unsubscribe
-    }, [])
+    }, [resetPersonalizedRecommendations])
 
     const syncFavoriteOpportunities = useCallback(async () => {
         if (!currentUser?.id) {
@@ -514,37 +525,33 @@ function OpportunitiesPage() {
         syncFavoriteOpportunities()
     }, [syncFavoriteOpportunities])
 
-    useEffect(() => {
-        let mounted = true
-
-        if (!isApplicant) {
-            setPersonalizedRecommendations([])
-            setRecommendationsError('')
-            setIsRecommendationsLoading(false)
-            return () => {
-                mounted = false
-            }
-        }
-
+    const loadPersonalizedRecommendations = useCallback(async () => {
+        if (!isApplicant || isRecommendationsLoading || hasRequestedRecommendations) return
         setIsRecommendationsLoading(true)
         setRecommendationsError('')
-        listPersonalizedOpportunityRecommendations()
-            .then((data) => {
-                if (mounted) setPersonalizedRecommendations(data?.items || [])
-            })
-            .catch((requestError) => {
-                if (!mounted) return
-                setPersonalizedRecommendations([])
-                setRecommendationsError(requestError?.message || 'Не удалось загрузить рекомендации')
-            })
-            .finally(() => {
-                if (mounted) setIsRecommendationsLoading(false)
-            })
 
-        return () => {
-            mounted = false
+        try {
+            const data = await listPersonalizedOpportunityRecommendations()
+            setPersonalizedRecommendations(data?.items || [])
+            setHasRequestedRecommendations(true)
+        } catch (requestError) {
+            setPersonalizedRecommendations([])
+            setRecommendationsError(requestError?.message || 'Не удалось загрузить рекомендации')
+            setHasRequestedRecommendations(true)
+        } finally {
+            setIsRecommendationsLoading(false)
         }
-    }, [isApplicant, currentUser?.id])
+    }, [hasRequestedRecommendations, isApplicant, isRecommendationsLoading])
+
+    const togglePersonalizedRecommendations = () => {
+        if (isRecommendationsOpen) {
+            setIsRecommendationsOpen(false)
+            return
+        }
+
+        setIsRecommendationsOpen(true)
+        loadPersonalizedRecommendations()
+    }
 
     useEffect(() => {
         const handleFavoritesUpdated = async () => {
@@ -1130,6 +1137,9 @@ function OpportunitiesPage() {
                         items={personalizedRecommendations}
                         isLoading={isRecommendationsLoading}
                         error={recommendationsError}
+                        isOpen={isRecommendationsOpen}
+                        hasRequested={hasRequestedRecommendations}
+                        onToggleOpen={togglePersonalizedRecommendations}
                         onOpenOpportunity={(id) => navigate(`/opportunities/${id}`)}
                         onApply={handleApply}
                         onToggleFavorite={toggleOpportunityFavorite}

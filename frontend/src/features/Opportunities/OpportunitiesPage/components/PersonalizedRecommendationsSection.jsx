@@ -5,48 +5,78 @@ function PersonalizedRecommendationsSection({
     items,
     isLoading,
     error,
+    isOpen,
+    hasRequested,
+    onToggleOpen,
     onOpenOpportunity,
     onApply,
     onToggleFavorite,
     favoriteOpportunities,
 }) {
-    if (!isLoading && error && items.length === 0) {
-        return null
-    }
+    const subtitle = isLoading
+        ? 'Подбираем подходящие возможности...'
+        : hasRequested && items.length > 0
+            ? `Нашли ${items.length} подходящих возможностей по профилю.`
+            : hasRequested && !error
+                ? 'Заполните навыки и интересы в профиле — рекомендации станут точнее.'
+                : 'Подберём возможности по навыкам, интересам и данным профиля.'
 
     return (
         <section className="personalized-recommendations">
             <div className="personalized-recommendations__heading">
                 <div>
                     <h2>Рекомендовано для вас</h2>
-                    <p>Подборка по навыкам, формату и данным профиля.</p>
+                    <p>{subtitle}</p>
                 </div>
+                <button
+                    type="button"
+                    className="personalized-recommendations__toggle"
+                    onClick={onToggleOpen}
+                    aria-expanded={isOpen}
+                    aria-controls="personalized-recommendations-panel"
+                >
+                    {isOpen ? 'Скрыть' : 'Показать'}
+                </button>
             </div>
 
-            {isLoading && (
-                <div className="personalized-recommendations__state">Подбираем рекомендации...</div>
-            )}
+            {isOpen && (
+                <div id="personalized-recommendations-panel" className="personalized-recommendations__panel">
+                    {isLoading && (
+                        <div className="personalized-recommendations__state">Подбираем рекомендации...</div>
+                    )}
 
-            {!isLoading && !error && items.length === 0 && (
-                <div className="personalized-recommendations__state">
-                    <strong>Пока нет персональных рекомендаций</strong>
-                    <span>Добавьте навыки и город в профиль — подборка станет точнее.</span>
-                </div>
-            )}
+                    {!isLoading && error && (
+                        <div className="personalized-recommendations__state">
+                            Не удалось загрузить рекомендации. Каталог ниже доступен как обычно.
+                        </div>
+                    )}
 
-            {!isLoading && items.length > 0 && (
-                <div className="personalized-recommendations__grid">
+                    {!isLoading && !error && hasRequested && items.length === 0 && (
+                        <div className="personalized-recommendations__state">
+                            Пока нет персональных рекомендаций. Добавьте навыки и интересы в профиль.
+                        </div>
+                    )}
+
+                    {!isLoading && !error && items.length > 0 && (
+                        <div className="personalized-recommendations__grid">
                     {items.map((item) => {
                         const opportunity = item.opportunity
                         const explanation = item.explanation || {}
-                        const whyFits = (explanation.whyFits || item.reasons || []).slice(0, 3)
-                        const whatToImprove = (explanation.whatToImprove || item.improvementTips || []).slice(0, 3)
+                        const whyFits = (explanation.whyFits || item.reasons || []).slice(0, 2)
+                        const whatToImprove = (explanation.whatToImprove || item.improvementTips || []).slice(0, 2)
+                        const matchedSkills = (item.matchedSkills || []).slice(0, 3)
+                        const matchedInterests = (item.matchedInterests || []).slice(0, 2)
+                        const hiddenMatches = Math.max(
+                            0,
+                            (item.matchedSkills?.length || 0) + (item.matchedInterests?.length || 0) -
+                            matchedSkills.length - matchedInterests.length
+                        )
 
                         return (
                             <article key={opportunity.id} className="personalized-recommendations__card">
                                 <div className="personalized-recommendations__card-top">
                                     <span className="personalized-recommendations__source">
-                                        {explanation.source === 'AI' ? 'ИИ-пояснение' : 'На основе профиля'}
+                                        {explanation.source === 'AI' ? 'ИИ-пояснение' : 'По профилю'}
                                     </span>
                                     <button
                                         type="button"
@@ -65,11 +95,14 @@ function PersonalizedRecommendationsSection({
                                     <span>{OPPORTUNITY_LABELS.type[opportunity.type] || opportunity.type}</span>
                                     <span>{OPPORTUNITY_LABELS.workFormat[opportunity.workFormat] || opportunity.workFormat}</span>
                                     {opportunity.grade && <span>{OPPORTUNITY_LABELS.grade[opportunity.grade] || opportunity.grade}</span>}
+                                    {opportunity.city?.name && <span>{opportunity.city.name}</span>}
                                 </div>
 
-                                {item.matchedSkills?.length > 0 && (
+                                {(matchedSkills.length > 0 || matchedInterests.length > 0) && (
                                     <div className="personalized-recommendations__skills">
-                                        {item.matchedSkills.map((skill) => <span key={skill}>{skill}</span>)}
+                                        {matchedSkills.map((skill) => <span key={`skill-${skill}`}>{skill}</span>)}
+                                        {matchedInterests.map((interest) => <span key={`interest-${interest}`}>{interest}</span>)}
+                                        {hiddenMatches > 0 && <span>+{hiddenMatches}</span>}
                                     </div>
                                 )}
 
@@ -77,7 +110,7 @@ function PersonalizedRecommendationsSection({
 
                                 {whyFits.length > 0 && (
                                     <div className="personalized-recommendations__list">
-                                        <strong>Почему может подойти</strong>
+                                        <strong>Почему подходит</strong>
                                         <ul>{whyFits.map((reason) => <li key={reason}>{reason}</li>)}</ul>
                                     </div>
                                 )}
@@ -100,6 +133,8 @@ function PersonalizedRecommendationsSection({
                             </article>
                         )
                     })}
+                        </div>
+                    )}
                 </div>
             )}
         </section>

@@ -54,8 +54,12 @@ class PersonalizedOpportunityRecommendationService(
                 .thenByDescending { it.first.publishedAt },
         )
 
+        val qualified = scored.filter { (_, score) ->
+            score.hasPersonalSignal && score.score >= properties.minScore.coerceAtLeast(0)
+        }
+
         return PersonalizedOpportunityRecommendationPage(
-            items = scored.take(limit).map { (opportunity, score) ->
+            items = qualified.take(limit).map { (opportunity, score) ->
                 val fallback = PersonalizedRecommendationExplanation(
                     source = RecommendationExplanationSource.RULES,
                     summary = rulesSummary(score),
@@ -67,12 +71,14 @@ class PersonalizedOpportunityRecommendationService(
                     score = score.score,
                     matchLevel = score.matchLevel,
                     matchedSkills = score.matchedSkills,
+                    matchedInterests = score.matchedInterests,
                     missingSkills = score.missingSkills,
                     reasons = score.reasons,
                     improvementTips = score.improvementTips,
                     explanation = explanationService.explain(
                         input = AiRecommendationExplanationInput(
                             applicantSkills = applicant.skills.map { it.name },
+                            applicantInterests = applicant.interests.map { it.name },
                             applicantCityName = applicant.cityName,
                             openToWork = applicant.openToWork,
                             openToEvents = applicant.openToEvents,
@@ -84,6 +90,7 @@ class PersonalizedOpportunityRecommendationService(
                             opportunityTags = opportunity.tags.map { it.name },
                             score = score.score,
                             matchedSkills = score.matchedSkills,
+                            matchedInterests = score.matchedInterests,
                             missingSkills = score.missingSkills,
                             reasons = score.reasons,
                             improvementTips = score.improvementTips,
@@ -111,6 +118,7 @@ class PersonalizedOpportunityRecommendationService(
     private fun rulesSummary(score: OpportunityRecommendationScore): String {
         return when {
             score.matchedSkills.isNotEmpty() -> "Подходит по навыкам и данным твоего профиля."
+            score.matchedInterests.isNotEmpty() -> "Подходит по интересам и данным твоего профиля."
             score.reasons.isNotEmpty() -> "Может подойти по данным твоего профиля."
             else -> "Обрати внимание на эту возможность."
         }
