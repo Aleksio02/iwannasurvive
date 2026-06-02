@@ -423,6 +423,9 @@ function EmployerProfileSection({
                                     src={displayedLogoUrl}
                                     alt={displayedProfile.companyName || 'Логотип компании'}
                                     className="employer-profile__logo-image"
+                                    loading="eager"
+                                    decoding="async"
+                                    fetchPriority="high"
                                 />
                             ) : (
                                 <div className="employer-profile__logo-placeholder">

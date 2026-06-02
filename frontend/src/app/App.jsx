@@ -13,6 +13,7 @@ const CuratorDashboard = lazy(() => import('@/features/Dashboard/CuratorDashboar
 const ProfileEdit = lazy(() => import('@/features/ProfileEdit/ProfileEdit'))
 const ApplicantSearchPage = lazy(() => import('@/features/ApplicantSearch/ApplicantSearchPage'))
 const ApplicantPublicProfile = lazy(() => import('@/features/ApplicantPublicProfile/ApplicantPublicProfile'))
+const EmployerPublicProfile = lazy(() => import('@/features/EmployerPublicProfile/EmployerPublicProfile'))
 const SecuritySettings = lazy(() => import('@/features/Settings/SecuritySettings/SecuritySettings'))
 const CuratorsAdminPage = lazy(() => import('@/features/Admin/CuratorsAdminPage/CuratorsAdminPage'))
 const ChatsPage = lazy(() => import('@/features/Chats/ChatsPage'))
@@ -42,6 +43,7 @@ function App() {
                 </Route>
 
                 <Route path="/seekers/:id" component={ApplicantPublicProfile} />
+                <Route path="/employers/:id" component={EmployerPublicProfile} />
 
                 <Route path="/login" component={Login} />
                 <Route path="/register" component={Register} />

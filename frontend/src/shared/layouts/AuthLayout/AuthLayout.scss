@@ -50,6 +50,8 @@
   height: 46px;
   display: block;
   flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 12px;
 }
 
 .auth-layout__logo-text {

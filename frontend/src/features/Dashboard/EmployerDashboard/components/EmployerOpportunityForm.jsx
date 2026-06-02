@@ -29,6 +29,7 @@ function EmployerOpportunityForm({
                                      resourceRows,
                                      setResourceRows,
                                      onResetOpportunityForm,
+                                     onCancelOpportunityEdit,
                                      onSaveOpportunity,
                                      onSuggestTags,
                                      onChangeAiDescriptionNotes,
@@ -57,7 +58,7 @@ function EmployerOpportunityForm({
             <div className="employer-create-form__header">
                 <h2>{opportunityMode === 'edit' ? 'Редактирование публикации' : 'Новая публикация'}</h2>
                 {opportunityMode === 'edit' && (
-                    <Button className="button--outline employer-create-form__cancel-edit" onClick={onResetOpportunityForm}>
+                    <Button className="button--outline employer-create-form__cancel-edit" onClick={onCancelOpportunityEdit}>
                         Отменить редактирование
                     </Button>
                 )}

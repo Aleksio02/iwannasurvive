@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { Suspense, lazy, useDeferredValue, useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useToast } from '@/shared/hooks/use-toast'
 import DashboardLayout from '@/features/Dashboard/DashboardLayout'
 
@@ -40,14 +40,14 @@ import { listTags, suggestOpportunityTags, generateOpportunityDescription, uploa
 import '@/features/Dashboard/DashboardBase.scss'
 import './EmployerDashboard.scss'
 
-import EmployerVerificationModal from './modals/EmployerVerificationModal'
-import EmployerLocationModal from './modals/EmployerLocationModal'
-import EmployerProfileSection from './sections/EmployerProfileSection'
-import EmployerOpportunityForm from './components/EmployerOpportunityForm'
-import EmployerOpportunitiesSection from './sections/EmployerOpportunitiesSection'
-import EmployerApplicantsSection from './sections/EmployerApplicantsSection'
-import ApplicantPreviewModal from './modals/ApplicantPreviewModal'
-import EmployerTagsPage from './sections/EmployerTagsPage'
+const EmployerVerificationModal = lazy(() => import('./modals/EmployerVerificationModal'))
+const EmployerLocationModal = lazy(() => import('./modals/EmployerLocationModal'))
+const EmployerProfileSection = lazy(() => import('./sections/EmployerProfileSection'))
+const EmployerOpportunityForm = lazy(() => import('./components/EmployerOpportunityForm'))
+const EmployerOpportunitiesSection = lazy(() => import('./sections/EmployerOpportunitiesSection'))
+const EmployerApplicantsSection = lazy(() => import('./sections/EmployerApplicantsSection'))
+const ApplicantPreviewModal = lazy(() => import('./modals/ApplicantPreviewModal'))
+const EmployerTagsPage = lazy(() => import('./sections/EmployerTagsPage'))
 
 import {
     createLinkRow,
@@ -153,6 +153,12 @@ const getVerificationAttachmentsStorageKey = (userId) => `tramplin_employer_veri
 
 function EmployerDashboard() {
     const { toast } = useToast()
+    const renderSectionFallback = (message = 'Загрузка раздела...') => (
+        <div className="dashboard-loading dashboard-loading--inner">
+            <div className="loading-spinner"></div>
+            <p>{message}</p>
+        </div>
+    )
 
     const [activeTab, setActiveTab] = useState('opportunities')
     const [user, setUser] = useState(null)
@@ -293,6 +299,7 @@ function EmployerDashboard() {
 
     const [opportunityMedia, setOpportunityMedia] = useState([])
     const [opportunityDetailsById, setOpportunityDetailsById] = useState({})
+    const deferredOpportunitySearchTerm = useDeferredValue(opportunitySearchTerm)
 
     const prevModerationStateRef = useRef('DRAFT')
 
@@ -778,9 +785,10 @@ function EmployerDashboard() {
         setShowVerificationModal(true)
     }
 
-    const resetOpportunityForm = () => {
+    const resetOpportunityForm = useCallback(() => {
         setOpportunityMode('create')
         setEditingOpportunityId(null)
+        setOpportunityMedia([])
         setResourceRows([createLinkRow()])
         setAiDescriptionNotes('')
         setIsAiDescriptionOpen(false)
@@ -808,7 +816,60 @@ function EmployerDashboard() {
             contactPerson: '',
             resourceLinks: [],
         })
-    }
+        setErrors({})
+    }, [])
+
+    const cancelOpportunityEdit = useCallback(() => {
+        resetOpportunityForm()
+        setActiveTab('opportunities')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+    }, [resetOpportunityForm])
+
+    const refreshEmployerOpportunities = useCallback(async () => {
+        const refreshed = await getEmployerOpportunities()
+        setOpportunities(Array.isArray(refreshed?.items) ? refreshed.items : [])
+        setOpportunityDetailsById({})
+        setExpandedOpportunityId(null)
+        return refreshed
+    }, [])
+
+    const handleArchiveOpportunity = useCallback(async (id, title, status) => {
+        const normalizedStatus = String(status || '').toUpperCase()
+
+        try {
+            if (normalizedStatus === 'PUBLISHED') {
+                await updateOpportunityStatus(id, 'close')
+            }
+
+            await updateOpportunityStatus(id, 'archive')
+            await refreshEmployerOpportunities()
+
+            toast({
+                title: 'Публикация архивирована',
+                description: `«${title}» перемещена в архив`,
+            })
+        } catch (error) {
+            toast({
+                title: 'Не удалось отправить в архив',
+                description: error?.message || 'Попробуйте сначала закрыть публикацию',
+                variant: 'destructive',
+            })
+        }
+    }, [refreshEmployerOpportunities, toast])
+
+    const handleUpdateOpportunityStatus = useCallback(async (id, action, successText) => {
+        try {
+            await updateOpportunityStatus(id, action)
+            await refreshEmployerOpportunities()
+            toast({ title: 'Статус обновлён', description: successText })
+        } catch (error) {
+            toast({
+                title: 'Не удалось обновить статус',
+                description: error?.message || 'Попробуйте ещё раз',
+                variant: 'destructive',
+            })
+        }
+    }, [refreshEmployerOpportunities, toast])
 
     const resetLocationForm = useCallback(() => {
         window.clearTimeout(locationCitySearchDebounceRef.current)
@@ -1724,8 +1785,8 @@ function EmployerDashboard() {
     const filteredOpportunities = useMemo(() => {
         return opportunities.filter((opp) => {
             const matchesSearch =
-                opp.title?.toLowerCase().includes(opportunitySearchTerm.toLowerCase()) ||
-                opp.shortDescription?.toLowerCase().includes(opportunitySearchTerm.toLowerCase())
+                opp.title?.toLowerCase().includes(deferredOpportunitySearchTerm.toLowerCase()) ||
+                opp.shortDescription?.toLowerCase().includes(deferredOpportunitySearchTerm.toLowerCase())
 
             const bucket = statusBucket(opp.status)
             const matchesStatus =
@@ -1736,7 +1797,7 @@ function EmployerDashboard() {
 
             return matchesSearch && matchesStatus
         })
-    }, [opportunities, opportunityFilterStatus, opportunitySearchTerm])
+    }, [deferredOpportunitySearchTerm, opportunities, opportunityFilterStatus])
 
     const dashboardAlerts = useMemo(() => {
         const alerts = []
@@ -2594,8 +2655,10 @@ function EmployerDashboard() {
 
             <div className="dashboard-panel">
                 {activeTab === 'opportunities' && (
-                    <EmployerOpportunitiesSection
+                    <Suspense fallback={renderSectionFallback('Загрузка вакансий...')}>
+                        <EmployerOpportunitiesSection
                         isVerified={isVerified}
+                            isLoading={isLoading}
                         opportunitySearchTerm={opportunitySearchTerm}
                         setOpportunitySearchTerm={setOpportunitySearchTerm}
                         opportunityFilterStatus={opportunityFilterStatus}
@@ -2605,11 +2668,7 @@ function EmployerDashboard() {
                         onToggleOpportunityDetails={handleToggleOpportunityDetails}
                         opportunityDetailsById={opportunityDetailsById}
                         employerLocations={employerLocations}
-                        onRefreshOpportunities={async () => {
-                            const refreshed = await getEmployerOpportunities()
-                            setOpportunities(refreshed.items || [])
-                            setOpportunityDetailsById({})
-                        }}
+                        onRefreshOpportunities={refreshEmployerOpportunities}
                         onStartEditOpportunity={async (opportunityId) => {
                             const opportunity = await getEmployerOpportunityById(opportunityId)
 
@@ -2654,28 +2713,15 @@ function EmployerDashboard() {
                             setActiveTab('create')
                             window.scrollTo({ top: 0, behavior: 'smooth' })
                         }}
-                        onUpdateOpportunityStatus={async (id, action, successText) => {
-                            await updateOpportunityStatus(id, action)
-                            const refreshed = await getEmployerOpportunities()
-                            setOpportunities(refreshed.items || [])
-                            setOpportunityDetailsById({})
-                            toast({ title: 'Статус обновлён', description: successText })
-                        }}
-                        onDeleteOpportunity={async (id, title) => {
-                            await updateOpportunityStatus(id, 'archive')
-                            const refreshed = await getEmployerOpportunities()
-                            setOpportunities(refreshed.items || [])
-                            setOpportunityDetailsById({})
-                            toast({
-                                title: 'Публикация архивирована',
-                                description: `«${title}» перемещена в архив`,
-                            })
-                        }}
-                    />
+                        onUpdateOpportunityStatus={handleUpdateOpportunityStatus}
+                        onDeleteOpportunity={handleArchiveOpportunity}
+                        />
+                    </Suspense>
                 )}
 
                 {activeTab === 'create' && (
-                    <EmployerOpportunityForm
+                    <Suspense fallback={renderSectionFallback('Загрузка формы публикации...')}>
+                        <EmployerOpportunityForm
                         isVerified={isVerified}
                         verificationState={verificationStateForUi}
                         isLoading={isLoading}
@@ -2691,6 +2737,7 @@ function EmployerDashboard() {
                         resourceRows={resourceRows}
                         setResourceRows={setResourceRows}
                         onResetOpportunityForm={resetOpportunityForm}
+                        onCancelOpportunityEdit={cancelOpportunityEdit}
                         onSaveOpportunity={handleSaveOpportunity}
                         onSuggestTags={handleSuggestOpportunityTags}
                         onChangeAiDescriptionNotes={setAiDescriptionNotes}
@@ -2700,14 +2747,17 @@ function EmployerDashboard() {
                         media={opportunityMedia}
                         mediaOpportunityId={editingOpportunityId}
                         onMediaUpdate={setOpportunityMedia}
-                    />
+                        />
+                    </Suspense>
                 )}
 
                 {activeTab === 'applicants' && (
-                    <EmployerApplicantsSection
+                    <Suspense fallback={renderSectionFallback('Загрузка откликов...')}>
+                        <EmployerApplicantsSection
                         responseFilters={responseFilters}
                         setResponseFilters={setResponseFilters}
                         responsesPage={responsesPage}
+                            isLoading={isLoading}
                         onLoadEmployerResponsesData={loadEmployerResponsesData}
                         onUpdateApplicationStatus={async (applicationId, newStatus) => {
                             await updateApplicationStatus(applicationId, newStatus)
@@ -2729,11 +2779,13 @@ function EmployerDashboard() {
                             setSelectedApplicant(applicant)
                             setIsApplicantModalOpen(true)
                         }}
-                    />
+                        />
+                    </Suspense>
                 )}
 
                 {activeTab === 'profile' && (
-                    <EmployerProfileSection
+                    <Suspense fallback={renderSectionFallback('Загрузка профиля компании...')}>
+                        <EmployerProfileSection
                         user={user}
                         profile={profile}
                         publicProfile={publicProfile}
@@ -2768,63 +2820,74 @@ function EmployerDashboard() {
                         onOpenCreateLocation={handleOpenCreateLocation}
                         onOpenEditLocation={handleOpenEditLocation}
                         onDeleteLocation={handleDeleteLocation}
-                    />
+                        />
+                    </Suspense>
                 )}
 
-                {activeTab === 'tags' && <EmployerTagsPage />}
+                {activeTab === 'tags' && (
+                    <Suspense fallback={renderSectionFallback('Загрузка тегов...')}>
+                        <EmployerTagsPage />
+                    </Suspense>
+                )}
             </div>
 
-            <EmployerVerificationModal
-                isOpen={showVerificationModal}
-                verificationData={verificationData}
-                setVerificationData={setVerificationData}
-                verificationLinkRows={verificationLinkRows}
-                setVerificationLinkRows={setVerificationLinkRows}
-                onSubmit={handleSubmitVerification}
-                onClose={() => setShowVerificationModal(false)}
-                userEmail={user?.email || ''}
-                companyLegalName={profile.legalName || ''}
-                currentVerification={currentVerification}
-                verificationModerationTask={verificationModerationTask}
-                verificationAttachments={verificationAttachments}
-                isVerificationAttachmentUploading={isVerificationAttachmentUploading}
-                isVerificationSubmitting={isVerificationSubmitting}
-                onUploadVerificationAttachment={handleUploadVerificationAttachment}
-                onCancelVerificationModerationTask={handleCancelVerificationModerationTask}
-                profileVerificationStatus={verificationStateForUi}
-                onOpenAttachment={handleOpenVerificationAttachment}
-                onDeleteAttachment={handleDeleteVerificationAttachment}
-                isDeletingAttachment={isDeletingAttachment}
-            />
+            <Suspense fallback={null}>
+                <EmployerVerificationModal
+                    isOpen={showVerificationModal}
+                    verificationData={verificationData}
+                    setVerificationData={setVerificationData}
+                    verificationLinkRows={verificationLinkRows}
+                    setVerificationLinkRows={setVerificationLinkRows}
+                    onSubmit={handleSubmitVerification}
+                    onClose={() => setShowVerificationModal(false)}
+                    userEmail={user?.email || ''}
+                    companyLegalName={profile.legalName || ''}
+                    currentVerification={currentVerification}
+                    verificationModerationTask={verificationModerationTask}
+                    verificationAttachments={verificationAttachments}
+                    isVerificationAttachmentUploading={isVerificationAttachmentUploading}
+                    isVerificationSubmitting={isVerificationSubmitting}
+                    onUploadVerificationAttachment={handleUploadVerificationAttachment}
+                    onCancelVerificationModerationTask={handleCancelVerificationModerationTask}
+                    profileVerificationStatus={verificationStateForUi}
+                    onOpenAttachment={handleOpenVerificationAttachment}
+                    onDeleteAttachment={handleDeleteVerificationAttachment}
+                    isDeletingAttachment={isDeletingAttachment}
+                />
+            </Suspense>
 
-            <EmployerLocationModal
-                isOpen={isLocationModalOpen}
-                locationMode={locationMode}
-                isLocationSaving={isLocationSaving}
-                locationForm={locationForm}
-                locationErrors={locationErrors}
-                locationCitySearchRef={locationCitySearchRef}
-                addressSearchRef={addressSearchRef}
-                locationCitySearchQuery={locationCitySearchQuery}
-                locationCitySuggestions={locationCitySuggestions}
-                isLocationCitySearchOpen={isLocationCitySearchOpen}
-                addressSearchQuery={addressSearchQuery}
-                addressSuggestions={addressSuggestions}
-                isAddressSearchOpen={isAddressSearchOpen}
-                onClose={() => setIsLocationModalOpen(false)}
-                onSave={handleSaveLocation}
-                onChangeLocationForm={setLocationForm}
-                onLocationCitySearch={handleLocationCitySearch}
-                onSelectLocationCity={handleSelectLocationCity}
-                onAddressSuggest={handleAddressSuggest}
-                onSelectAddressSuggestion={handleSelectAddressSuggestion}
-            />
+            <Suspense fallback={null}>
+                <EmployerLocationModal
+                    isOpen={isLocationModalOpen}
+                    locationMode={locationMode}
+                    isLocationSaving={isLocationSaving}
+                    locationForm={locationForm}
+                    locationErrors={locationErrors}
+                    locationCitySearchRef={locationCitySearchRef}
+                    addressSearchRef={addressSearchRef}
+                    locationCitySearchQuery={locationCitySearchQuery}
+                    locationCitySuggestions={locationCitySuggestions}
+                    isLocationCitySearchOpen={isLocationCitySearchOpen}
+                    addressSearchQuery={addressSearchQuery}
+                    addressSuggestions={addressSuggestions}
+                    isAddressSearchOpen={isAddressSearchOpen}
+                    onClose={() => setIsLocationModalOpen(false)}
+                    onSave={handleSaveLocation}
+                    onChangeLocationForm={setLocationForm}
+                    onLocationCitySearch={handleLocationCitySearch}
+                    onSelectLocationCity={handleSelectLocationCity}
+                    onAddressSuggest={handleAddressSuggest}
+                    onSelectAddressSuggestion={handleSelectAddressSuggestion}
+                />
+            </Suspense>
 
-            <ApplicantPreviewModal
-                isOpen={isApplicantModalOpen}
-                selectedApplicant={selectedApplicant}
-                onClose={() => setIsApplicantModalOpen(false)}
-            />
+            <Suspense fallback={null}>
+                <ApplicantPreviewModal
+                    isOpen={isApplicantModalOpen}
+                    selectedApplicant={selectedApplicant}
+                    onClose={() => setIsApplicantModalOpen(false)}
+                />
+            </Suspense>
         </DashboardLayout>
     )
 }

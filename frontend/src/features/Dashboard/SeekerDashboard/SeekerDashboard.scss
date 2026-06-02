@@ -562,6 +562,10 @@ $transition: all 0.2s ease;
   }
 }
 
+.saved-card--clickable {
+  cursor: pointer;
+}
+
 .application-card__content,
 .saved-card__content {
   flex: 1;
@@ -2457,6 +2461,12 @@ $transition: all 0.2s ease;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.seeker-dashboard-modal .modal__field:has(.custom-select.is-open) {
+  z-index: 50;
 }
 
 .seeker-dashboard-modal .modal__field .custom-select,
@@ -2464,6 +2474,43 @@ $transition: all 0.2s ease;
 .seeker-dashboard-modal .modal__field .custom-select__button,
 .seeker-dashboard-modal .modal__field .textarea {
   min-width: 0;
+}
+
+.seeker-dashboard-modal .modal__field--opportunities .custom-select__menu--inline {
+  max-height: min(320px, calc(100vh - 280px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.seeker-dashboard-modal .modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.profile-card__avatar-photo.is-loading {
+  opacity: 0;
+}
+
+.profile-card__avatar-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+
+  .loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
 }
 
 @media (max-width: 900px) {
@@ -2737,18 +2784,15 @@ $transition: all 0.2s ease;
   align-items: center;
   gap: 10px;
 
-  strong,
-  span {
-    display: block;
-  }
-
   strong {
+    display: block;
     margin-bottom: 4px;
     color: #0f172a;
     font-size: 14px;
   }
 
-  span {
+  > div span {
+    display: block;
     color: #64748b;
     font-size: 12px;
     line-height: 1.45;

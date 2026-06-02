@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'wouter'
 import DashboardLayout from '../Dashboard/DashboardLayout'
 import Button from '@/shared/ui/Button'
@@ -130,9 +130,22 @@ export default function ApplicantSearchPage() {
     const [isCitySearchOpen, setIsCitySearchOpen] = useState(false)
 
     const citySearchRef = useRef(null)
+    const prefetchedApplicantProfilesRef = useRef(new Set())
 
     const debouncedSearch = useDebounce(filters.search, INPUT_DEBOUNCE_MS)
     const debouncedCityName = useDebounce(filters.cityName, INPUT_DEBOUNCE_MS)
+
+    const prefetchApplicantProfile = useCallback((userId) => {
+        if (!userId || prefetchedApplicantProfilesRef.current.has(userId)) {
+            return
+        }
+
+        prefetchedApplicantProfilesRef.current.add(userId)
+        const query = currentUser?.id ? `?currentUserId=${currentUser.id}` : ''
+        void fetch(`/api/profile/applicant/${userId}${query}`, {
+            credentials: 'include',
+        })
+    }, [currentUser?.id])
 
     useEffect(() => {
         let isMounted = true
@@ -586,7 +599,11 @@ export default function ApplicantSearchPage() {
                                 )
 
                                 return (
-                                    <article key={applicant.userId} className="applicant-search__card">
+                                    <article
+                                        key={applicant.userId}
+                                        className="applicant-search__card"
+                                        onMouseEnter={() => prefetchApplicantProfile(applicant.userId)}
+                                    >
                                         <div className="applicant-search__card-head">
                                             <div className="applicant-search__avatar">
                                                 {avatarUrl ? (
@@ -686,7 +703,10 @@ export default function ApplicantSearchPage() {
                                         )}
 
                                         <div className="applicant-search__card-actions">
-                                            <Link href={`/seekers/${applicant.userId}`}>
+                                            <Link
+                                                href={`/seekers/${applicant.userId}`}
+                                                onMouseEnter={() => prefetchApplicantProfile(applicant.userId)}
+                                            >
                                                 <Button className="button--outline applicant-search__card-button">
                                                     Открыть профиль
                                                 </Button>

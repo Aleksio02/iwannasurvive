@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { memo, useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Link, useLocation } from 'wouter'
 import Button from '@/shared/ui/Button'
 import Input from '@/shared/ui/Input'
 import CustomSelect from '@/shared/ui/CustomSelect'
 import Navbar from '@/shared/layouts/Navbar'
-import YandexOpportunityMap from '@/shared/ui/Map/YandexOpportunityMap'
+import LazyYandexOpportunityMap from '@/shared/ui/Map/LazyYandexOpportunityMap'
 import { useToast } from '@/shared/hooks/use-toast'
 import {
     listOpportunityMap,
     listOpportunities,
     listNearbyOpportunities,
     listTags,
+    getOpportunity,
     OPPORTUNITY_LABELS
 } from '@/shared/api/opportunities'
 import {
@@ -18,7 +19,17 @@ import {
     removeFromSaved,
     applyToOpportunity,
 } from '@/shared/api/profile'
-import { getSavedFavorites } from '@/shared/api/favorites'
+import {
+    addEmployerToSaved,
+    getSavedFavorites,
+    isGenericEmployerTitle,
+    removeEmployerFromSaved,
+} from '@/shared/api/favorites'
+import {
+    getLocalFavoriteEmployerIds,
+    isEmployerFavoriteLocally,
+    setLocalFavoriteEmployerIds,
+} from '@/shared/lib/utils/favoriteStorage'
 import {
     getSessionUser,
     subscribeSessionChange,
@@ -65,6 +76,26 @@ function getStorageKey(key, user = getSessionUser()) {
 function setStorageSet(key, setValue, user = getSessionUser()) {
     const storageKey = getStorageKey(key, user)
     localStorage.setItem(storageKey, JSON.stringify(Array.from(setValue)))
+}
+
+function resolveEmployerUserId(item) {
+    const rawId =
+        item?.employerUserId ??
+        item?.employer_user_id ??
+        item?.employer?.userId ??
+        item?.employer?.id ??
+        null
+    const numericId = Number(rawId)
+    return Number.isFinite(numericId) && numericId > 0 ? numericId : null
+}
+
+function normalizeOpportunityListItem(item) {
+    if (!item || typeof item !== 'object') return item
+
+    return {
+        ...item,
+        employerUserId: resolveEmployerUserId(item),
+    }
 }
 
 function getStorageSet(key, user = getSessionUser()) {
@@ -139,6 +170,7 @@ function normalizeNearbyItem(item) {
         workFormat: item.workFormat,
 
         companyName,
+        employerUserId: resolveEmployerUserId(item),
         employer: item.employer || null,
 
         salaryFrom,
@@ -180,6 +212,155 @@ function normalizeNearbyResponse(data) {
     return { items, total }
 }
 
+const OpportunityCompactCard = memo(function OpportunityCompactCard({
+    item,
+    isOpportunityFavorite,
+    isCompanyFavorite,
+    onToggleOpportunityFavorite,
+    onToggleCompanyFavorite,
+    onShowOnMap,
+}) {
+    return (
+        <article className="opportunities-page__compact-card">
+            <div className="opportunities-page__compact-header">
+                <h3>{item.title}</h3>
+                <button
+                    type="button"
+                    className={`opportunities-page__fav-star ${isOpportunityFavorite ? 'is-favorite' : ''}`}
+                    onClick={() => onToggleOpportunityFavorite(item)}
+                >
+                    ★
+                </button>
+            </div>
+
+            <p className="opportunities-page__company">
+                <img src={companyIcon} alt="" className="icon"/>
+                <span>{item.companyName}</span>
+                <button
+                    type="button"
+                    className={`opportunities-page__company-fav ${isCompanyFavorite ? 'is-favorite' : ''}`}
+                    onClick={() => onToggleCompanyFavorite(item)}
+                >
+                    ★
+                </button>
+            </p>
+
+            <div className="opportunities-page__compact-meta">
+                <span className="opportunities-page__badge">
+                    {OPPORTUNITY_LABELS.type[item.type] || 'Возможность'}
+                </span>
+                <span className="opportunities-page__badge">
+                    {OPPORTUNITY_LABELS.workFormat[item.workFormat] || item.workFormat}
+                </span>
+            </div>
+
+            <p className="opportunities-page__salary">
+                <img src={briefcaseIcon} alt="" className="icon"/>
+                <span>{formatMoney(item.salaryFrom, item.salaryTo, item.salaryCurrency)}</span>
+            </p>
+
+            <p className="opportunities-page__short-desc">{item.shortDescription}</p>
+
+            <div className="opportunities-page__compact-actions">
+                <button
+                    type="button"
+                    className="opportunities-page__map-btn"
+                    onClick={() => onShowOnMap(item.id)}
+                >
+                    <img src={locationIcon} alt="" className="icon"/>
+                    <span>Показать на карте</span>
+                </button>
+
+                <Link href={`/opportunities/${item.id}`}>
+                    <button type="button" className="opportunities-page__detail-btn">
+                        <span>Подробнее</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M9 18L15 12L9 6"/>
+                        </svg>
+                    </button>
+                </Link>
+            </div>
+        </article>
+    )
+})
+
+const OpportunityListCard = memo(function OpportunityListCard({
+    item,
+    isApplicant,
+    isOpportunityFavorite,
+    isCompanyFavorite,
+    onToggleOpportunityFavorite,
+    onToggleCompanyFavorite,
+    onShowOnMap,
+    onApply,
+}) {
+    return (
+        <article className="opportunities-page__card">
+            <div className="opportunities-page__card-header">
+                <div className="opportunities-page__card-badges">
+                    <span className="opportunities-page__badge opportunities-page__badge--type">
+                        {OPPORTUNITY_LABELS.type[item.type] || item.type}
+                    </span>
+                    <span className="opportunities-page__badge">
+                        {OPPORTUNITY_LABELS.workFormat[item.workFormat] || item.workFormat}
+                    </span>
+                </div>
+
+                <button
+                    type="button"
+                    className={`opportunities-page__fav-star ${isOpportunityFavorite ? 'is-favorite' : ''}`}
+                    onClick={() => onToggleOpportunityFavorite(item)}
+                >
+                    ★
+                </button>
+            </div>
+
+            <h3>{item.title}</h3>
+
+            <p className="opportunities-page__company">
+                <img src={companyIcon} alt="" className="icon"/>
+                <span>{item.companyName}</span>
+                <button
+                    type="button"
+                    className={`opportunities-page__company-fav ${isCompanyFavorite ? 'is-favorite' : ''}`}
+                    onClick={() => onToggleCompanyFavorite(item)}
+                >
+                    ★
+                </button>
+            </p>
+
+            <p className="opportunities-page__salary">
+                <img src={briefcaseIcon} alt="" className="icon"/>
+                <span>{formatMoney(item.salaryFrom, item.salaryTo, item.salaryCurrency)}</span>
+            </p>
+
+            <p className="opportunities-page__desc">{item.shortDescription}</p>
+
+            <div className="opportunities-page__card-footer">
+                <button
+                    type="button"
+                    className="opportunities-page__map-link"
+                    onClick={() => onShowOnMap(item.id)}
+                >
+                    <img src={locationIcon} alt="" className="icon"/>
+                    <span>На карту</span>
+                </button>
+
+                <div className="opportunities-page__card-actions">
+                    {isApplicant && (
+                        <Button className="button--primary" onClick={() => onApply(item)}>
+                            Откликнуться
+                        </Button>
+                    )}
+                    <Link href={`/opportunities/${item.id}`}>
+                        <Button className="button--outline">Подробнее</Button>
+                    </Link>
+                </div>
+            </div>
+        </article>
+    )
+})
+
 function OpportunitiesPage() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
@@ -218,6 +399,9 @@ function OpportunitiesPage() {
     const [favoriteCompanies, setFavoriteCompanies] = useState(() =>
         getStorageSet('favorite_companies', getSessionUser())
     )
+    const [favoriteEmployerIds, setFavoriteEmployerIds] = useState(
+        () => new Set(getLocalFavoriteEmployerIds(getSessionUser()))
+    )
     const [favoriteOpportunities, setFavoriteOpportunities] = useState(() =>
         getStorageSet('favorite_opportunities', getSessionUser())
     )
@@ -239,11 +423,13 @@ function OpportunitiesPage() {
             if (!nextUser?.id) {
                 setFavoriteCompanies(getStorageSet('favorite_companies', null))
                 setFavoriteOpportunities(getStorageSet('favorite_opportunities', null))
+                setFavoriteEmployerIds(new Set())
                 return
             }
 
             setFavoriteCompanies(getStorageSet('favorite_companies', nextUser))
             setFavoriteOpportunities(getStorageSet('favorite_opportunities', nextUser))
+            setFavoriteEmployerIds(new Set(getLocalFavoriteEmployerIds(nextUser)))
         })
 
         return unsubscribe
@@ -261,6 +447,28 @@ function OpportunitiesPage() {
             const next = new Set((saved.opportunities || []).map((item) => item.id))
             setFavoriteOpportunities(next)
             setStorageSet('favorite_opportunities', next, currentUser)
+
+            const savedEmployers = saved.employers || []
+            const employerIds = [
+                ...getLocalFavoriteEmployerIds(currentUser),
+                ...savedEmployers
+                    .map((item) => Number(item.id))
+                    .filter((id) => Number.isFinite(id) && id > 0),
+            ]
+            const nextEmployerIds = new Set(employerIds)
+
+            setFavoriteEmployerIds(nextEmployerIds)
+            setLocalFavoriteEmployerIds(Array.from(nextEmployerIds), currentUser)
+
+            const nextCompanyNames = new Set(getStorageSet('favorite_companies', currentUser))
+            savedEmployers.forEach((employer) => {
+                const companyName = String(employer?.title || '').trim()
+                if (!companyName || isGenericEmployerTitle(companyName, employer?.id)) return
+                nextCompanyNames.add(companyName)
+            })
+
+            setFavoriteCompanies(nextCompanyNames)
+            setStorageSet('favorite_companies', nextCompanyNames, currentUser)
         } catch (syncError) {
             console.error('Failed to sync favorites:', syncError)
 
@@ -330,20 +538,16 @@ function OpportunitiesPage() {
             setError('')
 
             try {
-                const [listData, mapData] = await Promise.all([
-                    listOpportunities(queryParams),
-                    listOpportunityMap({ ...queryParams, limit: 100, offset: 0 }),
-                ])
-
+                const listData = await listOpportunities(queryParams)
                 if (!mounted) return
 
-                setOpportunities(listData?.items || [])
+                setOpportunities((listData?.items || []).map(normalizeOpportunityListItem))
                 setTotal(listData?.total || 0)
-                setBaseMapPoints(mapData?.items || [])
             } catch (requestError) {
                 if (!mounted) return
                 setError(requestError?.message || 'Не удалось загрузить вакансии')
-                setBaseMapPoints([])
+                setOpportunities([])
+                setTotal(0)
             } finally {
                 if (mounted) setIsLoading(false)
             }
@@ -356,27 +560,128 @@ function OpportunitiesPage() {
         }
     }, [queryParams])
 
+    useEffect(() => {
+        let mounted = true
+
+        const shouldLoadMapData = viewMode === 'map' && !isMapSearchActive
+        if (!shouldLoadMapData) return () => {
+            mounted = false
+        }
+
+        async function loadMapData() {
+            try {
+                const mapData = await listOpportunityMap({ ...queryParams, limit: 100, offset: 0 })
+                if (!mounted) return
+                setBaseMapPoints(mapData?.items || [])
+            } catch {
+                if (!mounted) return
+                setBaseMapPoints([])
+            }
+        }
+
+        loadMapData()
+
+        return () => {
+            mounted = false
+        }
+    }, [isMapSearchActive, queryParams, viewMode])
+
     const mapSideOpportunities = useMemo(() => {
         return [...visibleMapSideSource]
             .sort((a, b) => new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime())
             .slice(0, MAP_SIDE_LIMIT)
     }, [visibleMapSideSource])
 
-    const toggleCompanyFavorite = (companyName) => {
+    const isCompanyFavoriteForItem = useCallback((item) => {
+        const employerUserId = resolveEmployerUserId(item)
+        if (employerUserId) {
+            if (favoriteEmployerIds.has(employerUserId)) return true
+            if (isEmployerFavoriteLocally(employerUserId, currentUser)) return true
+        }
+
+        const companyName = String(item?.companyName || '').trim()
+        return companyName ? favoriteCompanies.has(companyName) : false
+    }, [currentUser, favoriteCompanies, favoriteEmployerIds])
+
+    const toggleCompanyFavorite = useCallback(async (item) => {
+        const companyName = item?.companyName
+        if (!companyName) return
+
+        let normalizedEmployerUserId = resolveEmployerUserId(item)
+
+        if (!normalizedEmployerUserId) {
+            const matchedOpportunity = opportunities.find(
+                (opportunity) => opportunity.companyName === companyName && resolveEmployerUserId(opportunity)
+            )
+            normalizedEmployerUserId = resolveEmployerUserId(matchedOpportunity)
+        }
+
+        if (!normalizedEmployerUserId && item?.id && currentUser) {
+            try {
+                const detail = await getOpportunity(item.id)
+                normalizedEmployerUserId = resolveEmployerUserId(detail)
+            } catch {
+                normalizedEmployerUserId = null
+            }
+        }
+
+        const hasEmployerUserId = Number.isFinite(normalizedEmployerUserId) && normalizedEmployerUserId > 0
+        const isFavorite = hasEmployerUserId
+            ? favoriteEmployerIds.has(normalizedEmployerUserId) || favoriteCompanies.has(companyName)
+            : favoriteCompanies.has(companyName)
+
+        if (!currentUser) {
+            const next = new Set(favoriteCompanies)
+            if (isFavorite) next.delete(companyName)
+            else next.add(companyName)
+
+            setFavoriteCompanies(next)
+            setStorageSet('favorite_companies', next, null)
+
+            toast({
+                title: isFavorite ? 'Компания удалена из избранного' : 'Компания добавлена в избранное',
+                description: isFavorite ? '' : 'Вакансии этой компании будут выделены на карте',
+            })
+            return
+        }
+
+        if (hasEmployerUserId) {
+            try {
+                if (isFavorite) {
+                    await removeEmployerFromSaved(normalizedEmployerUserId)
+                } else {
+                    await addEmployerToSaved(normalizedEmployerUserId, companyName)
+                }
+            } catch (error) {
+                toast({
+                    title: 'Ошибка',
+                    description: error.message || 'Не удалось изменить избранное работодателя',
+                    variant: 'destructive',
+                })
+                return
+            }
+
+            const nextEmployerIds = new Set(favoriteEmployerIds)
+            if (isFavorite) nextEmployerIds.delete(normalizedEmployerUserId)
+            else nextEmployerIds.add(normalizedEmployerUserId)
+            setFavoriteEmployerIds(nextEmployerIds)
+            setLocalFavoriteEmployerIds(Array.from(nextEmployerIds), currentUser)
+        }
+
         const next = new Set(favoriteCompanies)
-        if (next.has(companyName)) next.delete(companyName)
+        if (isFavorite) next.delete(companyName)
         else next.add(companyName)
 
         setFavoriteCompanies(next)
         setStorageSet('favorite_companies', next, currentUser)
 
         toast({
-            title: next.has(companyName) ? 'Компания добавлена в избранное' : 'Компания удалена из избранного',
-            description: next.has(companyName) ? 'Вакансии этой компании будут выделены на карте' : '',
+            title: isFavorite ? 'Компания удалена из избранного' : 'Компания добавлена в избранное',
+            description: isFavorite ? '' : 'Вакансии этой компании будут выделены на карте',
         })
-    }
+    }, [currentUser, favoriteCompanies, favoriteEmployerIds, opportunities, toast])
 
-    const toggleOpportunityFavorite = async (opportunity) => {
+    const toggleOpportunityFavorite = useCallback(async (opportunity) => {
         const isFavorite = favoriteOpportunities.has(opportunity.id)
 
         if (!currentUser) {
@@ -408,7 +713,7 @@ function OpportunitiesPage() {
                     description: `"${opportunity.title}" удалено из избранного`,
                 })
             } else {
-                await addToSaved(opportunity.id)
+                await addToSaved(opportunity)
 
                 const next = new Set(favoriteOpportunities)
                 next.add(opportunity.id)
@@ -452,9 +757,9 @@ function OpportunitiesPage() {
                 variant: 'destructive'
             })
         }
-    }
+    }, [currentUser, favoriteOpportunities, navigate, toast])
 
-    const handleShowOnMap = (id) => {
+    const handleShowOnMap = useCallback((id) => {
         setViewMode('map')
         setFocusedOpportunityId(null)
 
@@ -478,9 +783,9 @@ function OpportunitiesPage() {
         setTimeout(() => {
             setFocusedOpportunityId(id)
         }, 100)
-    }
+    }, [])
 
-    const handleApply = async (opportunity) => {
+    const handleApply = useCallback(async (opportunity) => {
         if (!currentUser) {
             toast({
                 title: 'Требуется авторизация',
@@ -534,14 +839,14 @@ function OpportunitiesPage() {
                 variant: 'destructive'
             })
         }
-    }
+    }, [currentUser, isApplicant, navigate, toast])
 
-    const goToPage = (newPage) => {
+    const goToPage = useCallback((newPage) => {
         setPage(newPage)
         if (viewMode === 'list') {
             window.scrollTo({ top: 0, behavior: 'smooth' })
         }
-    }
+    }, [viewMode])
 
     const resetMapSearchState = () => {
         setIsMapSearchActive(false)
@@ -830,67 +1135,15 @@ function OpportunitiesPage() {
                                     </div>
                                 ) : (
                                     mapSideOpportunities.map((item) => (
-                                        <article key={item.id} className="opportunities-page__compact-card">
-                                            <div className="opportunities-page__compact-header">
-                                                <h3>{item.title}</h3>
-                                                <button
-                                                    type="button"
-                                                    className={`opportunities-page__fav-star ${favoriteOpportunities.has(item.id) ? 'is-favorite' : ''}`}
-                                                    onClick={() => toggleOpportunityFavorite(item)}
-                                                >
-                                                    ★
-                                                </button>
-                                            </div>
-
-                                            <p className="opportunities-page__company">
-                                                <img src={companyIcon} alt="" className="icon"/>
-                                                <span>{item.companyName}</span>
-                                                <button
-                                                    type="button"
-                                                    className={`opportunities-page__company-fav ${favoriteCompanies.has(item.companyName) ? 'is-favorite' : ''}`}
-                                                    onClick={() => toggleCompanyFavorite(item.companyName)}
-                                                >
-                                                    ★
-                                                </button>
-                                            </p>
-
-                                            <div className="opportunities-page__compact-meta">
-                                                <span className="opportunities-page__badge">
-                                                    {OPPORTUNITY_LABELS.type[item.type] || 'Возможность'}
-                                                </span>
-                                                <span className="opportunities-page__badge">
-                                                    {OPPORTUNITY_LABELS.workFormat[item.workFormat] || item.workFormat}
-                                                </span>
-                                            </div>
-
-                                            <p className="opportunities-page__salary">
-                                                <img src={briefcaseIcon} alt="" className="icon"/>
-                                                <span>{formatMoney(item.salaryFrom, item.salaryTo, item.salaryCurrency)}</span>
-                                            </p>
-
-                                            <p className="opportunities-page__short-desc">{item.shortDescription}</p>
-
-                                            <div className="opportunities-page__compact-actions">
-                                                <button
-                                                    type="button"
-                                                    className="opportunities-page__map-btn"
-                                                    onClick={() => handleShowOnMap(item.id)}
-                                                >
-                                                    <img src={locationIcon} alt="" className="icon"/>
-                                                    <span>Показать на карте</span>
-                                                </button>
-
-                                                <Link href={`/opportunities/${item.id}`}>
-                                                    <button type="button" className="opportunities-page__detail-btn">
-                                                        <span>Подробнее</span>
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                             stroke="currentColor" strokeWidth="2">
-                                                            <path d="M9 18L15 12L9 6"/>
-                                                        </svg>
-                                                    </button>
-                                                </Link>
-                                            </div>
-                                        </article>
+                                        <OpportunityCompactCard
+                                            key={item.id}
+                                            item={item}
+                                            isOpportunityFavorite={favoriteOpportunities.has(item.id)}
+                                            isCompanyFavorite={isCompanyFavoriteForItem(item)}
+                                            onToggleOpportunityFavorite={toggleOpportunityFavorite}
+                                            onToggleCompanyFavorite={toggleCompanyFavorite}
+                                            onShowOnMap={handleShowOnMap}
+                                        />
                                     ))
                                 )}
 
@@ -921,7 +1174,7 @@ function OpportunitiesPage() {
                                     </div>
                                 )}
 
-                                <YandexOpportunityMap
+                                <LazyYandexOpportunityMap
                                     points={visibleMapPoints}
                                     favoriteCompanies={favoriteCompanies}
                                     focusedOpportunityId={focusedOpportunityId}
@@ -937,69 +1190,17 @@ function OpportunitiesPage() {
                     <section className="opportunities-page__content">
                         <div className="opportunities-page__cards-grid">
                             {opportunities.map((item) => (
-                                <article key={item.id} className="opportunities-page__card">
-                                    <div className="opportunities-page__card-header">
-                                        <div className="opportunities-page__card-badges">
-                                            <span className="opportunities-page__badge opportunities-page__badge--type">
-                                                {OPPORTUNITY_LABELS.type[item.type] || item.type}
-                                            </span>
-                                            <span className="opportunities-page__badge">
-                                                {OPPORTUNITY_LABELS.workFormat[item.workFormat] || item.workFormat}
-                                            </span>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            className={`opportunities-page__fav-star ${favoriteOpportunities.has(item.id) ? 'is-favorite' : ''}`}
-                                            onClick={() => toggleOpportunityFavorite(item)}
-                                        >
-                                            ★
-                                        </button>
-                                    </div>
-
-                                    <h3>{item.title}</h3>
-
-                                    <p className="opportunities-page__company">
-                                        <img src={companyIcon} alt="" className="icon"/>
-                                        <span>{item.companyName}</span>
-                                        <button
-                                            type="button"
-                                            className={`opportunities-page__company-fav ${favoriteCompanies.has(item.companyName) ? 'is-favorite' : ''}`}
-                                            onClick={() => toggleCompanyFavorite(item.companyName)}
-                                        >
-                                            ★
-                                        </button>
-                                    </p>
-
-                                    <p className="opportunities-page__salary">
-                                        <img src={briefcaseIcon} alt="" className="icon"/>
-                                        <span>{formatMoney(item.salaryFrom, item.salaryTo, item.salaryCurrency)}</span>
-                                    </p>
-
-                                    <p className="opportunities-page__desc">{item.shortDescription}</p>
-
-                                    <div className="opportunities-page__card-footer">
-                                        <button
-                                            type="button"
-                                            className="opportunities-page__map-link"
-                                            onClick={() => handleShowOnMap(item.id)}
-                                        >
-                                            <img src={locationIcon} alt="" className="icon"/>
-                                            <span>На карту</span>
-                                        </button>
-
-                                        <div className="opportunities-page__card-actions">
-                                            {isApplicant && (
-                                                <Button className="button--primary" onClick={() => handleApply(item)}>
-                                                    Откликнуться
-                                                </Button>
-                                            )}
-                                            <Link href={`/opportunities/${item.id}`}>
-                                                <Button className="button--outline">Подробнее</Button>
-                                            </Link>
-                                        </div>
-                                    </div>
-                                </article>
+                                <OpportunityListCard
+                                    key={item.id}
+                                    item={item}
+                                    isApplicant={isApplicant}
+                                    isOpportunityFavorite={favoriteOpportunities.has(item.id)}
+                                    isCompanyFavorite={isCompanyFavoriteForItem(item)}
+                                    onToggleOpportunityFavorite={toggleOpportunityFavorite}
+                                    onToggleCompanyFavorite={toggleCompanyFavorite}
+                                    onShowOnMap={handleShowOnMap}
+                                    onApply={handleApply}
+                                />
                             ))}
                         </div>
 

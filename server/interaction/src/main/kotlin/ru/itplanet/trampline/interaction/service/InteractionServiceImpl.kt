@@ -146,8 +146,8 @@ class InteractionServiceImpl(
                 compareByDescending<OpportunityResponseDto> { it.createdAt ?: OffsetDateTime.MIN }
                     .thenByDescending { it.id ?: Long.MIN_VALUE }
             )
-            .map { app ->
-                val opportunity = loadOpportunity(app.opportunityId)
+            .mapNotNull { app ->
+                val opportunity = loadOpportunityOrNull(app.opportunityId) ?: return@mapNotNull null
                 toOpportunityResponseResponse(app, opportunity.title)
             }
     }
@@ -200,8 +200,8 @@ class InteractionServiceImpl(
                 compareByDescending<OpportunityResponseDto> { it.createdAt ?: OffsetDateTime.MIN }
                     .thenByDescending { it.id ?: Long.MIN_VALUE }
             )
-            .map { app ->
-                val opportunity = loadOpportunity(app.opportunityId)
+            .mapNotNull { app ->
+                val opportunity = loadOpportunityOrNull(app.opportunityId) ?: return@mapNotNull null
                 InternalApplicantApplicationResponse(
                     id = app.id!!,
                     opportunityId = app.opportunityId,
@@ -282,7 +282,7 @@ class InteractionServiceImpl(
         userId: Long,
         employerUserId: Long,
     ): FavoriteResponse {
-        val employer = loadEmployerProfile(employerUserId)
+        val employer = loadEmployerProfileSummaryOrNull(employerUserId)
 
         val favorite = favoriteDao.findByUserIdAndEmployerUserId(userId, employerUserId)
             ?: favoriteDao.saveAndFlush(
@@ -292,7 +292,15 @@ class InteractionServiceImpl(
                 )
             )
 
-        return toEmployerFavoriteResponse(favorite, employer)
+        return employer?.let { toEmployerFavoriteResponse(favorite, it) }
+            ?: FavoriteResponse(
+                targetType = FavoriteTargetType.EMPLOYER,
+                targetId = employerUserId,
+                title = "Работодатель #$employerUserId",
+                subtitle = null,
+                logo = null,
+                createdAt = favorite.createdAt,
+            )
     }
 
     override fun removeEmployerFromFavorites(
@@ -305,7 +313,7 @@ class InteractionServiceImpl(
     override fun getUserFavorites(userId: Long): List<FavoriteResponse> {
         val employerCache = mutableMapOf<Long, EmployerProfileSummary>()
 
-        return favoriteDao.findByUserIdOrderByCreatedAtDescIdDesc(userId).map { favorite ->
+        return favoriteDao.findByUserIdOrderByCreatedAtDescIdDesc(userId).mapNotNull { favorite ->
             favorite.validateTargetConsistency()
 
             when (favorite.targetType) {
@@ -313,7 +321,7 @@ class InteractionServiceImpl(
                     val opportunityId = favorite.opportunityId
                         ?: throw IllegalStateException("Избранное по возможности должно содержать opportunityId")
 
-                    val opportunity = loadOpportunity(opportunityId)
+                    val opportunity = loadOpportunityOrNull(opportunityId) ?: return@mapNotNull null
                     val employer = opportunity.employerUserId?.let { employerUserId ->
                         employerCache[employerUserId]
                             ?: loadEmployerProfileSummaryOrNull(employerUserId)?.also {
@@ -329,7 +337,8 @@ class InteractionServiceImpl(
                         ?: throw IllegalStateException("Избранное по работодателю должно содержать employerUserId")
 
                     val employer = employerCache.getOrPut(employerUserId) {
-                        loadEmployerProfile(employerUserId)
+                        loadEmployerProfileSummaryOrNull(employerUserId)
+                            ?: return@mapNotNull null
                     }
 
                     toEmployerFavoriteResponse(favorite, employer)
@@ -827,17 +836,14 @@ class InteractionServiceImpl(
             }
     }
 
-    private fun loadOpportunity(
+    private fun loadOpportunityOrNull(
         opportunityId: Long,
-    ): OpportunityCard {
+    ): OpportunityCard? {
         return try {
             opportunityServiceClient.getPublicOpportunity(opportunityId)
         } catch (ex: FeignException) {
             when (ex.status()) {
-                HttpStatus.NOT_FOUND.value() -> throw InteractionNotFoundException(
-                    message = "Возможность не найдена",
-                    code = "opportunity_not_found",
-                )
+                HttpStatus.NOT_FOUND.value() -> null
 
                 else -> throw InteractionIntegrationException(
                     message = "Сервис возможностей временно недоступен",
@@ -846,6 +852,16 @@ class InteractionServiceImpl(
                 )
             }
         }
+    }
+
+    private fun loadOpportunity(
+        opportunityId: Long,
+    ): OpportunityCard {
+        return loadOpportunityOrNull(opportunityId)
+            ?: throw InteractionNotFoundException(
+                message = "Возможность не найдена",
+                code = "opportunity_not_found",
+            )
     }
 
     private fun loadEmployerProfile(

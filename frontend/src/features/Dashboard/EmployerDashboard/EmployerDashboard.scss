@@ -909,16 +909,18 @@ $section-title-size: 19px;
   align-items: center;
   justify-content: center;
   min-width: 34px;
+  width: 34px;
   height: 34px;
-  padding: 0 8px;
+  padding: 0;
   border-radius: 999px;
   background: rgba(31, 182, 170, 0.12);
   color: #159a90;
   font-size: 12px;
   font-weight: 800;
-  line-height: 34px;
+  line-height: 1;
   text-align: center;
   flex-shrink: 0;
+  align-self: center;
 }
 
 .employer-contact-editor__list {
@@ -960,18 +962,15 @@ $section-title-size: 19px;
   gap: 10px;
 }
 
-.employer-contact-editor__card-title strong,
-.employer-contact-editor__card-title span {
-  display: block;
-}
-
 .employer-contact-editor__card-title strong {
+  display: block;
   margin-bottom: 4px;
   color: #0f172a;
   font-size: 14px;
 }
 
-.employer-contact-editor__card-title span {
+.employer-contact-editor__card-title > div span {
+  display: block;
   color: #64748b;
   font-size: 12px;
   line-height: 1.45;
@@ -1254,9 +1253,11 @@ $section-title-size: 19px;
 }
 
 .employer-opportunities__details {
-  margin-top: 16px;
+  grid-column: 1 / -1;
+  margin-top: 4px;
   padding-top: 16px;
   border-top: 1px solid $gray-200;
+  text-align: left;
 
   h4 {
     font-size: 14px;
@@ -1265,16 +1266,36 @@ $section-title-size: 19px;
     color: $gray-700;
   }
 
-  p {
+  > p {
     font-size: 13px;
     color: $gray-600;
     margin-bottom: 8px;
-    overflow-wrap: anywhere;
+    line-height: 1.55;
 
     strong {
       color: $gray-700;
     }
   }
+}
+
+.employer-opportunities__details-block {
+  margin-bottom: 12px;
+
+  strong {
+    display: block;
+    font-size: 13px;
+    color: $gray-700;
+    margin-bottom: 4px;
+  }
+}
+
+.employer-opportunities__details-text {
+  margin: 0;
+  font-size: 13px;
+  color: $gray-600;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .employer-create-form {

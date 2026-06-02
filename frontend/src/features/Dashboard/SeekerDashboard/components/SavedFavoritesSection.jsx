@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 export default function SavedFavoritesSection({
                                                   favorites,
                                                   onOpenOpportunity,
+                                                  onOpenEmployer,
                                                   onRemoveOpportunity,
                                                   onRemoveEmployer,
                                               }) {
@@ -87,17 +88,27 @@ export default function SavedFavoritesSection({
                         })
                         : employerItems.map((item, index) => {
                             const itemKey = item.id ?? `${item.title ?? 'saved-employer'}-${item.savedAt ?? index}`
+                            const canOpenEmployer = item.id !== null && item.id !== undefined
 
                             return (
-                                <div key={itemKey} className="saved-card">
+                                <div
+                                    key={itemKey}
+                                    className={`saved-card ${canOpenEmployer ? 'saved-card--clickable' : ''}`}
+                                    onClick={() => canOpenEmployer && onOpenEmployer?.(item.id)}
+                                >
                                     <div className="saved-card__content">
-                                        <h3>{item.title || 'Работодатель'}</h3>
-                                        <p className="saved-card__company">{item.subtitle || 'Работодатель'}</p>
+                                        <h3>{item.title || 'Компания'}</h3>
+                                        {item.subtitle ? (
+                                            <p className="saved-card__company">{item.subtitle}</p>
+                                        ) : null}
                                     </div>
 
                                     <button
                                         className="saved-card__remove"
-                                        onClick={() => onRemoveEmployer(item.id, item.title)}
+                                        onClick={(event) => {
+                                            event.stopPropagation()
+                                            onRemoveEmployer(item.id, item.title)
+                                        }}
                                     >
                                         Удалить
                                     </button>
