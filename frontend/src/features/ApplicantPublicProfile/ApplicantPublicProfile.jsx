@@ -52,6 +52,12 @@ function getApplicationStatusClass(status) {
     return status?.toLowerCase?.() || 'default'
 }
 
+// Добавляем недостающую функцию
+function getApplicantFileUrl(userId, fileId) {
+    if (!userId || !fileId) return null
+    return `/api/profile/applicant/${userId}/file/${fileId}`
+}
+
 async function apiRequest(url) {
     const response = await fetch(url, {
         credentials: 'include',
