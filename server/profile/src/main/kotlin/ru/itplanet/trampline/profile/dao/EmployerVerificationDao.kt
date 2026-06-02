@@ -14,4 +14,8 @@ interface EmployerVerificationDao : JpaRepository<EmployerVerificationDto, Long>
     fun findTopByEmployerUserIdOrderByCreatedAtDescIdDesc(
         employerUserId: Long,
     ): EmployerVerificationDto?
+
+    fun findByEmployerUserId(
+        employerUserId: Long,
+    ): List<EmployerVerificationDto>
 }
