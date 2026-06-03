@@ -52,6 +52,8 @@ import ru.itplanet.trampline.interaction.model.response.FavoriteResponse
 import ru.itplanet.trampline.interaction.model.response.InternalApplicantApplicationResponse
 import ru.itplanet.trampline.interaction.model.response.InternalApplicantContactResponse
 import ru.itplanet.trampline.interaction.model.response.OpportunityResponseResponse
+import ru.itplanet.trampline.interaction.model.response.ChatSummaryResponse
+import ru.itplanet.trampline.interaction.chat.service.ChatPolicy
 import java.time.OffsetDateTime
 
 @Service
@@ -67,6 +69,7 @@ class InteractionServiceImpl(
     private val profileServiceClient: ProfileServiceClient,
     private val mediaServiceClient: MediaServiceClient,
     private val objectMapper: ObjectMapper,
+    private val interactionChatSummaryService: InteractionChatSummaryService,
 ) : InteractionService {
 
     override fun apply(
@@ -107,7 +110,10 @@ class InteractionServiceImpl(
             opportunityId = request.opportunityId,
         )
 
-        return toOpportunityResponseResponse(saved, opportunity.title)
+        return interactionChatSummaryService.enrichApplicantResponses(
+            currentUserId = userId,
+            responses = listOf(toOpportunityResponseResponse(saved, opportunity.title)),
+        ).first()
     }
 
     override fun updateApplicationStatus(
@@ -137,11 +143,14 @@ class InteractionServiceImpl(
         opportunityResponseDto.respondedAt = OffsetDateTime.now()
 
         val saved = opportunityResponseDao.save(opportunityResponseDto)
-        return toOpportunityResponseResponse(saved, opportunity.title)
+        return interactionChatSummaryService.enrichApplicantResponses(
+            currentUserId = currentUserId,
+            responses = listOf(toOpportunityResponseResponse(saved, opportunity.title)),
+        ).first()
     }
 
     override fun getUserApplications(userId: Long): List<OpportunityResponseResponse> {
-        return opportunityResponseDao.findByApplicantUserId(userId)
+        val responses = opportunityResponseDao.findByApplicantUserId(userId)
             .sortedWith(
                 compareByDescending<OpportunityResponseDto> { it.createdAt ?: OffsetDateTime.MIN }
                     .thenByDescending { it.id ?: Long.MIN_VALUE }
@@ -150,6 +159,11 @@ class InteractionServiceImpl(
                 val opportunity = loadOpportunityOrNull(app.opportunityId) ?: return@mapNotNull null
                 toOpportunityResponseResponse(app, opportunity.title)
             }
+
+        return interactionChatSummaryService.enrichApplicantResponses(
+            currentUserId = userId,
+            responses = responses,
+        )
     }
 
     override fun getOpportunityApplications(
@@ -165,9 +179,14 @@ class InteractionServiceImpl(
             )
         }
 
-        return opportunityResponseDao.findByOpportunityId(opportunityId).map { app ->
+        val responses = opportunityResponseDao.findByOpportunityId(opportunityId).map { app ->
             toOpportunityResponseResponse(app, opportunity.title)
         }
+
+        return interactionChatSummaryService.enrichApplicantResponses(
+            currentUserId = currentUserId,
+            responses = responses,
+        )
     }
 
     override fun getEmployerResponses(
@@ -189,7 +208,10 @@ class InteractionServiceImpl(
             }
         }
 
-        return employerResponseQueryDao.findResponses(currentUserId, request)
+        return interactionChatSummaryService.enrichEmployerResponses(
+            currentUserId = currentUserId,
+            page = employerResponseQueryDao.findResponses(currentUserId, request),
+        )
     }
 
     override fun getApplicantApplicationsForPrivacy(
@@ -948,6 +970,9 @@ class InteractionServiceImpl(
     private fun toOpportunityResponseResponse(
         oppResp: OpportunityResponseDto,
         title: String?,
+        chatSummary: ChatSummaryResponse = ChatSummaryResponse.noChat(
+            canSend = oppResp.status in ChatPolicy.WRITABLE_RESPONSE_STATUSES,
+        ),
     ): OpportunityResponseResponse {
         return OpportunityResponseResponse(
             id = oppResp.id!!,
@@ -960,6 +985,7 @@ class InteractionServiceImpl(
             coverLetter = oppResp.coverLetter,
             resumeFileId = oppResp.resumeFileId,
             createdAt = oppResp.createdAt,
+            chatSummary = chatSummary,
         )
     }
 
