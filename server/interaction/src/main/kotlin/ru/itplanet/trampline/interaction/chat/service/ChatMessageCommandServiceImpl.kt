@@ -407,9 +407,10 @@ class ChatMessageCommandServiceImpl(
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanRead(dialog, currentUser)
 
-        val attachment = chatMessageAttachmentDao.findByIdAndMessageDialogId(
+        val attachment = chatMessageAttachmentDao.findVisibleByIdAndMessageDialogIdForUser(
             id = attachmentId,
             dialogId = dialogId,
+            currentUserId = currentUser.userId,
         ) ?: throw InteractionNotFoundException(
             message = "Вложение чата не найдено",
             code = "chat_attachment_not_found",

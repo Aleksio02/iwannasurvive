@@ -621,6 +621,13 @@
   color: var(--color-primary-dark);
 }
 
+.chats__attachment-error {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
 .chats__message-actions {
   display: flex;
   gap: 10px;
