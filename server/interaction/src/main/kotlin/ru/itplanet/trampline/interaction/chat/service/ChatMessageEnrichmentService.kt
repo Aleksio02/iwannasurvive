@@ -51,7 +51,7 @@ class ChatMessageEnrichmentService(
             .associateBy { it.dialogId }
 
         return messages.map { message ->
-            val replyTo = findReplyPreview(message)
+            val replyTo = findReplyPreview(message, currentUserId)
             val pinnedMessage = pinnedByDialogId[message.dialogId]
             message.copy(
                 reactions = reactionsByMessageId[message.id] ?: emptyList(),
@@ -63,12 +63,25 @@ class ChatMessageEnrichmentService(
 
     private fun findReplyPreview(
         message: ChatMessage,
+        currentUserId: Long,
     ): ChatMessageReplyPreview? {
-        val replyToId = chatMessageDao.findById(message.id)
+        val source = chatMessageDao.findById(message.id)
             .orElse(null)
-            ?.replyToMessageId
             ?: return null
-        val reply = chatMessageDao.findById(replyToId).orElse(null) ?: return null
+        val replyToId = source.replyToMessageId
+            ?: return null
+        val reply = chatMessageDao.findVisibleByIdAndDialogIdForUser(
+            messageId = replyToId,
+            dialogId = source.dialogId,
+            currentUserId = currentUserId,
+        ) ?: return ChatMessageReplyPreview(
+            id = replyToId,
+            senderUserId = 0,
+            senderDisplayName = "Сообщение",
+            bodyPreview = "Сообщение недоступно",
+            attachmentKind = null,
+            deleted = false,
+        )
         val dialog = chatDialogDao.findById(reply.dialogId).orElse(null)
         val senderName = when (reply.senderUserId) {
             dialog?.applicantUserId -> dialog.applicantNameSnapshot

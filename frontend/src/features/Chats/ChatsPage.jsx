@@ -1026,7 +1026,14 @@ function ChatsPage() {
                 setTimeout(() => node?.classList.remove('is-highlighted'), 2000)
             })
         } catch (error) {
-            toast({ title: 'Сообщение выше в истории', description: error.message })
+            const isUnavailable = [403, 404].includes(error.status) ||
+                /not_found|forbidden|не найден/i.test(error.code || error.message || '')
+            if (isUnavailable) {
+                setSearchResults((current) => current.filter((result) => result.messageId !== messageId))
+                toast({ title: 'Сообщение недоступно' })
+            } else {
+                toast({ title: 'Не удалось открыть сообщение', description: error.message })
+            }
         }
     }
 

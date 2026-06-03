@@ -143,6 +143,15 @@ class ChatRealtimeServiceImpl(
         safeSendDialogUpdated(dialog, dialog.employerUserId)
     }
 
+    override fun broadcastMessageCreated(dialogId: Long, message: ChatMessage) {
+        val dialog = chatAccessService.requireDialog(dialogId)
+        safeSendToParticipants(dialog) { targetUserId ->
+            chatRealtimeMapper.toMessageCreatedEvent(chatMessageEnrichmentService.enrich(message, targetUserId))
+        }
+        safeSendDialogUpdated(dialog, dialog.applicantUserId)
+        safeSendDialogUpdated(dialog, dialog.employerUserId)
+    }
+
     override fun broadcastMessageDeleted(dialogId: Long, message: ChatMessage) {
         val dialog = chatAccessService.requireDialog(dialogId)
         safeSendToParticipants(dialog) { targetUserId ->
