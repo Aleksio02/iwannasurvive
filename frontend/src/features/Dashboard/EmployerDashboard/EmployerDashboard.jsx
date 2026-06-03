@@ -1024,6 +1024,14 @@ function EmployerDashboard() {
             ...prev,
             cityId: city.id,
             cityName: city.name || cityLabel,
+            addressLine: '',
+            addressLine2: '',
+            postalCode: '',
+            latitude: '',
+            longitude: '',
+            fiasId: '',
+            unrestrictedValue: '',
+            qcGeo: '',
         }))
         setLocationCitySearchQuery(cityLabel || city.name || '')
         setIsLocationCitySearchOpen(false)
@@ -1099,7 +1107,7 @@ function EmployerDashboard() {
             ...prev,
             cityId: suggestion.cityId ?? prev.cityId,
             cityName: suggestion.cityName || prev.cityName,
-            addressLine: suggestion.addressLine || suggestion.value || '',
+            addressLine: suggestion.addressLine || suggestion.value || suggestion.unrestrictedValue || '',
             postalCode: suggestion.postalCode || '',
             latitude: suggestion.latitude ?? '',
             longitude: suggestion.longitude ?? '',

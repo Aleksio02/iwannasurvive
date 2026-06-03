@@ -104,7 +104,7 @@ function EmployerLocationModal({
                         <Input
                             value={addressSearchQuery}
                             onChange={(e) => onAddressSuggest(e.target.value)}
-                            placeholder="Начните вводить адрес"
+                            placeholder="Начните вводить адрес или укажите ориентир"
                         />
                         {isAddressSearchOpen && addressSuggestions.length > 0 && (
                             <div className="autocomplete__list" role="listbox">
@@ -122,6 +122,9 @@ function EmployerLocationModal({
                             </div>
                         )}
                     </div>
+                    <p className="field-hint">
+                        Для небольших городов можно указать город или ориентир, а офис и помещение добавить ниже.
+                    </p>
                     {locationErrors.addressLine && <p className="field-error">{locationErrors.addressLine}</p>}
                 </div>
 
