@@ -223,7 +223,7 @@ class ChatMessageCommandServiceImpl(
     ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanWrite(dialog, currentUser)
-        val message = requireMessageInDialog(dialogId, messageId)
+        val message = requireVisibleMessageInDialog(dialogId, messageId, currentUser.userId)
         if (message.senderUserId != currentUser.userId) {
             throw InteractionForbiddenException(
                 message = "Редактировать можно только своё сообщение",
@@ -291,7 +291,7 @@ class ChatMessageCommandServiceImpl(
     ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanRead(dialog, currentUser)
-        val message = requireMessageInDialog(dialogId, messageId)
+        val message = requireVisibleMessageInDialog(dialogId, messageId, currentUser.userId)
         if (message.senderUserId != currentUser.userId) {
             throw InteractionForbiddenException(
                 message = "Удалить сообщение у всех может только отправитель",
@@ -343,8 +343,8 @@ class ChatMessageCommandServiceImpl(
         }
 
         chatAccessService.assertCanWrite(targetDialog, currentUser)
-        val source = requireMessageInDialog(sourceDialogId, messageId)
-        if (source.deletedAt != null || chatMessageUserStateDao.existsByIdMessageIdAndIdUserIdAndHiddenAtIsNotNull(messageId, currentUser.userId)) {
+        val source = requireVisibleMessageInDialog(sourceDialogId, messageId, currentUser.userId)
+        if (source.deletedAt != null) {
             throw InteractionBadRequestException(
                 message = "Сообщение нельзя переслать",
                 code = "chat_message_forward_not_allowed",
@@ -502,18 +502,27 @@ class ChatMessageCommandServiceImpl(
         return message
     }
 
+    private fun requireVisibleMessageInDialog(
+        dialogId: Long,
+        messageId: Long,
+        currentUserId: Long,
+    ): ChatMessageDto {
+        return chatMessageDao.findVisibleByIdAndDialogIdForUser(
+            messageId = messageId,
+            dialogId = dialogId,
+            currentUserId = currentUserId,
+        ) ?: throw InteractionNotFoundException(
+            message = "Сообщение чата не найдено",
+            code = "chat_message_not_found",
+        )
+    }
+
     private fun validateReplyToMessage(
         dialogId: Long,
         currentUserId: Long,
         replyToMessageId: Long?,
     ) {
         if (replyToMessageId == null) return
-        val replyTo = requireMessageInDialog(dialogId, replyToMessageId)
-        if (chatMessageUserStateDao.existsByIdMessageIdAndIdUserIdAndHiddenAtIsNotNull(replyTo.id ?: 0, currentUserId)) {
-            throw InteractionBadRequestException(
-                message = "Нельзя ответить на скрытое сообщение",
-                code = "chat_reply_hidden_message",
-            )
-        }
+        requireVisibleMessageInDialog(dialogId, replyToMessageId, currentUserId)
     }
 }

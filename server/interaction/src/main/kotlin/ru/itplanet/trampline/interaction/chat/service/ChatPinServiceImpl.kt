@@ -4,7 +4,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogQueryDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageDao
-import ru.itplanet.trampline.interaction.chat.dao.ChatMessageUserStateDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatPinnedMessageDao
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatPinnedMessageDto
 import ru.itplanet.trampline.interaction.chat.model.ChatDialog
@@ -17,20 +16,18 @@ class ChatPinServiceImpl(
     private val chatAccessService: ChatAccessService,
     private val chatDialogQueryDao: ChatDialogQueryDao,
     private val chatMessageDao: ChatMessageDao,
-    private val chatMessageUserStateDao: ChatMessageUserStateDao,
     private val chatPinnedMessageDao: ChatPinnedMessageDao,
 ) : ChatPinService {
     @Transactional
     override fun pin(dialogId: Long, messageId: Long, currentUser: AuthenticatedUser): ChatDialog {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanWrite(dialog, currentUser)
-        val message = chatMessageDao.findById(messageId).orElseThrow {
-            InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
-        }
-        if (message.dialogId != dialogId) {
-            throw InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
-        }
-        if (message.deletedAt != null || chatMessageUserStateDao.existsByIdMessageIdAndIdUserIdAndHiddenAtIsNotNull(messageId, currentUser.userId)) {
+        val message = chatMessageDao.findVisibleByIdAndDialogIdForUser(
+            messageId = messageId,
+            dialogId = dialogId,
+            currentUserId = currentUser.userId,
+        ) ?: throw InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
+        if (message.deletedAt != null) {
             throw InteractionBadRequestException("Сообщение нельзя закрепить", "chat_pin_not_allowed")
         }
         val pinned = chatPinnedMessageDao.findByDialogId(dialogId)
