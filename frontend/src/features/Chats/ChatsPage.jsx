@@ -235,6 +235,7 @@ function ChatAttachment({ dialogId, attachment, failed = false, pending = false 
     const [imageUrl, setImageUrl] = useState(attachment.localPreviewUrl || '')
     const [isThumbnailLoading, setIsThumbnailLoading] = useState(!attachment.localPreviewUrl)
     const [isFileOpening, setIsFileOpening] = useState(false)
+    const [fileOpenError, setFileOpenError] = useState('')
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
     const [fullImageUrl, setFullImageUrl] = useState('')
     const [isFullImageLoading, setIsFullImageLoading] = useState(false)
@@ -344,32 +345,39 @@ function ChatAttachment({ dialogId, attachment, failed = false, pending = false 
         if (!attachment.id || isFileOpening || pending || failed) return
 
         setIsFileOpening(true)
+        setFileOpenError('')
         try {
             const response = await getChatAttachmentDownloadUrl(dialogId, attachment.id)
             openDownloadUrl(response.url)
-        } catch {
-            return
+        } catch (error) {
+            setFileOpenError(error.status === 404 || error.status === 403
+                ? 'Файл недоступен'
+                : 'Не удалось открыть файл'
+            )
         } finally {
             setIsFileOpening(false)
         }
     }
 
     return (
-        <button
-            type="button"
-            className="chats__attachment-file"
-            disabled={pending || failed}
-            onClick={handleOpenFile}
-        >
-            {pending || isFileOpening
-                ? <LoaderCircle className="chats__spinner chats__attachment-file-icon" size={20} aria-hidden="true" />
-                : <FileText className="chats__attachment-file-icon" size={20} aria-hidden="true" />}
-            <span className="chats__attachment-file-info">
-                <strong>{attachment.originalFileName}</strong>
-                <small>{formatFileSize(attachment.sizeBytes)}</small>
-            </span>
-            {!pending && !isFileOpening && <Download size={17} aria-hidden="true" />}
-        </button>
+        <>
+            <button
+                type="button"
+                className="chats__attachment-file"
+                disabled={pending || failed}
+                onClick={handleOpenFile}
+            >
+                {pending || isFileOpening
+                    ? <LoaderCircle className="chats__spinner chats__attachment-file-icon" size={20} aria-hidden="true" />
+                    : <FileText className="chats__attachment-file-icon" size={20} aria-hidden="true" />}
+                <span className="chats__attachment-file-info">
+                    <strong>{attachment.originalFileName}</strong>
+                    <small>{formatFileSize(attachment.sizeBytes)}</small>
+                </span>
+                {!pending && !isFileOpening && <Download size={17} aria-hidden="true" />}
+            </button>
+            {fileOpenError && <small className="chats__attachment-error">{fileOpenError}</small>}
+        </>
     )
 }
 
