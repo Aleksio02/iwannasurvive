@@ -195,8 +195,10 @@ services:
       dockerfile: Dockerfile
     image: tramplin_frontend:latest
     ports:
-      - "8888:80"
-      - "443:443"  # если будет HTTPS
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt/:/etc/letsencrypt/:ro
     networks:
       - tramplin_net
     env_file:
