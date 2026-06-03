@@ -45,7 +45,8 @@ const EMOJI_GROUPS = [
     ['Работа и учёба', ['💼', '📚', '✍️', '✅', '🚀', '🎯', '💡', '📌']],
     ['Объекты', ['📎', '📄', '📅', '📞', '💻', '☕', '🎁', '⭐']],
 ]
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+const QUICK_REACTIONS_PRIMARY = ['👍', '❤️', '😂', '😮', '🙏']
+const QUICK_REACTIONS_MORE = ['😢', '🔥', '👏', '🎉', '🤔', '👀', '✅', '🚀']
 const INITIAL_STATE = {
     dialogs: [],
     nextCursor: null,
@@ -207,6 +208,12 @@ function getLastServerMessageId(messages) {
 function formatFileSize(sizeBytes) {
     if (sizeBytes < 1024 * 1024) return `${Math.max(1, Math.round(sizeBytes / 1024))} КБ`
     return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`
+}
+
+function getInitials(value = '') {
+    const parts = String(value).trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return '?'
+    return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 }
 
 function validateAttachment(file) {
@@ -401,6 +408,8 @@ function ChatsPage() {
     const [isEditSaving, setIsEditSaving] = useState(false)
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
     const [messageMenuPosition, setMessageMenuPosition] = useState(null)
+    const [isReactionMoreOpen, setIsReactionMoreOpen] = useState(false)
+    const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false)
     const [confirmAction, setConfirmAction] = useState(null)
     const [forwardingMessage, setForwardingMessage] = useState(null)
     const [forwardClientMessageId, setForwardClientMessageId] = useState('')
@@ -425,8 +434,10 @@ function ChatsPage() {
     const emojiButtonRef = useRef(null)
     const emojiPickerRef = useRef(null)
     const opportunityFilterRef = useRef(null)
+    const headerMenuRef = useRef(null)
     const editFileInputRef = useRef(null)
     const longPressTimerRef = useRef(null)
+    const pinGuardRef = useRef({ dialogId: null, pinnedMessageId: null, expiresAt: 0 })
     const shouldStickToBottomRef = useRef(true)
     const previousScrollMetricsRef = useRef(null)
     const olderMessagesLoadingRef = useRef(false)
@@ -517,9 +528,10 @@ function ChatsPage() {
             }
         }
         const handlePointer = (event) => {
-            if (!event.target.closest?.('.chats__floating-menu') && !event.target.closest?.('.chats__message-menu-button')) {
+            if (!event.target.closest?.('.chats__floating-menu')) {
                 setOpenMenuMessageId(null)
                 setMessageMenuPosition(null)
+                setIsReactionMoreOpen(false)
             }
         }
         const handleViewportMove = () => {
@@ -555,6 +567,26 @@ function ChatsPage() {
             document.removeEventListener('pointerdown', handlePointer)
         }
     }, [isOpportunityFilterOpen])
+
+    useEffect(() => {
+        if (!isHeaderMenuOpen) return undefined
+
+        const close = (event) => {
+            if (event.key === 'Escape') setIsHeaderMenuOpen(false)
+        }
+        const handlePointer = (event) => {
+            if (!headerMenuRef.current?.contains(event.target)) {
+                setIsHeaderMenuOpen(false)
+            }
+        }
+
+        document.addEventListener('keydown', close)
+        document.addEventListener('pointerdown', handlePointer)
+        return () => {
+            document.removeEventListener('keydown', close)
+            document.removeEventListener('pointerdown', handlePointer)
+        }
+    }, [isHeaderMenuOpen])
 
     useEffect(() => {
         if (openMenuMessageId && !messages.some((message) => message.id === openMenuMessageId && !message.deletedAt)) {
@@ -594,6 +626,7 @@ function ChatsPage() {
     const closeMessageMenu = () => {
         setOpenMenuMessageId(null)
         setMessageMenuPosition(null)
+        setIsReactionMoreOpen(false)
     }
 
     const openMessageMenu = (event, messageId, anchor = null) => {
@@ -968,6 +1001,17 @@ function ChatsPage() {
             }
 
             if (event.type === 'DIALOG_UPDATED') {
+                const pinGuard = pinGuardRef.current
+                if (
+                    pinGuard.dialogId === event.dialogId &&
+                    pinGuard.expiresAt > Date.now() &&
+                    (
+                        (pinGuard.pinnedMessageId && event.payload.pinnedMessage?.messageId !== pinGuard.pinnedMessageId) ||
+                        (pinGuard.pinnedMessageId === null && event.payload.pinnedMessage)
+                    )
+                ) {
+                    return
+                }
                 dispatch({ type: 'DIALOG_UPSERT', dialog: event.payload })
                 if (event.dialogId === routeDialogId) {
                     dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog: event.payload })
@@ -1208,12 +1252,18 @@ function ChatsPage() {
         setIsPinUpdating(true)
         try {
             const isPinned = state.activeDialog?.pinnedMessage?.messageId === message.id
+            pinGuardRef.current = {
+                dialogId: routeDialogId,
+                pinnedMessageId: isPinned ? null : message.id,
+                expiresAt: Date.now() + 2500,
+            }
             const dialog = isPinned
                 ? await unpinChatMessage(routeDialogId)
                 : await pinChatMessage(routeDialogId, message.id)
             dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
             dispatch({ type: 'DIALOG_UPSERT', dialog })
         } catch (error) {
+            pinGuardRef.current = { dialogId: null, pinnedMessageId: null, expiresAt: 0 }
             toast({ title: 'Не удалось обновить закреп', description: error.message, variant: 'destructive' })
         } finally {
             setIsPinUpdating(false)
@@ -1322,7 +1372,7 @@ function ChatsPage() {
         })
 
     return (
-        <DashboardLayout title="Сообщения" subtitle="Общайтесь по вашим откликам">
+        <DashboardLayout title="Сообщения">
             <div className={`chats ${routeDialogId ? 'chats--thread-open' : ''}`}>
                 <aside className="chats__sidebar">
                     <div className="chats__filters">
@@ -1451,12 +1501,29 @@ function ChatsPage() {
                                     >
                                         <Search size={18} aria-hidden="true" />
                                     </button>
-                                    <button className="chats__archive" type="button" onClick={handleMarkUnread}>
-                                        Непрочитано
-                                    </button>
-                                    <button className="chats__archive" type="button" onClick={handleArchive}>
-                                        {state.activeDialog?.archived ? 'Восстановить' : 'В архив'}
-                                    </button>
+                                    <div className="chats__header-menu-wrap" ref={headerMenuRef}>
+                                        <button
+                                            className="chats__icon-action"
+                                            type="button"
+                                            aria-label="Действия с диалогом"
+                                            aria-haspopup="menu"
+                                            aria-expanded={isHeaderMenuOpen}
+                                            title="Действия"
+                                            onClick={() => setIsHeaderMenuOpen((isOpen) => !isOpen)}
+                                        >
+                                            <MoreHorizontal size={18} aria-hidden="true" />
+                                        </button>
+                                        {isHeaderMenuOpen && (
+                                            <div className="chats__header-menu" role="menu">
+                                                <button type="button" role="menuitem" onClick={() => { setIsHeaderMenuOpen(false); void handleMarkUnread() }}>
+                                                    Отметить непрочитанным
+                                                </button>
+                                                <button type="button" role="menuitem" onClick={() => { setIsHeaderMenuOpen(false); void handleArchive() }}>
+                                                    {state.activeDialog?.archived ? 'Вернуть из архива' : 'В архив'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </header>
 
@@ -1538,8 +1605,13 @@ function ChatsPage() {
                                         {canEdit ? 'Напишите первое сообщение по этому отклику' : 'Переписка недоступна для новых сообщений'}
                                     </p>
                                 )}
-                                {messages.map((message) => {
+                                {messages.map((message, messageIndex) => {
                                     const isOwn = message.senderUserId === currentUser?.id
+                                    const nextMessage = messages[messageIndex + 1]
+                                    const showAvatar = !nextMessage || nextMessage.senderUserId !== message.senderUserId || Boolean(nextMessage.deletedAt) !== Boolean(message.deletedAt)
+                                    const senderName = isOwn
+                                        ? currentUser?.displayName || currentUser?.email || 'Вы'
+                                        : state.activeDialog?.counterpart?.displayName || 'Участник'
                                     const visibleEditAttachments = (message.attachments || []).filter((attachment) =>
                                         !editingRemoveAttachmentIds.includes(attachment.id)
                                     )
@@ -1548,6 +1620,13 @@ function ChatsPage() {
                                             key={message.id || message.clientMessageId}
                                             className={`chats__message-row ${isOwn ? 'chats__message-row--own' : ''}`}
                                         >
+                                            {showAvatar ? (
+                                                <span className="chats__message-avatar" title={senderName}>
+                                                    {getInitials(senderName)}
+                                                </span>
+                                            ) : (
+                                                <span className="chats__message-avatar chats__message-avatar--spacer" aria-hidden="true" />
+                                            )}
                                             <div
                                                 className={`chats__message ${isOwn ? 'chats__message--own' : ''} ${message.deletedAt ? 'chats__message--deleted' : ''}`}
                                                 data-message-id={message.id || ''}
@@ -1659,21 +1738,9 @@ function ChatsPage() {
                                                     {message.failed && ' · не отправлено'}
                                                     {message.editedAt && !message.deletedAt && ' · изменено'}
                                                 </span>
-                                                {!message.failed && !message.pending && !message.deletedAt && message.id && (
-                                                    <button
-                                                        type="button"
-                                                        className="chats__message-menu-button"
-                                                        aria-label="Действия с сообщением"
-                                                        aria-haspopup="menu"
-                                                        aria-expanded={openMenuMessageId === message.id}
-                                                        onClick={(event) => openMessageMenu(event, message.id)}
-                                                    >
-                                                        <MoreHorizontal size={16} aria-hidden="true" />
-                                                    </button>
-                                                )}
                                                 {message.reactions?.length > 0 && (
                                                     <div className="chats__reactions">
-                                                        {message.reactions.map((reaction) => (
+                                                        {message.reactions.slice(0, 4).map((reaction) => (
                                                             <button
                                                                 key={reaction.reaction}
                                                                 type="button"
@@ -1686,6 +1753,15 @@ function ChatsPage() {
                                                                 {reaction.reaction} {reaction.count}
                                                             </button>
                                                         ))}
+                                                        {message.reactions.length > 4 && (
+                                                            <button
+                                                                type="button"
+                                                                className="chats__reaction-chip"
+                                                                onClick={(event) => openMessageMenu(event, message.id, { clientX: event.clientX, clientY: event.clientY })}
+                                                            >
+                                                                +{message.reactions.slice(4).reduce((total, reaction) => total + Number(reaction.count || 0), 0)}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                                 {message.failed && (
@@ -1735,9 +1811,30 @@ function ChatsPage() {
                                     style={messageMenuPosition || undefined}
                                 >
                                     {canEdit && (
-                                        <div className="chats__reaction-row">
-                                            {QUICK_REACTIONS.map((reaction) => (
+                                        <div className="chats__quick-reactions">
+                                            {QUICK_REACTIONS_PRIMARY.map((reaction) => (
                                                 <button key={reaction} type="button" role="menuitem" onClick={() => {
+                                                    closeMessageMenu()
+                                                    void handleReaction(activeMenuMessage, reaction)
+                                                }}>
+                                                    {reaction}
+                                                </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                className="chats__quick-reaction-more"
+                                                aria-label="Ещё реакции"
+                                                aria-expanded={isReactionMoreOpen}
+                                                onClick={() => setIsReactionMoreOpen((isOpen) => !isOpen)}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    )}
+                                    {canEdit && isReactionMoreOpen && (
+                                        <div className="chats__reaction-more-grid">
+                                            {QUICK_REACTIONS_MORE.map((reaction) => (
+                                                <button key={reaction} type="button" onClick={() => {
                                                     closeMessageMenu()
                                                     void handleReaction(activeMenuMessage, reaction)
                                                 }}>
