@@ -325,6 +325,23 @@ class ChatMessageCommandServiceImpl(
         val sourceDialog = chatAccessService.assertDialogParticipant(sourceDialogId, currentUser.userId)
         chatAccessService.assertCanRead(sourceDialog, currentUser)
         val targetDialog = chatAccessService.assertDialogParticipant(targetDialogId, currentUser.userId)
+        chatAccessService.assertCanRead(targetDialog, currentUser)
+        val normalizedClientMessageId = normalizeClientMessageId(clientMessageId)
+
+        chatMessageDao.findByDialogIdAndSenderUserIdAndClientMessageId(
+            dialogId = targetDialogId,
+            senderUserId = currentUser.userId,
+            clientMessageId = normalizedClientMessageId,
+        )?.let { existingMessage ->
+            return ChatMessageCommandResult(
+                message = chatMessageEnrichmentService.enrich(
+                    chatDomainMapper.toChatMessage(existingMessage),
+                    currentUser.userId,
+                ),
+                created = false,
+            )
+        }
+
         chatAccessService.assertCanWrite(targetDialog, currentUser)
         val source = requireMessageInDialog(sourceDialogId, messageId)
         if (source.deletedAt != null || chatMessageUserStateDao.existsByIdMessageIdAndIdUserIdAndHiddenAtIsNotNull(messageId, currentUser.userId)) {
@@ -333,7 +350,6 @@ class ChatMessageCommandServiceImpl(
                 code = "chat_message_forward_not_allowed",
             )
         }
-        val normalizedClientMessageId = normalizeClientMessageId(clientMessageId)
         val senderRole = chatDomainMapper.toSenderRole(currentUser.role)
         val senderName = when (source.senderUserId) {
             sourceDialog.applicantUserId -> sourceDialog.applicantNameSnapshot

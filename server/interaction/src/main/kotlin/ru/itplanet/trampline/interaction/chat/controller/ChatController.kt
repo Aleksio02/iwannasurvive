@@ -255,7 +255,9 @@ class ChatController(
             currentUser = currentUser,
             clientMessageId = request.clientMessageId,
         )
-        chatRealtimeService.broadcastMessageCreated(request.targetDialogId, result.message)
+        if (result.created) {
+            chatRealtimeService.broadcastMessageCreated(request.targetDialogId, result.message)
+        }
         return chatRestMapper.toChatMessageResponse(result.message)
     }
 

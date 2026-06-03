@@ -23,7 +23,7 @@ class ChatPinServiceImpl(
     @Transactional
     override fun pin(dialogId: Long, messageId: Long, currentUser: AuthenticatedUser): ChatDialog {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
-        chatAccessService.assertCanRead(dialog, currentUser)
+        chatAccessService.assertCanWrite(dialog, currentUser)
         val message = chatMessageDao.findById(messageId).orElseThrow {
             InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
         }
@@ -44,7 +44,7 @@ class ChatPinServiceImpl(
     @Transactional
     override fun unpin(dialogId: Long, currentUser: AuthenticatedUser): ChatDialog {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
-        chatAccessService.assertCanRead(dialog, currentUser)
+        chatAccessService.assertCanWrite(dialog, currentUser)
         chatPinnedMessageDao.deleteByDialogId(dialogId)
         return currentDialog(dialogId, currentUser.userId)
     }
