@@ -145,7 +145,8 @@ class ChatController(
         @PathVariable
         @Positive(message = "Идентификатор диалога должен быть положительным")
         dialogId: Long,
-        @RequestPart("file") file: MultipartFile,
+        @RequestPart("file", required = false) file: MultipartFile?,
+        @RequestPart("files", required = false) files: List<MultipartFile>?,
         @RequestParam clientMessageId: String,
         @RequestParam(required = false) body: String?,
         @RequestParam(required = false) replyToMessageId: Long?,
@@ -156,7 +157,7 @@ class ChatController(
             currentUser = currentUser,
             clientMessageId = clientMessageId,
             body = body,
-            file = file,
+            files = collectAttachmentFiles(file, files),
             replyToMessageId = replyToMessageId,
         )
 
@@ -186,6 +187,7 @@ class ChatController(
         @RequestParam(required = false) body: String?,
         @RequestParam(required = false) removeAttachmentIds: List<Long>?,
         @RequestPart("file", required = false) file: MultipartFile?,
+        @RequestPart("files", required = false) files: List<MultipartFile>?,
         @CurrentUser currentUser: AuthenticatedUser,
     ): ChatMessageResponse {
         val result = chatMessageCommandService.editMessageContent(
@@ -194,7 +196,7 @@ class ChatController(
             currentUser = currentUser,
             body = body,
             removeAttachmentIds = removeAttachmentIds.orEmpty(),
-            file = file,
+            files = collectAttachmentFiles(file, files),
         )
         chatRealtimeService.broadcastMessageUpdated(dialogId, result.message)
         chatRealtimeService.broadcastDialogUpdated(chatDialogQueryService.getDialog(dialogId, currentUser))
@@ -325,6 +327,10 @@ class ChatController(
             attachmentId = attachmentId,
             currentUser = currentUser,
         )
+    }
+
+    private fun collectAttachmentFiles(file: MultipartFile?, files: List<MultipartFile>?): List<MultipartFile> {
+        return listOfNotNull(file) + files.orEmpty()
     }
 
     @ResponseStatus(HttpStatus.NO_CONTENT)
