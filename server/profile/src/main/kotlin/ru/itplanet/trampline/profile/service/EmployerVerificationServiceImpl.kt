@@ -345,6 +345,39 @@ class EmployerVerificationServiceImpl(
         }
     }
 
+    @Transactional(readOnly = true)
+    override fun getAttachmentDownloadUrl(
+        employerUserId: Long,
+        verificationId: Long,
+        fileId: Long,
+    ): InternalFileDownloadUrlResponse {
+        val verification = getOwnedVerification(employerUserId, verificationId)
+
+        val attachment = runMediaAction(
+            logMessage = "Не удалось загрузить список вложений для verificationId=$verificationId, employerUserId=$employerUserId",
+            errorMessage = "Не удалось получить вложения запроса на верификацию",
+            code = "employer_verification_attachments_load_failed",
+        ) {
+            loadVerificationAttachments(requireNotNull(verification.id))
+        }.firstOrNull { currentAttachment ->
+            currentAttachment.fileId == fileId &&
+                currentAttachment.entityType == FileAttachmentEntityType.EMPLOYER_VERIFICATION &&
+                currentAttachment.entityId == verificationId &&
+                currentAttachment.attachmentRole == FileAttachmentRole.VERIFICATION
+        } ?: throw ProfileNotFoundException(
+            message = "Вложение запроса на верификацию не найдено",
+            code = "employer_verification_attachment_not_found",
+        )
+
+        return runMediaAction(
+            logMessage = "Не удалось получить ссылку на скачивание fileId=${attachment.fileId}, verificationId=$verificationId",
+            errorMessage = "Не удалось открыть вложение запроса на верификацию",
+            code = "employer_verification_attachment_download_failed",
+        ) {
+            mediaServiceClient.getDownloadUrl(attachment.fileId)
+        }
+    }
+
     private fun validateVerificationRequest(
         profile: EmployerProfileDto,
         method: VerificationMethod,
