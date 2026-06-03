@@ -1668,7 +1668,7 @@ function ChatsPage() {
                                     return (
                                         <div
                                             key={message.id || message.clientMessageId}
-                                            className={`chats__message-row ${isOwn ? 'chats__message-row--own' : ''}`}
+                                            className={`chats__message-row ${isOwn ? 'chats__message-row--own' : 'chats__message-row--incoming'}`}
                                         >
                                             {showAvatar ? (
                                                 <span className="chats__message-avatar" title={senderName}>
@@ -1678,7 +1678,7 @@ function ChatsPage() {
                                                 <span className="chats__message-avatar chats__message-avatar--spacer" aria-hidden="true" />
                                             )}
                                             <div
-                                                className={`chats__message ${isOwn ? 'chats__message--own' : ''} ${message.deletedAt ? 'chats__message--deleted' : ''}`}
+                                                className={`chats__message ${isOwn ? 'chats__message--own' : 'chats__message--incoming'} ${message.deletedAt ? 'chats__message--deleted' : ''}`}
                                                 data-message-id={message.id || ''}
                                                 onContextMenu={(event) => handleMessageContextMenu(event, message)}
                                                 onPointerDown={(event) => handleMessagePointerDown(event, message)}
