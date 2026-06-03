@@ -388,7 +388,9 @@ function ChatsPage() {
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
     const [confirmAction, setConfirmAction] = useState(null)
     const [forwardingMessage, setForwardingMessage] = useState(null)
+    const [forwardClientMessageId, setForwardClientMessageId] = useState('')
     const [forwardSearch, setForwardSearch] = useState('')
+    const [isForwarding, setIsForwarding] = useState(false)
     const [isSearchOpen, setIsSearchOpen] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState([])
@@ -941,7 +943,7 @@ function ChatsPage() {
 
     const handleSaveEdit = async (message) => {
         const body = editingBody.trim()
-        if (!routeDialogId || !message.id || !body) return
+        if (!canEdit || !routeDialogId || !message.id || !body) return
         try {
             const saved = await editChatMessage(routeDialogId, message.id, body)
             dispatch({ type: 'MESSAGE_UPSERT', dialogId: routeDialogId, message: saved })
@@ -963,7 +965,7 @@ function ChatsPage() {
     }
 
     const handleDeleteForEveryone = async (message) => {
-        if (!routeDialogId || !message.id) return
+        if (!canEdit || !routeDialogId || !message.id) return
         try {
             const saved = await deleteChatMessageForEveryone(routeDialogId, message.id)
             dispatch({ type: 'MESSAGE_UPSERT', dialogId: routeDialogId, message: saved })
@@ -973,7 +975,7 @@ function ChatsPage() {
     }
 
     const handleReaction = async (message, reaction) => {
-        if (!routeDialogId || !message.id || message.deletedAt) return
+        if (!canEdit || !routeDialogId || !message.id || message.deletedAt) return
         try {
             const currentReaction = message.reactions?.find((item) => item.reactedByMe)
             const saved = currentReaction?.reaction === reaction
@@ -986,7 +988,7 @@ function ChatsPage() {
     }
 
     const handlePinToggle = async (message) => {
-        if (!routeDialogId || !message.id) return
+        if (!canEdit || !routeDialogId || !message.id) return
         try {
             const isPinned = state.activeDialog?.pinnedMessage?.messageId === message.id
             const dialog = isPinned
@@ -1002,15 +1004,24 @@ function ChatsPage() {
     }
 
     const handleForward = async (message, targetDialogId) => {
-        if (!routeDialogId || !message.id || !targetDialogId) return
+        if (!canEdit || !routeDialogId || !message.id || !targetDialogId || isForwarding) return
+        const clientMessageId = forwardClientMessageId || createClientMessageId()
+        if (!forwardClientMessageId) setForwardClientMessageId(clientMessageId)
+
+        setIsForwarding(true)
         try {
             await forwardChatMessage(routeDialogId, message.id, {
                 targetDialogId,
-                clientMessageId: createClientMessageId(),
+                clientMessageId,
             })
             toast({ title: 'Сообщение переслано' })
+            setForwardingMessage(null)
+            setForwardSearch('')
+            setForwardClientMessageId('')
         } catch (error) {
             toast({ title: 'Не удалось переслать сообщение', description: error.message, variant: 'destructive' })
+        } finally {
+            setIsForwarding(false)
         }
     }
 
@@ -1178,17 +1189,19 @@ function ChatsPage() {
                                 >
                                     <Pin size={16} aria-hidden="true" />
                                     <span>{state.activeDialog.pinnedMessage.preview}</span>
-                                    <X
-                                        size={16}
-                                        aria-hidden="true"
-                                        onClick={(event) => {
-                                            event.stopPropagation()
-                                            void unpinChatMessage(routeDialogId).then(() => getChatDialog(routeDialogId)).then((dialog) => {
-                                                dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
-                                                dispatch({ type: 'DIALOG_UPSERT', dialog })
-                                            })
-                                        }}
-                                    />
+                                    {canEdit && (
+                                        <X
+                                            size={16}
+                                            aria-hidden="true"
+                                            onClick={(event) => {
+                                                event.stopPropagation()
+                                                void unpinChatMessage(routeDialogId).then(() => getChatDialog(routeDialogId)).then((dialog) => {
+                                                    dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
+                                                    dispatch({ type: 'DIALOG_UPSERT', dialog })
+                                                })
+                                            }}
+                                        />
+                                    )}
                                 </button>
                             )}
 
@@ -1320,30 +1333,39 @@ function ChatsPage() {
                                             )}
                                             {openMenuMessageId === message.id && (
                                                 <div className="chats__message-menu" role="menu">
-                                                    <div className="chats__reaction-row">
-                                                        {QUICK_REACTIONS.map((reaction) => (
-                                                            <button key={reaction} type="button" onClick={() => {
-                                                                setOpenMenuMessageId(null)
-                                                                void handleReaction(message, reaction)
-                                                            }}>
-                                                                {reaction}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                    <button type="button" onClick={() => { setReplyToMessage(message); setOpenMenuMessageId(null); textareaRef.current?.focus() }}>Ответить</button>
-                                                    {isOwn && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(message.messageType) && (
+                                                    {canEdit && (
+                                                        <div className="chats__reaction-row">
+                                                            {QUICK_REACTIONS.map((reaction) => (
+                                                                <button key={reaction} type="button" onClick={() => {
+                                                                    setOpenMenuMessageId(null)
+                                                                    void handleReaction(message, reaction)
+                                                                }}>
+                                                                    {reaction}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {canEdit && (
+                                                        <button type="button" onClick={() => { setReplyToMessage(message); setOpenMenuMessageId(null); textareaRef.current?.focus() }}>Ответить</button>
+                                                    )}
+                                                    {canEdit && isOwn && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(message.messageType) && (
                                                         <button type="button" onClick={() => { setEditingMessageId(message.id); setEditingBody(message.body || ''); setOpenMenuMessageId(null) }}>Редактировать</button>
                                                     )}
                                                     <button type="button" onClick={() => { setOpenMenuMessageId(null); setConfirmAction({ type: 'deleteMe', message }) }}>Удалить у себя</button>
-                                                    {isOwn && <button type="button" onClick={() => { setOpenMenuMessageId(null); setConfirmAction({ type: 'deleteAll', message }) }}>Удалить у всех</button>}
-                                                    <button type="button" onClick={() => { setOpenMenuMessageId(null); void handlePinToggle(message) }}>
-                                                        {state.activeDialog?.pinnedMessage?.messageId === message.id ? 'Открепить' : 'Закрепить'}
-                                                    </button>
-                                                    <button type="button" onClick={() => {
-                                                        setOpenMenuMessageId(null)
-                                                        setForwardingMessage(message)
-                                                        setForwardSearch('')
-                                                    }}>Переслать</button>
+                                                    {canEdit && isOwn && <button type="button" onClick={() => { setOpenMenuMessageId(null); setConfirmAction({ type: 'deleteAll', message }) }}>Удалить у всех</button>}
+                                                    {canEdit && (
+                                                        <button type="button" onClick={() => { setOpenMenuMessageId(null); void handlePinToggle(message) }}>
+                                                            {state.activeDialog?.pinnedMessage?.messageId === message.id ? 'Открепить' : 'Закрепить'}
+                                                        </button>
+                                                    )}
+                                                    {canEdit && (
+                                                        <button type="button" onClick={() => {
+                                                            setOpenMenuMessageId(null)
+                                                            setForwardingMessage(message)
+                                                            setForwardSearch('')
+                                                            setForwardClientMessageId(createClientMessageId())
+                                                        }}>Переслать</button>
+                                                    )}
                                                 </div>
                                             )}
                                             {message.reactions?.length > 0 && (
@@ -1353,7 +1375,10 @@ function ChatsPage() {
                                                             key={reaction.reaction}
                                                             type="button"
                                                             className={reaction.reactedByMe ? 'is-active' : ''}
-                                                            onClick={() => void handleReaction(message, reaction.reaction)}
+                                                            disabled={!canEdit}
+                                                            onClick={() => {
+                                                                if (canEdit) void handleReaction(message, reaction.reaction)
+                                                            }}
                                                         >
                                                             {reaction.reaction} {reaction.count}
                                                         </button>
@@ -1565,7 +1590,16 @@ function ChatsPage() {
                                 </div>
                             )}
                             {forwardingMessage && (
-                                <div className="chats__modal-backdrop" role="presentation" onClick={() => setForwardingMessage(null)}>
+                                <div
+                                    className="chats__modal-backdrop"
+                                    role="presentation"
+                                    onClick={() => {
+                                        if (isForwarding) return
+                                        setForwardingMessage(null)
+                                        setForwardSearch('')
+                                        setForwardClientMessageId('')
+                                    }}
+                                >
                                     <div className="chats__forward-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
                                         <h3>Переслать сообщение</h3>
                                         <input
@@ -1580,11 +1614,9 @@ function ChatsPage() {
                                                 <button
                                                     key={dialog.dialogId}
                                                     type="button"
-                                                    disabled={!dialog.canSend}
+                                                    disabled={isForwarding || !dialog.canSend}
                                                     onClick={() => {
-                                                        const message = forwardingMessage
-                                                        setForwardingMessage(null)
-                                                        void handleForward(message, dialog.dialogId)
+                                                        void handleForward(forwardingMessage, dialog.dialogId)
                                                     }}
                                                 >
                                                     <strong>{dialog.counterpart.displayName}</strong>
@@ -1592,8 +1624,17 @@ function ChatsPage() {
                                                 </button>
                                             ))}
                                         </div>
-                                        <button type="button" className="chats__forward-close" onClick={() => setForwardingMessage(null)}>
-                                            Отмена
+                                        <button
+                                            type="button"
+                                            className="chats__forward-close"
+                                            disabled={isForwarding}
+                                            onClick={() => {
+                                                setForwardingMessage(null)
+                                                setForwardSearch('')
+                                                setForwardClientMessageId('')
+                                            }}
+                                        >
+                                            {isForwarding ? 'Пересылаем...' : 'Отмена'}
                                         </button>
                                     </div>
                                 </div>

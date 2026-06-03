@@ -496,6 +496,11 @@
       border-color: var(--color-primary);
       background: var(--color-primary-soft);
     }
+
+    &:disabled {
+      cursor: default;
+      opacity: .65;
+    }
   }
 }
 

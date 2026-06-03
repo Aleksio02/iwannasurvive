@@ -29,7 +29,7 @@ class ChatReactionServiceImpl(
         reaction: String,
     ): ChatMessage {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
-        chatAccessService.assertCanRead(dialog, currentUser)
+        chatAccessService.assertCanWrite(dialog, currentUser)
         val message = requireMessage(dialogId, messageId)
         if (message.deletedAt != null) {
             throw InteractionBadRequestException("Нельзя реагировать на удалённое сообщение", "chat_reaction_deleted_message")
@@ -52,7 +52,7 @@ class ChatReactionServiceImpl(
         currentUser: AuthenticatedUser,
     ): ChatMessage {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
-        chatAccessService.assertCanRead(dialog, currentUser)
+        chatAccessService.assertCanWrite(dialog, currentUser)
         val message = requireMessage(dialogId, messageId)
         val reactionId = ChatMessageReactionId(messageId, currentUser.userId)
         if (chatMessageReactionDao.existsById(reactionId)) {
