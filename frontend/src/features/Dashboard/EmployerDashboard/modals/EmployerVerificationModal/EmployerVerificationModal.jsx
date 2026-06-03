@@ -141,8 +141,6 @@ function EmployerVerificationModal({
     const verificationStatusMeta =
         VERIFICATION_STATUS_META[verificationStatus] || VERIFICATION_STATUS_META.NOT_STARTED
 
-    const employerUserId = currentVerification?.employerUserId ?? null
-
     const persistedMethod = String(
         currentVerification?.verificationMethod ||
         verificationData?.verificationMethod ||
@@ -273,20 +271,8 @@ function EmployerVerificationModal({
     }
 
     const handleOpenAttachment = (file) => {
-        const fileData = file?.file || file
-        const fileId = fileData?.fileId || file?.fileId
-        const verificationId = file?.entityId
-        const ownerUserId = fileData?.ownerUserId
-
-        if (verificationId && fileId) {
-            const downloadUrl = `/api/employer/verifications/${verificationId}/attachments/${fileId}`
-            window.open(downloadUrl, '_blank', 'noopener,noreferrer')
-            return
-        }
-
-        if (ownerUserId && fileId) {
-            const downloadUrl = `/api/profile/employer/${ownerUserId}/files/${fileId}`
-            window.open(downloadUrl, '_blank', 'noopener,noreferrer')
+        if (typeof onOpenAttachment === 'function') {
+            onOpenAttachment(file)
             return
         }
 
@@ -683,8 +669,8 @@ function EmployerVerificationModal({
                                         file?.name ||
                                         `Файл ${index + 1}`
 
-                                    const ownerUserId = file?.file?.ownerUserId || employerUserId
-                                    const canOpen = Boolean(fileId && ownerUserId)
+                                    const attachmentVerificationId = file?.entityId || verificationId
+                                    const canOpen = Boolean(fileId && attachmentVerificationId)
                                     const canDelete = Boolean(fileId && !isDeletingAttachment && canUploadAttachments)
 
                                     return (
@@ -696,6 +682,13 @@ function EmployerVerificationModal({
                                                 <div
                                                     className="employer-verification-modal__attachment-name"
                                                     onClick={() => canOpen && handleOpenAttachment(file)}
+                                                    onKeyDown={(event) => {
+                                                        if (!canOpen) return
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault()
+                                                            handleOpenAttachment(file)
+                                                        }
+                                                    }}
                                                     style={{ cursor: canOpen ? 'pointer' : 'default' }}
                                                     role={canOpen ? 'button' : undefined}
                                                     tabIndex={canOpen ? 0 : undefined}

@@ -650,15 +650,19 @@ export async function uploadEmployerLogo(file) {
     return normalizeEmployerProfile(data)
 }
 
-export async function deleteEmployerFile(fileId) {
+export async function deleteEmployerOwnedFile(fileId) {
     if (!fileId) throw createApiError('Не указан fileId', 400)
 
     const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
-    const data = await apiRequest(`${API_BASE}/employer/profile/files/${fileId}?currentUser=${currentUser}`, {
+    const data = await apiRequest(`${API_BASE}/employer/files/${fileId}?currentUser=${currentUser}`, {
         method: 'DELETE',
     })
 
     return normalizeEmployerProfile(data)
+}
+
+export async function deleteEmployerFile(fileId) {
+    return deleteEmployerOwnedFile(fileId)
 }
 
 export async function createEmployerVerification(payload) {
@@ -706,6 +710,15 @@ export async function getEmployerVerificationAttachments(verificationId) {
     return apiRequest(`/api/employer/verifications/${verificationId}/attachments?currentUser=${currentUserParam}`, {
         method: 'GET',
     })
+}
+
+export async function getEmployerVerificationAttachmentOpenUrl(verificationId, fileId) {
+    if (!verificationId) throw createApiError('Не указан verificationId', 400)
+    if (!fileId) throw createApiError('Не указан fileId', 400)
+
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    return `${API_BASE}/employer/verifications/${verificationId}/attachments/${fileId}?currentUser=${currentUser}`
 }
 
 export async function getEmployerVerificationModerationTask(verificationId) {
@@ -1628,17 +1641,15 @@ export function getVerificationAttachmentDownloadUrl(employerUserId, fileId) {
 }
 
 export async function openVerificationAttachment(attachment) {
-    if (attachment?.url) {
-        window.open(attachment.url, '_blank', 'noopener,noreferrer')
+    const fileId = attachment?.fileId || attachment?.file?.fileId || attachment?.id
+    const verificationId = attachment?.entityId || attachment?.verificationId
+
+    if (verificationId && fileId) {
+        const url = await getEmployerVerificationAttachmentOpenUrl(verificationId, fileId)
+        window.open(url, '_blank', 'noopener,noreferrer')
         return
     }
 
-    if (attachment?.file?.url) {
-        window.open(attachment.file.url, '_blank', 'noopener,noreferrer')
-        return
-    }
-
-    const fileId = attachment?.fileId || attachment?.id
     const ownerUserId = attachment?.ownerUserId || attachment?.file?.ownerUserId
 
     if (ownerUserId && fileId) {

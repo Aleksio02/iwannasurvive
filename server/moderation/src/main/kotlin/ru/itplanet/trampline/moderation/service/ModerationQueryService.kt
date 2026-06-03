@@ -41,6 +41,12 @@ interface ModerationQueryService {
         fileId: Long,
     ): InternalFileDownloadUrlResponse
 
+    fun getEntityAttachmentDownloadUrl(
+        taskId: Long,
+        currentUser: AuthenticatedUser,
+        fileId: Long,
+    ): InternalFileDownloadUrlResponse
+
     fun getEntityHistory(
         entityType: ModerationEntityType,
         entityId: Long,
