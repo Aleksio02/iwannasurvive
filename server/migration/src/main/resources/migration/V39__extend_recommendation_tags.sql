@@ -1,3 +1,6 @@
+ALTER TABLE tag DROP COLUMN normalized_name;
+ALTER TABLE tag ADD COLUMN normalized_name VARCHAR(100) GENERATED ALWAYS AS (LOWER(name)) STORED;
+
 INSERT INTO tag (name, category, created_by_type, moderation_status, is_active)
 VALUES
     ('HTML', 'TECH', 'SYSTEM', 'APPROVED', TRUE),
