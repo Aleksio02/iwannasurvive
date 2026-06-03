@@ -1940,9 +1940,16 @@ function SeekerDashboard() {
     }
 
     const getInitials = (sourceProfile = profile) => {
-        if (sourceProfile.firstName || sourceProfile.lastName) {
-            return `${sourceProfile.firstName?.[0] || ''}${sourceProfile.lastName?.[0] || ''}`.toUpperCase()
+        const lastInitial = sourceProfile.lastName?.[0] || ''
+        const firstInitial = sourceProfile.firstName?.[0] || ''
+
+        if (lastInitial && firstInitial) {
+            return `${lastInitial}${firstInitial}`.toUpperCase()
         }
+
+        if (lastInitial) return lastInitial.toUpperCase()
+        if (firstInitial) return firstInitial.toUpperCase()
+
         if (user?.displayName) {
             return user.displayName[0].toUpperCase()
         }
@@ -1950,11 +1957,23 @@ function SeekerDashboard() {
     }
 
     const getFullNameWithPatronymic = (sourceProfile = profile) => {
-        const parts = []
-        if (sourceProfile.firstName) parts.push(sourceProfile.firstName)
-        if (sourceProfile.lastName) parts.push(sourceProfile.lastName)
-        if (sourceProfile.middleName) parts.push(sourceProfile.middleName)
-        return parts.join(' ')
+        const hasFirstName = sourceProfile.firstName?.trim()
+        const hasLastName = sourceProfile.lastName?.trim()
+        const hasMiddleName = sourceProfile.middleName?.trim()
+
+        if (hasLastName && hasFirstName && hasMiddleName) {
+            return `${sourceProfile.lastName} ${sourceProfile.firstName} ${sourceProfile.middleName}`
+        }
+
+        if (hasLastName && hasFirstName) {
+            return `${sourceProfile.lastName} ${sourceProfile.firstName}`
+        }
+
+        if (hasFirstName && hasLastName) {
+            return `${sourceProfile.firstName} ${sourceProfile.lastName}`
+        }
+
+        return sourceProfile.firstName || sourceProfile.lastName || 'Не указано'
     }
 
     const getDisplayName = (sourceProfile = profile) => {
