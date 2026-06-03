@@ -502,6 +502,29 @@
 
 .chats__message-row--own {
   justify-content: flex-end;
+  flex-direction: row-reverse;
+}
+
+.chats__message-avatar {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.chats__message-row--own .chats__message-avatar {
+  background: var(--color-primary-dark);
+}
+
+.chats__message-avatar--spacer {
+  visibility: hidden;
 }
 
 .chats__message-row--incoming {
