@@ -502,7 +502,10 @@
 
 .chats__message-row--own {
   justify-content: flex-end;
-  flex-direction: row-reverse;
+}
+
+.chats__message-row--incoming {
+  justify-content: flex-start;
 }
 
 .chats__message-avatar {
@@ -520,7 +523,20 @@
 }
 
 .chats__message-row--own .chats__message-avatar {
+  order: 2;
   background: var(--color-primary-dark);
+}
+
+.chats__message-row--own .chats__message {
+  order: 1;
+}
+
+.chats__message-row--incoming .chats__message-avatar {
+  order: 1;
+}
+
+.chats__message-row--incoming .chats__message {
+  order: 2;
 }
 
 .chats__message-avatar--spacer {
