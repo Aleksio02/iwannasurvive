@@ -240,6 +240,16 @@ function openDownloadUrl(url) {
     link.click()
 }
 
+function downloadFile(url, filename = '') {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.rel = 'noopener noreferrer'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+}
+
 function ChatAttachment({ dialogId, attachment, failed = false, pending = false }) {
     const [imageUrl, setImageUrl] = useState(attachment.localPreviewUrl || '')
     const [isThumbnailLoading, setIsThumbnailLoading] = useState(!attachment.localPreviewUrl)
@@ -406,6 +416,7 @@ function ChatsPage() {
     const [isEditSaving, setIsEditSaving] = useState(false)
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
     const [messageMenuPosition, setMessageMenuPosition] = useState(null)
+    const [savingAttachmentMessageId, setSavingAttachmentMessageId] = useState(null)
     const [isReactionMoreOpen, setIsReactionMoreOpen] = useState(false)
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false)
     const [confirmAction, setConfirmAction] = useState(null)
@@ -1224,6 +1235,42 @@ function ChatsPage() {
         }
     }
 
+    const saveMessageAttachments = async (message) => {
+        if (!routeDialogId || !message?.id || message.pending || message.failed) return
+        const attachments = (message.attachments || []).filter((attachment) => attachment.id)
+        if (attachments.length === 0 || savingAttachmentMessageId === message.id) return
+
+        setSavingAttachmentMessageId(message.id)
+        closeMessageMenu()
+        const results = await Promise.allSettled(
+            attachments.map(async (attachment) => {
+                const response = await getChatAttachmentDownloadUrl(routeDialogId, attachment.id)
+                downloadFile(response.url, attachment.originalFileName || '')
+            })
+        )
+        const failedCount = results.filter((result) => result.status === 'rejected').length
+
+        if (failedCount === 0) {
+            toast({ title: attachments.length === 1 ? 'Вложение сохранено' : 'Вложения сохранены' })
+        } else if (failedCount < attachments.length) {
+            toast({
+                title: 'Часть вложений не удалось сохранить',
+                description: `${attachments.length - failedCount} из ${attachments.length} сохранено`,
+                variant: 'destructive',
+            })
+        } else {
+            const firstError = results.find((result) => result.status === 'rejected')?.reason
+            toast({
+                title: firstError?.status === 403 || firstError?.status === 404
+                    ? 'Файл недоступен'
+                    : 'Не удалось сохранить вложения',
+                description: 'Файлы недоступны или срок ссылки истёк',
+                variant: 'destructive',
+            })
+        }
+        setSavingAttachmentMessageId(null)
+    }
+
     const handleSaveEdit = async () => {
         const message = editingMessage
         const body = draft.trim()
@@ -1834,10 +1881,25 @@ function ChatsPage() {
                                             Ответить
                                         </button>
                                     )}
-                                    {activeMenuMessage.body && (
+                                    {activeMenuMessage.body && !activeMenuMessage.deletedAt && (
                                         <button type="button" role="menuitem" onClick={() => void copyMessageText(activeMenuMessage)}>
                                             <Copy size={15} aria-hidden="true" />
                                             Копировать текст
+                                        </button>
+                                    )}
+                                    {!activeMenuMessage.deletedAt && !activeMenuMessage.pending && !activeMenuMessage.failed && (activeMenuMessage.attachments || []).some((attachment) => attachment.id) && (
+                                        <button
+                                            type="button"
+                                            role="menuitem"
+                                            disabled={savingAttachmentMessageId === activeMenuMessage.id}
+                                            onClick={() => void saveMessageAttachments(activeMenuMessage)}
+                                        >
+                                            {savingAttachmentMessageId === activeMenuMessage.id
+                                                ? <LoaderCircle className="chats__spinner" size={15} aria-hidden="true" />
+                                                : <Download size={15} aria-hidden="true" />}
+                                            {(activeMenuMessage.attachments || []).filter((attachment) => attachment.id).length === 1
+                                                ? 'Сохранить вложение'
+                                                : 'Сохранить вложения'}
                                         </button>
                                     )}
                                     {canEdit && activeMenuMessage.senderUserId === currentUser?.id && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(activeMenuMessage.messageType) && (
