@@ -2,6 +2,7 @@ package ru.itplanet.trampline.interaction.chat.service
 
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import ru.itplanet.trampline.interaction.chat.dao.ChatDialogDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogQueryDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatPinnedMessageDao
@@ -10,10 +11,12 @@ import ru.itplanet.trampline.interaction.chat.model.ChatDialog
 import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
 import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
+import java.time.OffsetDateTime
 
 @Service
 class ChatPinServiceImpl(
     private val chatAccessService: ChatAccessService,
+    private val chatDialogDao: ChatDialogDao,
     private val chatDialogQueryDao: ChatDialogQueryDao,
     private val chatMessageDao: ChatMessageDao,
     private val chatPinnedMessageDao: ChatPinnedMessageDao,
@@ -34,7 +37,8 @@ class ChatPinServiceImpl(
             ?: ChatPinnedMessageDto(dialogId, messageId, currentUser.userId)
         pinned.messageId = messageId
         pinned.pinnedByUserId = currentUser.userId
-        chatPinnedMessageDao.save(pinned)
+        chatPinnedMessageDao.saveAndFlush(pinned)
+        touchDialog(dialogId)
         return currentDialog(dialogId, currentUser.userId)
     }
 
@@ -43,7 +47,17 @@ class ChatPinServiceImpl(
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanWrite(dialog, currentUser)
         chatPinnedMessageDao.deleteByDialogId(dialogId)
+        chatPinnedMessageDao.flush()
+        touchDialog(dialogId)
         return currentDialog(dialogId, currentUser.userId)
+    }
+
+    private fun touchDialog(dialogId: Long) {
+        val dialog = chatDialogDao.findById(dialogId).orElseThrow {
+            InteractionNotFoundException("Диалог чата не найден", "chat_dialog_not_found")
+        }
+        dialog.updatedAt = OffsetDateTime.now()
+        chatDialogDao.saveAndFlush(dialog)
     }
 
     private fun currentDialog(dialogId: Long, currentUserId: Long): ChatDialog {

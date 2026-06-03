@@ -26,7 +26,7 @@ interface ChatRealtimeService {
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String?,
-        file: MultipartFile,
+        files: List<MultipartFile>,
         replyToMessageId: Long? = null,
     ): ChatMessageCommandResult
 

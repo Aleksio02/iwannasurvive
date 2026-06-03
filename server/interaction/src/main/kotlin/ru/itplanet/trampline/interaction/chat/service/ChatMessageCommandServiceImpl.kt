@@ -41,6 +41,9 @@ class ChatMessageCommandServiceImpl(
     private val chatMessageEnrichmentService: ChatMessageEnrichmentService,
     private val mediaServiceClient: MediaServiceClient,
 ) : ChatMessageCommandService {
+    private companion object {
+        const val MAX_MESSAGE_ATTACHMENTS = 10
+    }
 
     @Transactional
     override fun sendMessage(
@@ -128,7 +131,7 @@ class ChatMessageCommandServiceImpl(
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String?,
-        file: MultipartFile,
+        files: List<MultipartFile>,
         replyToMessageId: Long?,
     ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
@@ -144,18 +147,9 @@ class ChatMessageCommandServiceImpl(
         }
 
         val normalizedBody = normalizeOptionalBody(body)
+        val normalizedFiles = normalizeAttachmentFiles(files)
         validateReplyToMessage(dialogId, currentUser.userId, replyToMessageId)
-        val uploadedFile = mediaServiceClient.upload(
-            file = file,
-            ownerUserId = currentUser.userId,
-            kind = FileAssetKind.CHAT_ATTACHMENT,
-            visibility = FileAssetVisibility.PRIVATE,
-        )
-        val attachmentKind = if (uploadedFile.mediaType.startsWith("image/")) {
-            ChatAttachmentKind.IMAGE
-        } else {
-            ChatAttachmentKind.FILE
-        }
+        val uploadedFiles = normalizedFiles.map { uploadChatAttachment(it, currentUser.userId) }
         val message = ChatMessageDto(
             dialogId = dialogId,
             senderUserId = currentUser.userId,
@@ -165,37 +159,38 @@ class ChatMessageCommandServiceImpl(
             messageType = if (normalizedBody == null) ChatMessageType.ATTACHMENT else ChatMessageType.MIXED,
             replyToMessageId = replyToMessageId,
         )
-        message.attachments.add(
-            ChatMessageAttachmentDto().apply {
-                this.message = message
-                fileId = uploadedFile.fileId
-                originalFileName = uploadedFile.originalFileName
-                mediaType = uploadedFile.mediaType
-                sizeBytes = uploadedFile.sizeBytes
-                this.attachmentKind = attachmentKind
-            },
-        )
+        uploadedFiles.forEach { uploadedFile ->
+            message.attachments.add(
+                ChatMessageAttachmentDto().apply {
+                    this.message = message
+                    fileId = uploadedFile.fileId
+                    originalFileName = uploadedFile.originalFileName
+                    mediaType = uploadedFile.mediaType
+                    sizeBytes = uploadedFile.sizeBytes
+                    this.attachmentKind = toAttachmentKind(uploadedFile.mediaType)
+                },
+            )
+        }
 
         val savedMessage = chatMessageDao.saveAndFlush(message)
         val savedMessageId = savedMessage.id
             ?: throw IllegalStateException("Идентификатор сохранённого сообщения чата не должен быть null")
 
-        mediaServiceClient.createAttachment(
-            InternalCreateFileAttachmentRequest(
-                fileId = uploadedFile.fileId,
-                entityType = FileAttachmentEntityType.CHAT_MESSAGE,
-                entityId = savedMessageId,
-                attachmentRole = FileAttachmentRole.ATTACHMENT,
-            ),
-        )
+        uploadedFiles.forEach { uploadedFile ->
+            mediaServiceClient.createAttachment(
+                InternalCreateFileAttachmentRequest(
+                    fileId = uploadedFile.fileId,
+                    entityType = FileAttachmentEntityType.CHAT_MESSAGE,
+                    entityId = savedMessageId,
+                    attachmentRole = FileAttachmentRole.ATTACHMENT,
+                ),
+            )
+        }
 
         val timestamp = savedMessage.createdAt ?: OffsetDateTime.now()
+        val previewAttachment = savedMessage.attachments.firstOrNull()
         dialog.lastMessageId = savedMessageId
-        dialog.lastMessagePreview = chatDomainMapper.buildPreview(
-            body = normalizedBody,
-            attachmentFileName = uploadedFile.originalFileName,
-            isImage = attachmentKind == ChatAttachmentKind.IMAGE,
-        )
+        dialog.lastMessagePreview = buildAttachmentPreview(normalizedBody, previewAttachment, savedMessage.attachments.size)
         dialog.lastMessageAt = timestamp
         chatDialogDao.save(dialog)
         chatParticipantStateService.onMessageSent(
@@ -273,7 +268,7 @@ class ChatMessageCommandServiceImpl(
         currentUser: AuthenticatedUser,
         body: String?,
         removeAttachmentIds: List<Long>,
-        file: MultipartFile?,
+        files: List<MultipartFile>,
     ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanWrite(dialog, currentUser)
@@ -292,6 +287,13 @@ class ChatMessageCommandServiceImpl(
         }
 
         val normalizedBody = normalizeOptionalBody(body)
+        val normalizedFiles = files.filter { !it.isEmpty }
+        if (normalizedFiles.size > MAX_MESSAGE_ATTACHMENTS) {
+            throw InteractionBadRequestException(
+                message = "К сообщению можно прикрепить не больше $MAX_MESSAGE_ATTACHMENTS файлов",
+                code = "chat_attachment_limit_exceeded",
+            )
+        }
         val messageAttachmentIds = message.attachments.mapNotNull { it.id }.toSet()
         val requestedRemoveIds = removeAttachmentIds.toSet()
         if (!messageAttachmentIds.containsAll(requestedRemoveIds)) {
@@ -305,38 +307,38 @@ class ChatMessageCommandServiceImpl(
             message.attachments.removeIf { it.id in requestedRemoveIds }
         }
 
-        if (file != null && !file.isEmpty) {
+        if (message.attachments.size + normalizedFiles.size > MAX_MESSAGE_ATTACHMENTS) {
+            throw InteractionBadRequestException(
+                message = "К сообщению можно прикрепить не больше $MAX_MESSAGE_ATTACHMENTS файлов",
+                code = "chat_attachment_limit_exceeded",
+            )
+        }
+
+        if (normalizedFiles.isNotEmpty()) {
             val messageIdValue = message.id
                 ?: throw IllegalStateException("Идентификатор сообщения чата не должен быть null")
-            val uploadedFile = mediaServiceClient.upload(
-                file = file,
-                ownerUserId = currentUser.userId,
-                kind = FileAssetKind.CHAT_ATTACHMENT,
-                visibility = FileAssetVisibility.PRIVATE,
-            )
-            val attachmentKind = if (uploadedFile.mediaType.startsWith("image/")) {
-                ChatAttachmentKind.IMAGE
-            } else {
-                ChatAttachmentKind.FILE
+            val uploadedFiles = normalizedFiles.map { uploadChatAttachment(it, currentUser.userId) }
+            uploadedFiles.forEach { uploadedFile ->
+                val attachmentKind = toAttachmentKind(uploadedFile.mediaType)
+                message.attachments.add(
+                    ChatMessageAttachmentDto().apply {
+                        this.message = message
+                        fileId = uploadedFile.fileId
+                        originalFileName = uploadedFile.originalFileName
+                        mediaType = uploadedFile.mediaType
+                        sizeBytes = uploadedFile.sizeBytes
+                        this.attachmentKind = attachmentKind
+                    },
+                )
+                mediaServiceClient.createAttachment(
+                    InternalCreateFileAttachmentRequest(
+                        fileId = uploadedFile.fileId,
+                        entityType = FileAttachmentEntityType.CHAT_MESSAGE,
+                        entityId = messageIdValue,
+                        attachmentRole = FileAttachmentRole.ATTACHMENT,
+                    ),
+                )
             }
-            message.attachments.add(
-                ChatMessageAttachmentDto().apply {
-                    this.message = message
-                    fileId = uploadedFile.fileId
-                    originalFileName = uploadedFile.originalFileName
-                    mediaType = uploadedFile.mediaType
-                    sizeBytes = uploadedFile.sizeBytes
-                    this.attachmentKind = attachmentKind
-                },
-            )
-            mediaServiceClient.createAttachment(
-                InternalCreateFileAttachmentRequest(
-                    fileId = uploadedFile.fileId,
-                    entityType = FileAttachmentEntityType.CHAT_MESSAGE,
-                    entityId = messageIdValue,
-                    attachmentRole = FileAttachmentRole.ATTACHMENT,
-                ),
-            )
         }
 
         if (normalizedBody == null && message.attachments.isEmpty()) {
@@ -356,10 +358,10 @@ class ChatMessageCommandServiceImpl(
         val saved = chatMessageDao.saveAndFlush(message)
 
         if (dialog.lastMessageId == messageId) {
-            dialog.lastMessagePreview = chatDomainMapper.buildPreview(
+            dialog.lastMessagePreview = buildAttachmentPreview(
                 body = saved.body,
-                attachmentFileName = saved.attachments.firstOrNull()?.originalFileName,
-                isImage = saved.attachments.firstOrNull()?.attachmentKind == ChatAttachmentKind.IMAGE,
+                attachment = saved.attachments.firstOrNull(),
+                attachmentCount = saved.attachments.size,
             )
             chatDialogDao.save(dialog)
         }
@@ -367,6 +369,50 @@ class ChatMessageCommandServiceImpl(
         return ChatMessageCommandResult(
             message = chatMessageEnrichmentService.enrich(chatDomainMapper.toChatMessage(saved), currentUser.userId),
             created = false,
+        )
+    }
+
+    private fun normalizeAttachmentFiles(files: List<MultipartFile>): List<MultipartFile> {
+        val normalizedFiles = files.filter { !it.isEmpty }
+        if (normalizedFiles.isEmpty()) {
+            throw InteractionBadRequestException(
+                message = "Добавьте файл",
+                code = "chat_attachment_required",
+            )
+        }
+        if (normalizedFiles.size > MAX_MESSAGE_ATTACHMENTS) {
+            throw InteractionBadRequestException(
+                message = "К сообщению можно прикрепить не больше $MAX_MESSAGE_ATTACHMENTS файлов",
+                code = "chat_attachment_limit_exceeded",
+            )
+        }
+        return normalizedFiles
+    }
+
+    private fun uploadChatAttachment(file: MultipartFile, ownerUserId: Long) =
+        mediaServiceClient.upload(
+            file = file,
+            ownerUserId = ownerUserId,
+            kind = FileAssetKind.CHAT_ATTACHMENT,
+            visibility = FileAssetVisibility.PRIVATE,
+        )
+
+    private fun toAttachmentKind(mediaType: String): ChatAttachmentKind {
+        return if (mediaType.startsWith("image/")) ChatAttachmentKind.IMAGE else ChatAttachmentKind.FILE
+    }
+
+    private fun buildAttachmentPreview(
+        body: String?,
+        attachment: ChatMessageAttachmentDto?,
+        attachmentCount: Int,
+    ): String {
+        if (attachmentCount > 1 && body == null) {
+            return "$attachmentCount вложений"
+        }
+        return chatDomainMapper.buildPreview(
+            body = body,
+            attachmentFileName = attachment?.originalFileName,
+            isImage = attachment?.attachmentKind == ChatAttachmentKind.IMAGE,
         )
     }
 

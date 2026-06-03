@@ -19,7 +19,7 @@ interface ChatMessageCommandService {
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String?,
-        file: MultipartFile,
+        files: List<MultipartFile>,
         replyToMessageId: Long? = null,
     ): ChatMessageCommandResult
 
@@ -36,7 +36,7 @@ interface ChatMessageCommandService {
         currentUser: AuthenticatedUser,
         body: String?,
         removeAttachmentIds: List<Long>,
-        file: MultipartFile?,
+        files: List<MultipartFile>,
     ): ChatMessageCommandResult
 
     fun deleteForMe(

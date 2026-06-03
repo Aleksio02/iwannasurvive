@@ -72,13 +72,14 @@ async function parseResponseBody(response) {
     return response.text()
 }
 
-export async function sendChatAttachment(dialogId, { clientMessageId, body, file, replyToMessageId }) {
+export async function sendChatAttachment(dialogId, { clientMessageId, body, file, files = [], replyToMessageId }) {
     const formData = new FormData()
     const normalizedBody = (body || '').trim()
+    const normalizedFiles = files.length > 0 ? files : (file ? [file] : [])
     formData.append('clientMessageId', clientMessageId)
     if (normalizedBody) formData.append('body', normalizedBody)
     if (replyToMessageId) formData.append('replyToMessageId', String(replyToMessageId))
-    formData.append('file', file)
+    normalizedFiles.forEach((item) => formData.append('files', item))
 
     let response
     try {
@@ -131,12 +132,13 @@ export function editChatMessage(dialogId, messageId, body) {
     })
 }
 
-export async function updateChatMessageContent(dialogId, messageId, { body = '', removeAttachmentIds = [], file = null }) {
+export async function updateChatMessageContent(dialogId, messageId, { body = '', removeAttachmentIds = [], file = null, files = [] }) {
     const formData = new FormData()
     const normalizedBody = (body || '').trim()
+    const normalizedFiles = files.length > 0 ? files : (file ? [file] : [])
     if (normalizedBody) formData.append('body', normalizedBody)
     removeAttachmentIds.forEach((attachmentId) => formData.append('removeAttachmentIds', String(attachmentId)))
-    if (file) formData.append('file', file)
+    normalizedFiles.forEach((item) => formData.append('files', item))
 
     let response
     try {

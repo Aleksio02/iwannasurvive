@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { ChevronDown, Download, FileText, LoaderCircle, MoreHorizontal, Paperclip, Pin, RefreshCw, Search, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
+import { ChevronDown, Copy, Download, Edit3, FileText, Forward, LoaderCircle, MoreHorizontal, Paperclip, Pin, RefreshCw, Reply, Search, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
 import { useLocation, useRoute } from 'wouter'
 import DashboardLayout from '@/features/Dashboard/DashboardLayout'
 import Textarea from '@/shared/ui/Textarea'
@@ -38,6 +38,7 @@ const CHAT_TEXTAREA_MIN_HEIGHT = 58
 const CHAT_TEXTAREA_MAX_HEIGHT = 160
 const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
 const PDF_MAX_SIZE_BYTES = 20 * 1024 * 1024
+const MAX_MESSAGE_ATTACHMENTS = 10
 const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
 const EMOJI_GROUPS = [
     ['Эмоции', ['😊', '😂', '😍', '🥳', '😎', '🤔', '😢', '❤️']],
@@ -399,11 +400,8 @@ function ChatsPage() {
     const [selectedOpportunityId, setSelectedOpportunityId] = useState('')
     const [draft, setDraft] = useState('')
     const [replyToMessage, setReplyToMessage] = useState(null)
-    const [editingMessageId, setEditingMessageId] = useState(null)
-    const [editingBody, setEditingBody] = useState('')
+    const [editingMessage, setEditingMessage] = useState(null)
     const [editingRemoveAttachmentIds, setEditingRemoveAttachmentIds] = useState([])
-    const [editingFile, setEditingFile] = useState(null)
-    const [editingFilePreview, setEditingFilePreview] = useState('')
     const [editingError, setEditingError] = useState('')
     const [isEditSaving, setIsEditSaving] = useState(false)
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
@@ -411,6 +409,7 @@ function ChatsPage() {
     const [isReactionMoreOpen, setIsReactionMoreOpen] = useState(false)
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false)
     const [confirmAction, setConfirmAction] = useState(null)
+    const [deleteForEveryone, setDeleteForEveryone] = useState(false)
     const [forwardingMessage, setForwardingMessage] = useState(null)
     const [forwardClientMessageId, setForwardClientMessageId] = useState('')
     const [forwardSearch, setForwardSearch] = useState('')
@@ -423,8 +422,7 @@ function ChatsPage() {
     const [typingByDialogId, setTypingByDialogId] = useState({})
     const [showJumpToNew, setShowJumpToNew] = useState(false)
     const [isEmojiOpen, setIsEmojiOpen] = useState(false)
-    const [selectedFile, setSelectedFile] = useState(null)
-    const [selectedFilePreview, setSelectedFilePreview] = useState('')
+    const [selectedFiles, setSelectedFiles] = useState([])
     const [isUploading, setIsUploading] = useState(false)
     const [isPinUpdating, setIsPinUpdating] = useState(false)
     const threadRef = useRef(null)
@@ -435,7 +433,6 @@ function ChatsPage() {
     const emojiPickerRef = useRef(null)
     const opportunityFilterRef = useRef(null)
     const headerMenuRef = useRef(null)
-    const editFileInputRef = useRef(null)
     const longPressTimerRef = useRef(null)
     const pinGuardRef = useRef({ dialogId: null, pinnedMessageId: null, expiresAt: 0 })
     const shouldStickToBottomRef = useRef(true)
@@ -448,6 +445,7 @@ function ChatsPage() {
     const reconcileTimersRef = useRef(new Map())
     const handledEventSequenceRef = useRef(0)
     const stateRef = useRef(state)
+    const selectedFilesRef = useRef([])
     const { toast } = useToast()
     const { connectionStatus, events, publishMessage, publishRead, publishTyping } = useChatRealtime()
 
@@ -481,27 +479,26 @@ function ChatsPage() {
         resizeTextarea()
     }, [draft, resizeTextarea])
 
-    useEffect(() => {
-        if (!selectedFile || !selectedFile.type.startsWith('image/')) {
-            setSelectedFilePreview('')
-            return undefined
+    const clearSelectedFiles = useCallback((options = {}) => {
+        const shouldRevoke = options.revoke !== false
+        if (shouldRevoke) {
+            selectedFilesRef.current.forEach((item) => {
+                if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+            })
         }
-
-        const previewUrl = URL.createObjectURL(selectedFile)
-        setSelectedFilePreview(previewUrl)
-        return () => URL.revokeObjectURL(previewUrl)
-    }, [selectedFile])
+        selectedFilesRef.current = []
+        setSelectedFiles([])
+    }, [])
 
     useEffect(() => {
-        if (!editingFile || !editingFile.type.startsWith('image/')) {
-            setEditingFilePreview('')
-            return undefined
-        }
+        selectedFilesRef.current = selectedFiles
+    }, [selectedFiles])
 
-        const previewUrl = URL.createObjectURL(editingFile)
-        setEditingFilePreview(previewUrl)
-        return () => URL.revokeObjectURL(previewUrl)
-    }, [editingFile])
+    useEffect(() => () => {
+        selectedFilesRef.current.forEach((item) => {
+            if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+        })
+    }, [])
 
     useEffect(() => {
         if (!isEmojiOpen) return undefined
@@ -610,17 +607,45 @@ function ChatsPage() {
         })
     }
 
-    const handleFileSelect = (file) => {
-        if (!file) return
+    const handleFileSelect = (fileList) => {
+        const files = Array.from(fileList || [])
+        if (files.length === 0) return
 
-        const validationError = validateAttachment(file)
-        if (validationError) {
-            toast({ title: 'Файл не выбран', description: validationError, variant: 'destructive' })
+        const existingCount = editingMessage
+            ? (editingMessage.attachments || []).filter((attachment) => !editingRemoveAttachmentIds.includes(attachment.id)).length
+            : 0
+        if (existingCount + selectedFiles.length + files.length > MAX_MESSAGE_ATTACHMENTS) {
+            toast({
+                title: 'Файлы не выбраны',
+                description: `К сообщению можно прикрепить не больше ${MAX_MESSAGE_ATTACHMENTS} файлов`,
+                variant: 'destructive',
+            })
             return
         }
 
-        setSelectedFile(file)
+        const invalidFile = files.find((file) => validateAttachment(file))
+        if (invalidFile) {
+            toast({ title: 'Файл не выбран', description: validateAttachment(invalidFile), variant: 'destructive' })
+            return
+        }
+
+        setSelectedFiles((current) => [
+            ...current,
+            ...files.map((file) => ({
+                id: createClientMessageId(),
+                file,
+                previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+            })),
+        ])
         setIsEmojiOpen(false)
+    }
+
+    const removeSelectedFile = (fileId) => {
+        setSelectedFiles((current) => current.filter((item) => {
+            if (item.id !== fileId) return true
+            if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+            return false
+        }))
     }
 
     const closeMessageMenu = () => {
@@ -839,22 +864,49 @@ function ChatsPage() {
     }, [connectionStatus, currentUser?.id, publishMessage, replyToMessage, routeDialogId, scheduleReconciliation, scrollToBottom, state.activeDialog?.counterpart?.displayName, toast])
 
     const sendAttachmentMessage = useCallback(async (
-        file,
+        fileItems,
         body,
         clientMessageId = createClientMessageId(),
-        existingPreviewUrl = ''
+        existingPreviewUrls = []
     ) => {
-        if (!routeDialogId || !file || !state.activeDialog?.canSend || isUploading) return
+        const normalizedItems = (Array.isArray(fileItems) ? fileItems : [fileItems])
+            .filter(Boolean)
+            .map((item, index) => item.file
+                ? item
+                : {
+                    id: `${clientMessageId}-${index}`,
+                    file: item,
+                    previewUrl: existingPreviewUrls[index] || '',
+                })
+        if (!routeDialogId || normalizedItems.length === 0 || !state.activeDialog?.canSend || isUploading) return
+        if (normalizedItems.length > MAX_MESSAGE_ATTACHMENTS) {
+            toast({
+                title: 'Файлы не отправлены',
+                description: `К сообщению можно прикрепить не больше ${MAX_MESSAGE_ATTACHMENTS} файлов`,
+                variant: 'destructive',
+            })
+            return
+        }
 
-        const validationError = validateAttachment(file)
+        const invalidItem = normalizedItems.find((item) => validateAttachment(item.file))
+        const validationError = invalidItem ? validateAttachment(invalidItem.file) : ''
         if (validationError) {
-            toast({ title: 'Файл не отправлен', description: validationError, variant: 'destructive' })
+            toast({ title: 'Файлы не отправлены', description: validationError, variant: 'destructive' })
             return
         }
 
         const normalizedBody = body.trim()
         const replyMessage = replyToMessage
-        const localPreviewUrl = existingPreviewUrl || (file.type.startsWith('image/') ? URL.createObjectURL(file) : '')
+        const optimisticAttachments = normalizedItems.map((item) => {
+            const localPreviewUrl = item.previewUrl || (item.file.type.startsWith('image/') ? URL.createObjectURL(item.file) : '')
+            return {
+                originalFileName: item.file.name,
+                mediaType: item.file.type,
+                sizeBytes: item.file.size,
+                attachmentKind: item.file.type.startsWith('image/') ? 'IMAGE' : 'FILE',
+                localPreviewUrl,
+            }
+        })
         dispatch({
             type: 'MESSAGE_OPTIMISTIC',
             dialogId: routeDialogId,
@@ -873,21 +925,16 @@ function ChatsPage() {
                     attachmentKind: replyMessage.attachments?.[0]?.attachmentKind || null,
                     deleted: Boolean(replyMessage.deletedAt),
                 } : null,
-                attachments: [{
-                    originalFileName: file.name,
-                    mediaType: file.type,
-                    sizeBytes: file.size,
-                    attachmentKind: file.type.startsWith('image/') ? 'IMAGE' : 'FILE',
-                    localPreviewUrl,
-                }],
-                retryFile: file,
+                attachments: optimisticAttachments,
+                retryFiles: normalizedItems,
                 pending: true,
                 failed: false,
             },
         })
         setDraft('')
         setReplyToMessage(null)
-        setSelectedFile(null)
+        setEditingError('')
+        clearSelectedFiles({ revoke: false })
         setIsUploading(true)
         requestAnimationFrame(() => scrollToBottom())
 
@@ -895,18 +942,20 @@ function ChatsPage() {
             const saved = await sendChatAttachment(routeDialogId, {
                 clientMessageId,
                 body: normalizedBody,
-                file,
+                files: normalizedItems.map((item) => item.file),
                 replyToMessageId: replyMessage?.id,
             })
             dispatch({ type: 'MESSAGES_LOADED', dialogId: routeDialogId, messages: [saved] })
-            if (localPreviewUrl) setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 0)
+            optimisticAttachments.forEach((attachment) => {
+                if (attachment.localPreviewUrl) setTimeout(() => URL.revokeObjectURL(attachment.localPreviewUrl), 0)
+            })
         } catch (error) {
             dispatch({ type: 'MESSAGE_FAILED', dialogId: routeDialogId, clientMessageId })
-            toast({ title: 'Файл не отправлен', description: error.message, variant: 'destructive' })
+            toast({ title: 'Файлы не отправлены', description: error.message, variant: 'destructive' })
         } finally {
             setIsUploading(false)
         }
-    }, [currentUser?.id, isUploading, replyToMessage, routeDialogId, scrollToBottom, state.activeDialog?.canSend, state.activeDialog?.counterpart?.displayName, toast])
+    }, [clearSelectedFiles, currentUser?.id, isUploading, replyToMessage, routeDialogId, scrollToBottom, state.activeDialog?.canSend, state.activeDialog?.counterpart?.displayName, toast])
 
     const loadOlderMessages = useCallback(async () => {
         if (
@@ -1130,33 +1179,25 @@ function ChatsPage() {
     }
 
     const startEditingMessage = (message) => {
-        setEditingMessageId(message.id)
-        setEditingBody(message.body || '')
+        setEditingMessage(message)
+        setDraft(message.body || '')
+        setReplyToMessage(null)
         setEditingRemoveAttachmentIds([])
-        setEditingFile(null)
+        clearSelectedFiles()
         setEditingError('')
+        requestAnimationFrame(() => {
+            textareaRef.current?.focus()
+            resizeTextarea()
+        })
     }
 
     const cancelEditingMessage = () => {
-        setEditingMessageId(null)
-        setEditingBody('')
+        setEditingMessage(null)
         setEditingRemoveAttachmentIds([])
-        setEditingFile(null)
+        setDraft('')
+        clearSelectedFiles()
         setEditingError('')
         setIsEditSaving(false)
-    }
-
-    const handleEditFileSelect = (file) => {
-        if (!file) return
-
-        const validationError = validateAttachment(file)
-        if (validationError) {
-            setEditingError(validationError)
-            return
-        }
-
-        setEditingFile(file)
-        setEditingError('')
     }
 
     const copyMessageText = async (message) => {
@@ -1183,26 +1224,31 @@ function ChatsPage() {
         }
     }
 
-    const handleSaveEdit = async (message) => {
-        const body = editingBody.trim()
-        if (!canEdit || !routeDialogId || !message.id || isEditSaving) return
+    const handleSaveEdit = async () => {
+        const message = editingMessage
+        const body = draft.trim()
+        if (!canEdit || !routeDialogId || !message?.id || isEditSaving) return
 
         const keptAttachments = (message.attachments || []).filter((attachment) =>
             !editingRemoveAttachmentIds.includes(attachment.id)
         )
-        if (!body && keptAttachments.length === 0 && !editingFile) {
+        if (keptAttachments.length + selectedFiles.length > MAX_MESSAGE_ATTACHMENTS) {
+            setEditingError(`К сообщению можно прикрепить не больше ${MAX_MESSAGE_ATTACHMENTS} файлов`)
+            return
+        }
+        if (!body && keptAttachments.length === 0 && selectedFiles.length === 0) {
             setEditingError('Добавьте текст или файл')
             return
         }
 
         setIsEditSaving(true)
         try {
-            const shouldUseMultipart = editingFile || editingRemoveAttachmentIds.length > 0 || (message.attachments || []).length > 0
+            const shouldUseMultipart = selectedFiles.length > 0 || editingRemoveAttachmentIds.length > 0 || (message.attachments || []).length > 0
             const saved = shouldUseMultipart
                 ? await updateChatMessageContent(routeDialogId, message.id, {
                     body,
                     removeAttachmentIds: editingRemoveAttachmentIds,
-                    file: editingFile,
+                    files: selectedFiles.map((item) => item.file),
                 })
                 : await editChatMessage(routeDialogId, message.id, body)
             dispatch({ type: 'MESSAGE_UPSERT', dialogId: routeDialogId, message: saved })
@@ -1316,8 +1362,9 @@ function ChatsPage() {
     }
 
     const removeFailedMessage = (message) => {
-        const previewUrl = message.attachments?.[0]?.localPreviewUrl
-        if (previewUrl) URL.revokeObjectURL(previewUrl)
+        ;(message.attachments || []).forEach((attachment) => {
+            if (attachment.localPreviewUrl) URL.revokeObjectURL(attachment.localPreviewUrl)
+        })
         dispatch({ type: 'MESSAGE_REMOVE', dialogId: message.dialogId, clientMessageId: message.clientMessageId })
     }
 
@@ -1340,9 +1387,15 @@ function ChatsPage() {
     const canEdit = Boolean(state.activeDialog?.canSend)
     const canSubmit = canEdit &&
         !isUploading &&
-        Boolean(draft.trim() || selectedFile)
+        !isEditSaving &&
+        Boolean(draft.trim() || selectedFiles.length > 0 || editingMessage)
+    const visibleEditingAttachments = editingMessage
+        ? (editingMessage.attachments || []).filter((attachment) => !editingRemoveAttachmentIds.includes(attachment.id))
+        : []
     const composerPlaceholder = !canEdit
         ? 'Отправка недоступна для этого диалога'
+        : editingMessage
+            ? 'Измените сообщение'
         : connectionStatus !== 'connected'
             ? 'Нет realtime-соединения. Сообщение отправится через REST.'
             : 'Введите сообщение'
@@ -1612,9 +1665,6 @@ function ChatsPage() {
                                     const senderName = isOwn
                                         ? currentUser?.displayName || currentUser?.email || 'Вы'
                                         : state.activeDialog?.counterpart?.displayName || 'Участник'
-                                    const visibleEditAttachments = (message.attachments || []).filter((attachment) =>
-                                        !editingRemoveAttachmentIds.includes(attachment.id)
-                                    )
                                     return (
                                         <div
                                             key={message.id || message.clientMessageId}
@@ -1655,81 +1705,16 @@ function ChatsPage() {
                                                                 <span>{message.replyTo.bodyPreview || 'Вложение'}</span>
                                                             </button>
                                                         )}
-                                                        {editingMessageId === message.id ? (
-                                                            <div className="chats__inline-edit">
-                                                                <textarea
-                                                                    value={editingBody}
-                                                                    onChange={(event) => setEditingBody(event.target.value.slice(0, 4000))}
-                                                                    onKeyDown={(event) => {
-                                                                        if (event.key === 'Enter' && !event.shiftKey) {
-                                                                            event.preventDefault()
-                                                                            void handleSaveEdit(message)
-                                                                        }
-                                                                    }}
-                                                                />
-                                                                {visibleEditAttachments.length > 0 && (
-                                                                    <div className="chats__edit-attachments">
-                                                                        {visibleEditAttachments.map((attachment) => (
-                                                                            <div key={attachment.id} className="chats__edit-attachment">
-                                                                                <span>
-                                                                                    <strong>{attachment.originalFileName}</strong>
-                                                                                    <small>{formatFileSize(attachment.sizeBytes)}</small>
-                                                                                </span>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    onClick={() => setEditingRemoveAttachmentIds((current) => [...current, attachment.id])}
-                                                                                >
-                                                                                    Удалить вложение
-                                                                                </button>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                )}
-                                                                {editingFile && (
-                                                                    <div className="chats__edit-attachment">
-                                                                        {editingFilePreview
-                                                                            ? <img src={editingFilePreview} alt="" />
-                                                                            : <FileText size={20} aria-hidden="true" />}
-                                                                        <span>
-                                                                            <strong>{editingFile.name}</strong>
-                                                                            <small>{formatFileSize(editingFile.size)}</small>
-                                                                        </span>
-                                                                        <button type="button" onClick={() => setEditingFile(null)}>Убрать файл</button>
-                                                                    </div>
-                                                                )}
-                                                                {editingError && <small className="chats__edit-error">{editingError}</small>}
-                                                                <input
-                                                                    ref={editFileInputRef}
-                                                                    className="chats__file-input"
-                                                                    type="file"
-                                                                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                                                                    onChange={(event) => {
-                                                                        handleEditFileSelect(event.target.files?.[0])
-                                                                        event.target.value = ''
-                                                                    }}
-                                                                />
-                                                                <div>
-                                                                    <button type="button" onClick={() => editFileInputRef.current?.click()}>
-                                                                        {visibleEditAttachments.length > 0 ? 'Заменить файл' : 'Добавить файл'}
-                                                                    </button>
-                                                                    <button type="button" disabled={isEditSaving} onClick={() => void handleSaveEdit(message)}>Сохранить</button>
-                                                                    <button type="button" disabled={isEditSaving} onClick={cancelEditingMessage}>Отмена</button>
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <>
-                                                                {message.body && <p>{message.body}</p>}
-                                                                {(message.attachments || []).map((attachment) => (
-                                                                    <ChatAttachment
-                                                                        key={attachment.id || `${message.clientMessageId}-${attachment.originalFileName}`}
-                                                                        dialogId={message.dialogId}
-                                                                        attachment={attachment}
-                                                                        failed={message.failed}
-                                                                        pending={message.pending}
-                                                                    />
-                                                                ))}
-                                                            </>
-                                                        )}
+                                                        {message.body && <p>{message.body}</p>}
+                                                        {(message.attachments || []).map((attachment) => (
+                                                            <ChatAttachment
+                                                                key={attachment.id || `${message.clientMessageId}-${attachment.originalFileName}`}
+                                                                dialogId={message.dialogId}
+                                                                attachment={attachment}
+                                                                failed={message.failed}
+                                                                pending={message.pending}
+                                                            />
+                                                        ))}
                                                     </>
                                                 )}
                                                 <span className="chats__message-meta">
@@ -1768,14 +1753,14 @@ function ChatsPage() {
                                                     <div className="chats__message-actions">
                                                         <button
                                                             className="chats__message-action"
-                                                            disabled={message.retryFile ? isUploading : false}
+                                                            disabled={message.retryFiles ? isUploading : false}
                                                             onClick={() => {
-                                                                if (message.retryFile) {
+                                                                if (message.retryFiles) {
                                                                     void sendAttachmentMessage(
-                                                                        message.retryFile,
+                                                                        message.retryFiles,
                                                                         message.body || '',
                                                                         message.clientMessageId,
-                                                                        message.attachments?.[0]?.localPreviewUrl || ''
+                                                                        (message.attachments || []).map((attachment) => attachment.localPreviewUrl || '')
                                                                     )
                                                                 } else {
                                                                     void sendMessage(message.body, message.clientMessageId)
@@ -1785,7 +1770,7 @@ function ChatsPage() {
                                                             <RefreshCw size={13} aria-hidden="true" />
                                                             Повторить
                                                         </button>
-                                                        {message.retryFile && (
+                                                        {message.retryFiles && (
                                                             <button
                                                                 type="button"
                                                                 className="chats__message-action"
@@ -1844,16 +1829,26 @@ function ChatsPage() {
                                         </div>
                                     )}
                                     {canEdit && (
-                                        <button type="button" role="menuitem" onClick={() => { setReplyToMessage(activeMenuMessage); closeMessageMenu(); textareaRef.current?.focus() }}>Ответить</button>
+                                        <button type="button" role="menuitem" onClick={() => { setReplyToMessage(activeMenuMessage); cancelEditingMessage(); closeMessageMenu(); textareaRef.current?.focus() }}>
+                                            <Reply size={15} aria-hidden="true" />
+                                            Ответить
+                                        </button>
                                     )}
                                     {activeMenuMessage.body && (
-                                        <button type="button" role="menuitem" onClick={() => void copyMessageText(activeMenuMessage)}>Копировать текст</button>
+                                        <button type="button" role="menuitem" onClick={() => void copyMessageText(activeMenuMessage)}>
+                                            <Copy size={15} aria-hidden="true" />
+                                            Копировать текст
+                                        </button>
                                     )}
                                     {canEdit && activeMenuMessage.senderUserId === currentUser?.id && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(activeMenuMessage.messageType) && (
-                                        <button type="button" role="menuitem" onClick={() => { startEditingMessage(activeMenuMessage); closeMessageMenu() }}>Редактировать</button>
+                                        <button type="button" role="menuitem" onClick={() => { startEditingMessage(activeMenuMessage); closeMessageMenu() }}>
+                                            <Edit3 size={15} aria-hidden="true" />
+                                            Редактировать
+                                        </button>
                                     )}
                                     {canEdit && (
                                         <button type="button" role="menuitem" disabled={isPinUpdating} onClick={() => { closeMessageMenu(); void handlePinToggle(activeMenuMessage) }}>
+                                            <Pin size={15} aria-hidden="true" />
                                             {state.activeDialog?.pinnedMessage?.messageId === activeMenuMessage.id ? 'Открепить' : 'Закрепить'}
                                         </button>
                                     )}
@@ -1863,12 +1858,19 @@ function ChatsPage() {
                                             setForwardSearch('')
                                             setForwardClientMessageId(createClientMessageId())
                                             closeMessageMenu()
-                                        }}>Переслать</button>
+                                        }}>
+                                            <Forward size={15} aria-hidden="true" />
+                                            Переслать
+                                        </button>
                                     )}
-                                    <button type="button" role="menuitem" className="is-danger" onClick={() => { setConfirmAction({ type: 'deleteMe', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у себя</button>
-                                    {canEdit && activeMenuMessage.senderUserId === currentUser?.id && (
-                                        <button type="button" role="menuitem" className="is-danger" onClick={() => { setConfirmAction({ type: 'deleteAll', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у всех</button>
-                                    )}
+                                    <button type="button" role="menuitem" className="is-danger" onClick={() => {
+                                        setDeleteForEveryone(false)
+                                        setConfirmAction({ type: 'delete', message: activeMenuMessage })
+                                        closeMessageMenu()
+                                    }}>
+                                        <Trash2 size={15} aria-hidden="true" />
+                                        Удалить
+                                    </button>
                                 </div>
                             )}
 
@@ -1888,13 +1890,26 @@ function ChatsPage() {
                                 className="chats__composer"
                                 onSubmit={(event) => {
                                     event.preventDefault()
-                                    if (selectedFile) {
-                                        void sendAttachmentMessage(selectedFile, draft)
+                                    if (editingMessage) {
+                                        void handleSaveEdit()
+                                    } else if (selectedFiles.length > 0) {
+                                        void sendAttachmentMessage(selectedFiles, draft)
                                     } else {
                                         void sendMessage(draft)
                                     }
                                 }}
                             >
+                                {editingMessage && (
+                                    <div className="chats__edit-preview">
+                                        <span>
+                                            <strong>Редактирование</strong>
+                                            {editingMessage.body || editingMessage.attachments?.[0]?.originalFileName || 'Вложение'}
+                                        </span>
+                                        <button type="button" aria-label="Отменить редактирование" onClick={cancelEditingMessage}>
+                                            <X size={16} aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                )}
                                 {replyToMessage && (
                                     <div className="chats__reply-preview">
                                         <span>
@@ -1935,9 +1950,10 @@ function ChatsPage() {
                                             ref={fileInputRef}
                                             className="chats__file-input"
                                             type="file"
+                                            multiple
                                             accept="image/jpeg,image/png,image/webp,application/pdf"
                                             onChange={(event) => {
-                                                handleFileSelect(event.target.files?.[0])
+                                                handleFileSelect(event.target.files)
                                                 event.target.value = ''
                                             }}
                                         />
@@ -1953,8 +1969,10 @@ function ChatsPage() {
                                         onKeyDown={(event) => {
                                             if (event.key === 'Enter' && !event.shiftKey) {
                                                 event.preventDefault()
-                                                if (selectedFile) {
-                                                    void sendAttachmentMessage(selectedFile, draft)
+                                                if (editingMessage) {
+                                                    void handleSaveEdit()
+                                                } else if (selectedFiles.length > 0) {
+                                                    void sendAttachmentMessage(selectedFiles, draft)
                                                 } else {
                                                     void sendMessage(draft)
                                                 }
@@ -1966,9 +1984,9 @@ function ChatsPage() {
                                         className="button chats__send"
                                         disabled={!canSubmit}
                                         aria-label="Отправить сообщение"
-                                        title="Отправить сообщение"
+                                        title={editingMessage ? 'Сохранить изменения' : 'Отправить сообщение'}
                                     >
-                                        {isUploading
+                                        {isUploading || isEditSaving
                                             ? <LoaderCircle className="chats__spinner" size={20} aria-hidden="true" />
                                             : <Send size={20} aria-hidden="true" />}
                                     </button>
@@ -1989,54 +2007,96 @@ function ChatsPage() {
                                         ))}
                                     </div>
                                 )}
-                                {selectedFile && (
-                                    <div className="chats__selected-file">
-                                        {selectedFilePreview
-                                            ? <img src={selectedFilePreview} alt="" />
-                                            : <FileText className="chats__attachment-file-icon" size={22} aria-hidden="true" />}
-                                        <span>
-                                            <strong>{selectedFile.name}</strong>
-                                            <small>{formatFileSize(selectedFile.size)}</small>
-                                        </span>
-                                        <button
-                                            type="button"
-                                            aria-label="Убрать прикреплённый файл"
-                                            title="Убрать файл"
-                                            onClick={() => setSelectedFile(null)}
-                                        >
-                                            <X size={18} aria-hidden="true" />
-                                        </button>
+                                {editingMessage && visibleEditingAttachments.length > 0 && (
+                                    <div className="chats__selected-files">
+                                        {visibleEditingAttachments.map((attachment) => (
+                                            <div key={attachment.id} className="chats__selected-file chats__selected-file--existing">
+                                                <FileText className="chats__attachment-file-icon" size={22} aria-hidden="true" />
+                                                <span>
+                                                    <strong>{attachment.originalFileName}</strong>
+                                                    <small>{formatFileSize(attachment.sizeBytes)}</small>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    aria-label="Удалить вложение"
+                                                    title="Удалить вложение"
+                                                    onClick={() => setEditingRemoveAttachmentIds((current) => [...current, attachment.id])}
+                                                >
+                                                    <X size={18} aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
+                                {selectedFiles.length > 0 && (
+                                    <div className="chats__selected-files">
+                                        {selectedFiles.map((item) => (
+                                            <div key={item.id} className="chats__selected-file">
+                                                {item.previewUrl
+                                                    ? <img src={item.previewUrl} alt="" />
+                                                    : <FileText className="chats__attachment-file-icon" size={22} aria-hidden="true" />}
+                                                <span>
+                                                    <strong>{item.file.name}</strong>
+                                                    <small>{formatFileSize(item.file.size)}</small>
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    aria-label="Убрать прикреплённый файл"
+                                                    title="Убрать файл"
+                                                    onClick={() => removeSelectedFile(item.id)}
+                                                >
+                                                    <X size={18} aria-hidden="true" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {editingError && <small className="chats__edit-error">{editingError}</small>}
                                 <div className="chats__composer-footer">
                                     <span>{draft.length}/4000</span>
+                                    <span>{visibleEditingAttachments.length + selectedFiles.length}/{MAX_MESSAGE_ATTACHMENTS}</span>
                                 </div>
                             </form>
                             {confirmAction && (
-                                <div className="chats__modal-backdrop" role="presentation" onClick={() => setConfirmAction(null)}>
+                                <div className="chats__modal-backdrop" role="presentation" onClick={() => { setConfirmAction(null); setDeleteForEveryone(false) }}>
                                     <div className="chats__confirm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-                                        <h3>{confirmAction.type === 'deleteAll' ? 'Удалить сообщение у всех?' : 'Удалить сообщение у себя?'}</h3>
+                                        <h3>Удалить сообщение?</h3>
                                         <p>
-                                            {confirmAction.type === 'deleteAll'
+                                            {deleteForEveryone
                                                 ? 'Сообщение исчезнет из переписки для обоих участников.'
                                                 : 'Оно исчезнет только у вас. У собеседника сообщение останется.'}
                                         </p>
+                                        {canEdit && confirmAction.message?.senderUserId === currentUser?.id && !confirmAction.message?.deletedAt && (
+                                            <label className="chats__confirm-check">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={deleteForEveryone}
+                                                    onChange={(event) => setDeleteForEveryone(event.target.checked)}
+                                                />
+                                                <span>Также удалить у собеседника</span>
+                                            </label>
+                                        )}
                                         <div>
-                                            <button type="button" onClick={() => setConfirmAction(null)}>Отмена</button>
+                                            <button type="button" onClick={() => { setConfirmAction(null); setDeleteForEveryone(false) }}>Отмена</button>
                                             <button
                                                 type="button"
                                                 className="is-danger"
                                                 onClick={() => {
                                                     const action = confirmAction
+                                                    const shouldDeleteForEveryone = deleteForEveryone &&
+                                                        canEdit &&
+                                                        action.message?.senderUserId === currentUser?.id &&
+                                                        !action.message?.deletedAt
                                                     setConfirmAction(null)
-                                                    if (action.type === 'deleteAll') {
+                                                    setDeleteForEveryone(false)
+                                                    if (shouldDeleteForEveryone) {
                                                         void handleDeleteForEveryone(action.message)
                                                     } else {
                                                         void handleDeleteForMe(action.message)
                                                     }
                                                 }}
                                             >
-                                                {confirmAction.type === 'deleteAll' ? 'Удалить у всех' : 'Удалить у себя'}
+                                                Удалить
                                             </button>
                                         </div>
                                     </div>

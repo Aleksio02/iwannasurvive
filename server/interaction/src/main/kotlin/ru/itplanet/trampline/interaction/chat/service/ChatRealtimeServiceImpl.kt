@@ -52,7 +52,7 @@ class ChatRealtimeServiceImpl(
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String?,
-        file: MultipartFile,
+        files: List<MultipartFile>,
         replyToMessageId: Long?,
     ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
@@ -61,7 +61,7 @@ class ChatRealtimeServiceImpl(
             currentUser = currentUser,
             clientMessageId = clientMessageId,
             body = body,
-            file = file,
+            files = files,
             replyToMessageId = replyToMessageId,
         )
         broadcastCreatedMessage(dialog, commandResult)
