@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatMessageReactionDao
+import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageDto
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageReactionDto
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageReactionId
 import ru.itplanet.trampline.interaction.chat.mapper.ChatDomainMapper
@@ -30,7 +31,7 @@ class ChatReactionServiceImpl(
     ): ChatMessage {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanWrite(dialog, currentUser)
-        val message = requireMessage(dialogId, messageId)
+        val message = requireVisibleMessage(dialogId, messageId, currentUser.userId)
         if (message.deletedAt != null) {
             throw InteractionBadRequestException("Нельзя реагировать на удалённое сообщение", "chat_reaction_deleted_message")
         }
@@ -53,7 +54,10 @@ class ChatReactionServiceImpl(
     ): ChatMessage {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanWrite(dialog, currentUser)
-        val message = requireMessage(dialogId, messageId)
+        val message = requireVisibleMessage(dialogId, messageId, currentUser.userId)
+        if (message.deletedAt != null) {
+            throw InteractionBadRequestException("Нельзя реагировать на удалённое сообщение", "chat_reaction_deleted_message")
+        }
         val reactionId = ChatMessageReactionId(messageId, currentUser.userId)
         if (chatMessageReactionDao.existsById(reactionId)) {
             chatMessageReactionDao.deleteById(reactionId)
@@ -61,12 +65,18 @@ class ChatReactionServiceImpl(
         return chatMessageEnrichmentService.enrich(chatDomainMapper.toChatMessage(message), currentUser.userId)
     }
 
-    private fun requireMessage(dialogId: Long, messageId: Long) =
-        chatMessageDao.findById(messageId).orElseThrow {
-            InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
-        }.also {
-            if (it.dialogId != dialogId) {
-                throw InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
-            }
-        }
+    private fun requireVisibleMessage(
+        dialogId: Long,
+        messageId: Long,
+        currentUserId: Long,
+    ): ChatMessageDto {
+        return chatMessageDao.findVisibleByIdAndDialogIdForUser(
+            messageId = messageId,
+            dialogId = dialogId,
+            currentUserId = currentUserId,
+        ) ?: throw InteractionNotFoundException(
+            message = "Сообщение чата не найдено",
+            code = "chat_message_not_found",
+        )
+    }
 }
