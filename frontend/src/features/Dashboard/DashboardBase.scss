@@ -22,6 +22,11 @@
     padding: 20px;
     border-radius: 22px;
   }
+
+  @media (max-width: 480px) {
+    padding: 16px;
+    border-radius: 18px;
+  }
 }
 
 .dashboard-tabs {

@@ -14,6 +14,7 @@ import './ApplicantSearchPage.scss'
 
 const DEFAULT_LIMIT = 12
 const INPUT_DEBOUNCE_MS = 250
+const TAG_SUGGESTION_LIMIT = 6
 
 function useDebounce(value, delay) {
     const [debouncedValue, setDebouncedValue] = useState(value)
@@ -63,12 +64,110 @@ function mergeUniqueTags(...tagGroups) {
     )
 }
 
+function normalizeTagName(value) {
+    return String(value || '').trim().toLowerCase()
+}
+
 function toggleTagId(ids, tagId) {
     if (ids.includes(tagId)) {
         return ids.filter((currentId) => currentId !== tagId)
     }
 
     return [...ids, tagId]
+}
+
+function TagSearchFilter({
+    title,
+    placeholder,
+    tags,
+    selectedTagIds,
+    onToggleTag,
+}) {
+    const [search, setSearch] = useState('')
+    const normalizedSearch = normalizeTagName(search)
+
+    const selectedTags = useMemo(
+        () => tags.filter((tag) => selectedTagIds.includes(tag.id)),
+        [selectedTagIds, tags]
+    )
+
+    const visibleTags = useMemo(() => {
+        const filteredTags = normalizedSearch
+            ? tags.filter((tag) => normalizeTagName(tag.name).includes(normalizedSearch))
+            : tags
+
+        const unselectedTags = filteredTags.filter((tag) => !selectedTagIds.includes(tag.id))
+        return [
+            ...selectedTags,
+            ...unselectedTags.slice(0, TAG_SUGGESTION_LIMIT),
+        ]
+    }, [normalizedSearch, selectedTagIds, selectedTags, tags])
+
+    const hasHiddenMatches = useMemo(() => {
+        const matchingUnselectedCount = tags
+            .filter((tag) => !selectedTagIds.includes(tag.id))
+            .filter((tag) => !normalizedSearch || normalizeTagName(tag.name).includes(normalizedSearch))
+            .length
+
+        return matchingUnselectedCount > TAG_SUGGESTION_LIMIT
+    }, [normalizedSearch, selectedTagIds, tags])
+
+    return (
+        <div className="applicant-search__chip-group">
+            <div className="applicant-search__chip-header">
+                <span className="applicant-search__label">{title}</span>
+                {selectedTagIds.length > 0 && (
+                    <span className="applicant-search__counter">
+                        {selectedTagIds.length}
+                    </span>
+                )}
+            </div>
+
+            <div className="applicant-search__tag-search">
+                <Input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={placeholder}
+                />
+                {search.trim() && (
+                    <button
+                        type="button"
+                        className="applicant-search__tag-search-clear"
+                        onClick={() => setSearch('')}
+                        aria-label={`Очистить поиск: ${title.toLowerCase()}`}
+                    >
+                        ×
+                    </button>
+                )}
+            </div>
+
+            <div className="applicant-search__chips" aria-live="polite">
+                {visibleTags.map((tag) => {
+                    const isActive = selectedTagIds.includes(tag.id)
+
+                    return (
+                        <button
+                            key={tag.id}
+                            type="button"
+                            className={`applicant-search__chip ${isActive ? 'is-active' : ''}`}
+                            onClick={() => onToggleTag(tag.id)}
+                        >
+                            #{tag.name}
+                        </button>
+                    )
+                })}
+            </div>
+
+            {visibleTags.length === 0 ? (
+                <p className="applicant-search__chips-hint">Ничего не найдено — попробуйте другой запрос.</p>
+            ) : (
+                <p className="applicant-search__chips-hint">
+                    Показаны выбранные и до {TAG_SUGGESTION_LIMIT} ближайших подсказок.
+                    {hasHiddenMatches ? ' Уточните запрос, чтобы увидеть больше вариантов.' : ''}
+                </p>
+            )}
+        </div>
+    )
 }
 
 function buildApplicantFileUrl(userId, fileId) {
@@ -457,73 +556,33 @@ export default function ApplicantSearchPage() {
                     </div>
 
                     <div className="applicant-search__chips-block">
-                        <div className="applicant-search__chip-group">
-                            <div className="applicant-search__chip-header">
-                                <span className="applicant-search__label">Навыки</span>
-                                {filters.skillTagIds.length > 0 && (
-                                    <span className="applicant-search__counter">
-                                        {filters.skillTagIds.length}
-                                    </span>
-                                )}
-                            </div>
+                        <TagSearchFilter
+                            title="Навыки"
+                            placeholder="Найти навык"
+                            tags={skillTags}
+                            selectedTagIds={filters.skillTagIds}
+                            onToggleTag={(tagId) => {
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    skillTagIds: toggleTagId(prev.skillTagIds, tagId),
+                                }))
+                                setPageNumber(1)
+                            }}
+                        />
 
-                            <div className="applicant-search__chips">
-                                {skillTags.map((tag) => {
-                                    const isActive = filters.skillTagIds.includes(tag.id)
-
-                                    return (
-                                        <button
-                                            key={tag.id}
-                                            type="button"
-                                            className={`applicant-search__chip ${isActive ? 'is-active' : ''}`}
-                                            onClick={() => {
-                                                setFilters((prev) => ({
-                                                    ...prev,
-                                                    skillTagIds: toggleTagId(prev.skillTagIds, tag.id),
-                                                }))
-                                                setPageNumber(1)
-                                            }}
-                                        >
-                                            #{tag.name}
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="applicant-search__chip-group">
-                            <div className="applicant-search__chip-header">
-                                <span className="applicant-search__label">Интересы</span>
-                                {filters.interestTagIds.length > 0 && (
-                                    <span className="applicant-search__counter">
-                                        {filters.interestTagIds.length}
-                                    </span>
-                                )}
-                            </div>
-
-                            <div className="applicant-search__chips">
-                                {interestTags.map((tag) => {
-                                    const isActive = filters.interestTagIds.includes(tag.id)
-
-                                    return (
-                                        <button
-                                            key={tag.id}
-                                            type="button"
-                                            className={`applicant-search__chip ${isActive ? 'is-active' : ''}`}
-                                            onClick={() => {
-                                                setFilters((prev) => ({
-                                                    ...prev,
-                                                    interestTagIds: toggleTagId(prev.interestTagIds, tag.id),
-                                                }))
-                                                setPageNumber(1)
-                                            }}
-                                        >
-                                            #{tag.name}
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
+                        <TagSearchFilter
+                            title="Интересы"
+                            placeholder="Найти интерес или направление"
+                            tags={interestTags}
+                            selectedTagIds={filters.interestTagIds}
+                            onToggleTag={(tagId) => {
+                                setFilters((prev) => ({
+                                    ...prev,
+                                    interestTagIds: toggleTagId(prev.interestTagIds, tagId),
+                                }))
+                                setPageNumber(1)
+                            }}
+                        />
                     </div>
                 </div>
 

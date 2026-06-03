@@ -70,7 +70,7 @@ const CuratorCreateTagForm = ({ onCreate, onCancel, isLoading }) => {
               <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="например, JavaScript"
+                  placeholder="Например, JavaScript"
                   disabled={isLoading}
               />
             </div>
@@ -80,6 +80,7 @@ const CuratorCreateTagForm = ({ onCreate, onCancel, isLoading }) => {
                   value={category}
                   onChange={setCategory}
                   options={CATEGORIES}
+                  inModal={true}
               />
             </div>
             {error && <div className={styles.error}>{error}</div>}
