@@ -48,7 +48,7 @@ function isAttachmentPayload(payload) {
 function isReadPayload(payload) {
     return isObject(payload) &&
         isPositiveNumber(payload.readerUserId) &&
-        isPositiveNumber(payload.lastReadMessageId)
+        (payload.lastReadMessageId === null || isPositiveNumber(payload.lastReadMessageId))
 }
 
 function isDialogPayload(payload) {
@@ -58,6 +58,17 @@ function isDialogPayload(payload) {
         isObject(payload.counterpart) &&
         isPositiveNumber(payload.counterpart.userId) &&
         typeof payload.counterpart.displayName === 'string'
+}
+
+function isHiddenPayload(payload) {
+    return isObject(payload) && isPositiveNumber(payload.messageId)
+}
+
+function isTypingPayload(payload) {
+    return isObject(payload) &&
+        isPositiveNumber(payload.userId) &&
+        typeof payload.typing === 'boolean' &&
+        typeof payload.expiresAt === 'string'
 }
 
 function parseEvent(body) {
@@ -73,16 +84,24 @@ function parseEvent(body) {
         return null
     }
 
-    if (event.type === 'MESSAGE_CREATED' && isMessagePayload(event.payload)) {
+    if ([
+        'MESSAGE_CREATED',
+        'MESSAGE_UPDATED',
+        'MESSAGE_DELETED',
+        'MESSAGE_REACTIONS_UPDATED',
+    ].includes(event.type) && isMessagePayload(event.payload)) {
         return {
             ...event,
             payload: {
                 ...event.payload,
                 attachments: event.payload.attachments || [],
+                reactions: event.payload.reactions || [],
             },
         }
     }
-    if (event.type === 'READ_UPDATED' && isReadPayload(event.payload)) return event
+    if (['READ_UPDATED', 'READ_STATE_UPDATED'].includes(event.type) && isReadPayload(event.payload)) return event
+    if (event.type === 'MESSAGE_HIDDEN' && isHiddenPayload(event.payload)) return event
+    if (event.type === 'TYPING_UPDATED' && isTypingPayload(event.payload)) return event
     if (event.type === 'DIALOG_UPDATED' && isDialogPayload(event.payload)) return event
     if (event.type === 'DIALOG_CLOSED') return event
 
@@ -186,6 +205,16 @@ export function publishChatRead(dialogId, lastReadMessageId) {
     client.publish({
         destination: `/app/chats/${dialogId}/read`,
         body: JSON.stringify({ lastReadMessageId }),
+    })
+    return true
+}
+
+export function publishChatTyping(dialogId, typing) {
+    if (!client?.connected) return false
+
+    client.publish({
+        destination: `/app/chats/${dialogId}/typing`,
+        body: JSON.stringify({ typing }),
     })
     return true
 }

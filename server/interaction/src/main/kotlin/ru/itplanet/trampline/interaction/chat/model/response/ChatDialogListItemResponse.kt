@@ -16,4 +16,5 @@ data class ChatDialogListItemResponse(
     val canSend: Boolean,
     val responseStatus: OpportunityResponseStatus,
     val archived: Boolean,
+    val pinnedMessage: ChatPinnedMessageResponse? = null,
 )

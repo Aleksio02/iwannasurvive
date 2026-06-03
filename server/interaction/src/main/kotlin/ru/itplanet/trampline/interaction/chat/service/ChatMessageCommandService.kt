@@ -1,5 +1,7 @@
 package ru.itplanet.trampline.interaction.chat.service
 
+import org.springframework.core.io.Resource
+import org.springframework.http.ResponseEntity
 import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.interaction.chat.model.ChatMessageCommandResult
 import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentDownloadUrlResponse
@@ -11,6 +13,7 @@ interface ChatMessageCommandService {
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String,
+        replyToMessageId: Long? = null,
     ): ChatMessageCommandResult
 
     fun sendAttachment(
@@ -18,7 +21,44 @@ interface ChatMessageCommandService {
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String?,
-        file: MultipartFile,
+        files: List<MultipartFile>,
+        replyToMessageId: Long? = null,
+    ): ChatMessageCommandResult
+
+    fun editMessage(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+        body: String,
+    ): ChatMessageCommandResult
+
+    fun editMessageContent(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+        body: String?,
+        removeAttachmentIds: List<Long>,
+        files: List<MultipartFile>,
+    ): ChatMessageCommandResult
+
+    fun deleteForMe(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+    )
+
+    fun deleteForEveryone(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+    ): ChatMessageCommandResult
+
+    fun forwardMessage(
+        sourceDialogId: Long,
+        messageId: Long,
+        targetDialogId: Long,
+        currentUser: AuthenticatedUser,
+        clientMessageId: String,
     ): ChatMessageCommandResult
 
     fun getAttachmentDownloadUrl(
@@ -26,4 +66,10 @@ interface ChatMessageCommandService {
         attachmentId: Long,
         currentUser: AuthenticatedUser,
     ): ChatAttachmentDownloadUrlResponse
+
+    fun getAttachmentContent(
+        dialogId: Long,
+        attachmentId: Long,
+        currentUser: AuthenticatedUser,
+    ): ResponseEntity<Resource>
 }

@@ -1185,9 +1185,32 @@ export async function deleteEmployerLocation(locationId) {
 
 // ========== INTERACTION API: СОИСКАТЕЛЬ ==========
 
+const WRITABLE_RESPONSE_STATUSES = new Set(['SUBMITTED', 'IN_REVIEW', 'RESERVE', 'ACCEPTED'])
+
+function normalizeChatSummary(raw, status) {
+    if (raw) {
+        return {
+            dialogId: raw.dialogId ?? null,
+            hasChat: Boolean(raw.hasChat),
+            unreadCount: Number(raw.unreadCount || 0),
+            canSend: Boolean(raw.canSend),
+            lastMessageAt: raw.lastMessageAt || null,
+        }
+    }
+
+    return {
+        dialogId: null,
+        hasChat: false,
+        unreadCount: 0,
+        canSend: WRITABLE_RESPONSE_STATUSES.has(status),
+        lastMessageAt: null,
+    }
+}
+
 function mapProfileApplicationSummary(application, index) {
     const opportunityId = application.opportunityId ?? application.opportunity?.id ?? null
     const fallbackTitle = opportunityId ? `Вакансия #${opportunityId}` : `Отклик #${application.id ?? index + 1}`
+    const status = application.status || 'SUBMITTED'
 
     return {
         id: application.id ?? `${opportunityId ?? 'unknown'}-${application.createdAt ?? index}`,
@@ -1195,11 +1218,11 @@ function mapProfileApplicationSummary(application, index) {
         position: application.opportunityTitle || application.title || fallbackTitle,
         title: application.opportunityTitle || application.title || fallbackTitle,
         companyName: application.companyName || 'Компания',
-        status: application.status || 'SUBMITTED',
+        status,
         message: application.employerComment || application.applicantComment || 'Отклик отправлен',
         appliedAt: application.createdAt,
         createdAt: application.createdAt,
-        chatSummary: application.chatSummary || null,
+        chatSummary: normalizeChatSummary(application.chatSummary, status),
     }
 }
 
@@ -1277,6 +1300,7 @@ function mapInteractionApplications(responses) {
     return responses.map((response, index) => {
         const opportunityId = response.opportunityId ?? response.opportunity?.id ?? null
         const fallbackTitle = opportunityId ? `Вакансия #${opportunityId}` : `Отклик #${response.id ?? index + 1}`
+        const status = response.status || 'SUBMITTED'
 
         return {
             id: response.id ?? `${opportunityId ?? 'unknown'}-${response.createdAt ?? index}`,
@@ -1284,11 +1308,11 @@ function mapInteractionApplications(responses) {
             position: response.opportunityTitle || response.opportunity?.title || fallbackTitle,
             title: response.opportunityTitle || response.opportunity?.title || fallbackTitle,
             companyName: response.companyName || 'Компания',
-            status: response.status || 'SUBMITTED',
+            status,
             message: response.employerComment || response.applicantComment || 'Отклик отправлен',
             appliedAt: response.createdAt,
             createdAt: response.createdAt,
-            chatSummary: response.chatSummary || null,
+            chatSummary: normalizeChatSummary(response.chatSummary, status),
         }
     })
 }
@@ -1296,14 +1320,6 @@ function mapInteractionApplications(responses) {
 export async function getSeekerApplications() {
     const userId = await getSessionUserIdFromApi()
     if (!userId) return []
-
-    try {
-        return await getApplicantApplicationsViaProfile(userId)
-    } catch (profileError) {
-        if (![401, 403, 404, 500, 502, 503].includes(profileError?.status) && profileError?.status !== 0) {
-            throw profileError
-        }
-    }
 
     try {
         const responses = await getMyResponses()

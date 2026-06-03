@@ -22,13 +22,7 @@ class ChatAccessServiceImpl(
         dialogId: Long,
         currentUserId: Long,
     ): ChatDialogDto {
-        val dialog = chatDialogDao.findById(dialogId)
-            .orElseThrow {
-                InteractionNotFoundException(
-                    message = "Диалог чата не найден",
-                    code = "chat_dialog_not_found",
-                )
-            }
+        val dialog = requireDialog(dialogId)
 
         if (!isParticipant(dialog, currentUserId)) {
             throw InteractionForbiddenException(
@@ -38,6 +32,18 @@ class ChatAccessServiceImpl(
         }
 
         return dialog
+    }
+
+    override fun requireDialog(
+        dialogId: Long,
+    ): ChatDialogDto {
+        return chatDialogDao.findById(dialogId)
+            .orElseThrow {
+                InteractionNotFoundException(
+                    message = "Диалог чата не найден",
+                    code = "chat_dialog_not_found",
+                )
+            }
     }
 
     override fun assertCanRead(
