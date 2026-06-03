@@ -231,14 +231,14 @@ class ChatController(
         return chatRestMapper.toChatDialogResponse(dialog)
     }
 
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @DeleteMapping("/{dialogId}/pinned-message")
     fun unpinMessage(
         @PathVariable @Positive(message = "Идентификатор диалога должен быть положительным") dialogId: Long,
         @CurrentUser currentUser: AuthenticatedUser,
-    ) {
+    ): ChatDialogResponse {
         val dialog = chatPinService.unpin(dialogId, currentUser)
         chatRealtimeService.broadcastDialogUpdated(dialog)
+        return chatRestMapper.toChatDialogResponse(dialog)
     }
 
     @PostMapping("/{sourceDialogId}/messages/{messageId}/forward")
