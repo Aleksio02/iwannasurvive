@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { Download, FileText, LoaderCircle, MoreHorizontal, Paperclip, Pin, RefreshCw, Search, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
+import { ChevronDown, Download, FileText, LoaderCircle, MoreHorizontal, Paperclip, Pin, RefreshCw, Search, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
 import { useLocation, useRoute } from 'wouter'
 import DashboardLayout from '@/features/Dashboard/DashboardLayout'
 import Textarea from '@/shared/ui/Textarea'
@@ -394,6 +394,7 @@ function ChatsPage() {
     const [editingMessageId, setEditingMessageId] = useState(null)
     const [editingBody, setEditingBody] = useState('')
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
+    const [messageMenuPosition, setMessageMenuPosition] = useState(null)
     const [confirmAction, setConfirmAction] = useState(null)
     const [forwardingMessage, setForwardingMessage] = useState(null)
     const [forwardClientMessageId, setForwardClientMessageId] = useState('')
@@ -402,17 +403,22 @@ function ChatsPage() {
     const [isSearchOpen, setIsSearchOpen] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [searchResults, setSearchResults] = useState([])
+    const [isOpportunityFilterOpen, setIsOpportunityFilterOpen] = useState(false)
+    const [opportunityFilterQuery, setOpportunityFilterQuery] = useState('')
     const [typingByDialogId, setTypingByDialogId] = useState({})
     const [showJumpToNew, setShowJumpToNew] = useState(false)
     const [isEmojiOpen, setIsEmojiOpen] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
     const [selectedFilePreview, setSelectedFilePreview] = useState('')
     const [isUploading, setIsUploading] = useState(false)
+    const [isPinUpdating, setIsPinUpdating] = useState(false)
+    const threadRef = useRef(null)
     const messageListRef = useRef(null)
     const textareaRef = useRef(null)
     const fileInputRef = useRef(null)
     const emojiButtonRef = useRef(null)
     const emojiPickerRef = useRef(null)
+    const opportunityFilterRef = useRef(null)
     const shouldStickToBottomRef = useRef(true)
     const previousScrollMetricsRef = useRef(null)
     const olderMessagesLoadingRef = useRef(false)
@@ -486,20 +492,57 @@ function ChatsPage() {
     useEffect(() => {
         if (!openMenuMessageId) return undefined
         const close = (event) => {
-            if (event.key === 'Escape') setOpenMenuMessageId(null)
-        }
-        const handlePointer = (event) => {
-            if (!event.target.closest?.('.chats__message-menu') && !event.target.closest?.('.chats__message-menu-button')) {
+            if (event.key === 'Escape') {
                 setOpenMenuMessageId(null)
+                setMessageMenuPosition(null)
             }
         }
+        const handlePointer = (event) => {
+            if (!event.target.closest?.('.chats__floating-menu') && !event.target.closest?.('.chats__message-menu-button')) {
+                setOpenMenuMessageId(null)
+                setMessageMenuPosition(null)
+            }
+        }
+        const handleViewportMove = () => {
+            setOpenMenuMessageId(null)
+            setMessageMenuPosition(null)
+        }
+        document.addEventListener('keydown', close)
+        document.addEventListener('pointerdown', handlePointer)
+        window.addEventListener('resize', handleViewportMove)
+        return () => {
+            document.removeEventListener('keydown', close)
+            document.removeEventListener('pointerdown', handlePointer)
+            window.removeEventListener('resize', handleViewportMove)
+        }
+    }, [openMenuMessageId])
+
+    useEffect(() => {
+        if (!isOpportunityFilterOpen) return undefined
+
+        const close = (event) => {
+            if (event.key === 'Escape') setIsOpportunityFilterOpen(false)
+        }
+        const handlePointer = (event) => {
+            if (!opportunityFilterRef.current?.contains(event.target)) {
+                setIsOpportunityFilterOpen(false)
+            }
+        }
+
         document.addEventListener('keydown', close)
         document.addEventListener('pointerdown', handlePointer)
         return () => {
             document.removeEventListener('keydown', close)
             document.removeEventListener('pointerdown', handlePointer)
         }
-    }, [openMenuMessageId])
+    }, [isOpportunityFilterOpen])
+
+    useEffect(() => {
+        if (openMenuMessageId && !messages.some((message) => message.id === openMenuMessageId && !message.deletedAt)) {
+            setOpenMenuMessageId(null)
+            setMessageMenuPosition(null)
+        }
+    }, [messages, openMenuMessageId])
 
     const insertEmoji = (emoji) => {
         const textarea = textareaRef.current
@@ -527,6 +570,45 @@ function ChatsPage() {
 
         setSelectedFile(file)
         setIsEmojiOpen(false)
+    }
+
+    const closeMessageMenu = () => {
+        setOpenMenuMessageId(null)
+        setMessageMenuPosition(null)
+    }
+
+    const openMessageMenu = (event, messageId) => {
+        if (openMenuMessageId === messageId) {
+            closeMessageMenu()
+            return
+        }
+
+        const buttonRect = event.currentTarget.getBoundingClientRect()
+        const containerRect = threadRef.current?.getBoundingClientRect()
+        if (!containerRect) {
+            setOpenMenuMessageId(messageId)
+            setMessageMenuPosition(null)
+            return
+        }
+
+        const menuWidth = Math.min(220, containerRect.width - 16)
+        const menuHeight = canEdit ? 292 : 74
+        const gap = 8
+        const maxLeft = Math.max(gap, containerRect.width - menuWidth - gap)
+        const maxTop = Math.max(gap, containerRect.height - menuHeight - gap)
+        const openUp = buttonRect.bottom + menuHeight + gap > containerRect.bottom
+
+        const left = Math.min(
+            Math.max(buttonRect.right - containerRect.left - menuWidth, gap),
+            maxLeft
+        )
+        const preferredTop = openUp
+            ? buttonRect.top - containerRect.top - menuHeight - gap
+            : buttonRect.bottom - containerRect.top + gap
+        const top = Math.min(Math.max(preferredTop, gap), maxTop)
+
+        setOpenMenuMessageId(messageId)
+        setMessageMenuPosition({ top, left, width: menuWidth })
     }
 
     const loadDialogs = useCallback(async ({ append = false } = {}) => {
@@ -996,18 +1078,19 @@ function ChatsPage() {
     }
 
     const handlePinToggle = async (message) => {
-        if (!canEdit || !routeDialogId || !message.id) return
+        if (!canEdit || !routeDialogId || !message.id || isPinUpdating) return
+        setIsPinUpdating(true)
         try {
             const isPinned = state.activeDialog?.pinnedMessage?.messageId === message.id
             const dialog = isPinned
-                ? await unpinChatMessage(routeDialogId).then(() => getChatDialog(routeDialogId))
+                ? await unpinChatMessage(routeDialogId)
                 : await pinChatMessage(routeDialogId, message.id)
-            if (dialog) {
-                dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
-                dispatch({ type: 'DIALOG_UPSERT', dialog })
-            }
+            dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
+            dispatch({ type: 'DIALOG_UPSERT', dialog })
         } catch (error) {
             toast({ title: 'Не удалось обновить закреп', description: error.message, variant: 'destructive' })
+        } finally {
+            setIsPinUpdating(false)
         }
     }
 
@@ -1062,6 +1145,16 @@ function ChatsPage() {
         dispatch({ type: 'MESSAGE_REMOVE', dialogId: message.dialogId, clientMessageId: message.clientMessageId })
     }
 
+    const toggleSearch = () => {
+        setIsSearchOpen((isOpen) => {
+            if (isOpen) {
+                setSearchQuery('')
+                setSearchResults([])
+            }
+            return !isOpen
+        })
+    }
+
     const connectionLabel = {
         connecting: 'Подключение...',
         reconnecting: 'Переподключение...',
@@ -1081,6 +1174,15 @@ function ChatsPage() {
         const expiresAt = typingByDialogId[routeDialogId]
         return Boolean(expiresAt && new Date(expiresAt).getTime() > Date.now())
     })()
+    const selectedOpportunity = state.opportunityFilters.find((option) =>
+        String(option.opportunityId) === String(selectedOpportunityId)
+    ) || null
+    const opportunityFilterOptions = state.opportunityFilters.filter((option) => {
+        const query = opportunityFilterQuery.trim().toLowerCase()
+        if (!query) return true
+        return option.opportunityTitle.toLowerCase().includes(query)
+    })
+    const activeMenuMessage = messages.find((message) => message.id === openMenuMessageId && !message.deletedAt)
     const forwardDialogOptions = state.dialogs
         .filter((dialog) => dialog.dialogId !== routeDialogId)
         .filter((dialog) => {
@@ -1113,21 +1215,64 @@ function ChatsPage() {
                         ))}
                     </div>
 
-                    <select
-                        className="chats__opportunity-filter"
-                        value={selectedOpportunityId}
-                        onChange={(event) => setSelectedOpportunityId(event.target.value)}
-                        aria-label="Фильтр по вакансии"
-                    >
-                        <option value="">Все вакансии</option>
-                        {state.opportunityFilters.map((option) => (
-                            <option key={option.opportunityId} value={option.opportunityId}>
-                                {option.unreadCount > 0
-                                    ? `${option.opportunityTitle} · ${option.unreadCount} новых`
-                                    : option.opportunityTitle}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="chats__opportunity-filter" ref={opportunityFilterRef}>
+                        <button
+                            type="button"
+                            className="chats__opportunity-trigger"
+                            aria-haspopup="listbox"
+                            aria-expanded={isOpportunityFilterOpen}
+                            onClick={() => setIsOpportunityFilterOpen((isOpen) => !isOpen)}
+                        >
+                            <span>{selectedOpportunity?.opportunityTitle || 'Все вакансии'}</span>
+                            {selectedOpportunity?.unreadCount > 0 && <strong>{selectedOpportunity.unreadCount}</strong>}
+                            <ChevronDown size={16} aria-hidden="true" />
+                        </button>
+                        {isOpportunityFilterOpen && (
+                            <div className="chats__opportunity-menu" role="listbox">
+                                {state.opportunityFilters.length > 6 && (
+                                    <input
+                                        value={opportunityFilterQuery}
+                                        onChange={(event) => setOpportunityFilterQuery(event.target.value)}
+                                        placeholder="Найти вакансию"
+                                        autoFocus
+                                    />
+                                )}
+                                <button
+                                    type="button"
+                                    className={!selectedOpportunityId ? 'is-active' : ''}
+                                    role="option"
+                                    aria-selected={!selectedOpportunityId}
+                                    onClick={() => {
+                                        setSelectedOpportunityId('')
+                                        setOpportunityFilterQuery('')
+                                        setIsOpportunityFilterOpen(false)
+                                    }}
+                                >
+                                    <span>Все вакансии</span>
+                                </button>
+                                {opportunityFilterOptions.length === 0 && (
+                                    <small>Нет диалогов по вакансиям</small>
+                                )}
+                                {opportunityFilterOptions.map((option) => (
+                                    <button
+                                        key={option.opportunityId}
+                                        type="button"
+                                        className={String(selectedOpportunityId) === String(option.opportunityId) ? 'is-active' : ''}
+                                        role="option"
+                                        aria-selected={String(selectedOpportunityId) === String(option.opportunityId)}
+                                        onClick={() => {
+                                            setSelectedOpportunityId(String(option.opportunityId))
+                                            setOpportunityFilterQuery('')
+                                            setIsOpportunityFilterOpen(false)
+                                        }}
+                                    >
+                                        <span>{option.opportunityTitle}</span>
+                                        {option.unreadCount > 0 && <strong>{option.unreadCount}</strong>}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     {state.dialogsError && <p className="chats__state chats__state--error">{state.dialogsError}</p>}
                     {!state.dialogsLoading && state.dialogs.length === 0 && (
@@ -1159,7 +1304,7 @@ function ChatsPage() {
                     )}
                 </aside>
 
-                <section className="chats__thread">
+                <section className="chats__thread" ref={threadRef}>
                     {!routeDialogId ? (
                         <div className="chats__placeholder">Выберите диалог, чтобы открыть переписку</div>
                     ) : (
@@ -1176,7 +1321,7 @@ function ChatsPage() {
                                         type="button"
                                         aria-label="Поиск по сообщениям"
                                         title="Поиск"
-                                        onClick={() => setIsSearchOpen((isOpen) => !isOpen)}
+                                        onClick={toggleSearch}
                                     >
                                         <Search size={18} aria-hidden="true" />
                                     </button>
@@ -1190,27 +1335,30 @@ function ChatsPage() {
                             </header>
 
                             {state.activeDialog?.pinnedMessage && (
-                                <button
-                                    type="button"
+                                <div
                                     className="chats__pinned-bar"
-                                    onClick={() => void openMessageContext(state.activeDialog.pinnedMessage.messageId)}
                                 >
-                                    <Pin size={16} aria-hidden="true" />
-                                    <span>{state.activeDialog.pinnedMessage.preview}</span>
+                                    <button
+                                        type="button"
+                                        className="chats__pinned-main"
+                                        onClick={() => void openMessageContext(state.activeDialog.pinnedMessage.messageId)}
+                                    >
+                                        <Pin size={16} aria-hidden="true" />
+                                        <span>{state.activeDialog.pinnedMessage.preview}</span>
+                                    </button>
+                                    {isPinUpdating && <LoaderCircle className="chats__spinner" size={14} aria-hidden="true" />}
                                     {canEdit && (
-                                        <X
-                                            size={16}
-                                            aria-hidden="true"
-                                            onClick={(event) => {
-                                                event.stopPropagation()
-                                                void unpinChatMessage(routeDialogId).then(() => getChatDialog(routeDialogId)).then((dialog) => {
-                                                    dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
-                                                    dispatch({ type: 'DIALOG_UPSERT', dialog })
-                                                })
-                                            }}
-                                        />
+                                        <button
+                                            type="button"
+                                            className="chats__pinned-close"
+                                            aria-label="Открепить сообщение"
+                                            disabled={isPinUpdating}
+                                            onClick={() => void handlePinToggle({ id: state.activeDialog.pinnedMessage.messageId })}
+                                        >
+                                            <X size={16} aria-hidden="true" />
+                                        </button>
                                     )}
-                                </button>
+                                </div>
                             )}
 
                             {isSearchOpen && (
@@ -1245,6 +1393,7 @@ function ChatsPage() {
                                 ref={messageListRef}
                                 className="chats__messages"
                                 onScroll={(event) => {
+                                    if (openMenuMessageId) closeMessageMenu()
                                     const list = event.currentTarget
                                     const isNearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80
                                     shouldStickToBottomRef.current = isNearBottom
@@ -1259,14 +1408,16 @@ function ChatsPage() {
                                     <p className="chats__history-loading">Загружаем историю...</p>
                                 )}
                                 {!state.messagesLoading && messages.length === 0 && (
-                                    <p className="chats__empty-thread">Напишите первое сообщение по этому отклику</p>
+                                    <p className="chats__empty-thread">
+                                        {canEdit ? 'Напишите первое сообщение по этому отклику' : 'Переписка недоступна для новых сообщений'}
+                                    </p>
                                 )}
                                 {messages.map((message) => {
                                     const isOwn = message.senderUserId === currentUser?.id
                                     return (
                                         <div
                                             key={message.id || message.clientMessageId}
-                                            className={`chats__message ${isOwn ? 'chats__message--own' : ''}`}
+                                            className={`chats__message ${isOwn ? 'chats__message--own' : ''} ${message.deletedAt ? 'chats__message--deleted' : ''}`}
                                             data-message-id={message.id || ''}
                                         >
                                             {message.deletedAt ? (
@@ -1334,47 +1485,10 @@ function ChatsPage() {
                                                     aria-label="Действия с сообщением"
                                                     aria-haspopup="menu"
                                                     aria-expanded={openMenuMessageId === message.id}
-                                                    onClick={() => setOpenMenuMessageId((current) => current === message.id ? null : message.id)}
+                                                    onClick={(event) => openMessageMenu(event, message.id)}
                                                 >
                                                     <MoreHorizontal size={16} aria-hidden="true" />
                                                 </button>
-                                            )}
-                                            {openMenuMessageId === message.id && (
-                                                <div className="chats__message-menu" role="menu">
-                                                    {canEdit && (
-                                                        <div className="chats__reaction-row">
-                                                            {QUICK_REACTIONS.map((reaction) => (
-                                                                <button key={reaction} type="button" onClick={() => {
-                                                                    setOpenMenuMessageId(null)
-                                                                    void handleReaction(message, reaction)
-                                                                }}>
-                                                                    {reaction}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                    {canEdit && (
-                                                        <button type="button" onClick={() => { setReplyToMessage(message); setOpenMenuMessageId(null); textareaRef.current?.focus() }}>Ответить</button>
-                                                    )}
-                                                    {canEdit && isOwn && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(message.messageType) && (
-                                                        <button type="button" onClick={() => { setEditingMessageId(message.id); setEditingBody(message.body || ''); setOpenMenuMessageId(null) }}>Редактировать</button>
-                                                    )}
-                                                    <button type="button" onClick={() => { setOpenMenuMessageId(null); setConfirmAction({ type: 'deleteMe', message }) }}>Удалить у себя</button>
-                                                    {canEdit && isOwn && <button type="button" onClick={() => { setOpenMenuMessageId(null); setConfirmAction({ type: 'deleteAll', message }) }}>Удалить у всех</button>}
-                                                    {canEdit && (
-                                                        <button type="button" onClick={() => { setOpenMenuMessageId(null); void handlePinToggle(message) }}>
-                                                            {state.activeDialog?.pinnedMessage?.messageId === message.id ? 'Открепить' : 'Закрепить'}
-                                                        </button>
-                                                    )}
-                                                    {canEdit && (
-                                                        <button type="button" onClick={() => {
-                                                            setOpenMenuMessageId(null)
-                                                            setForwardingMessage(message)
-                                                            setForwardSearch('')
-                                                            setForwardClientMessageId(createClientMessageId())
-                                                        }}>Переслать</button>
-                                                    )}
-                                                </div>
                                             )}
                                             {message.reactions?.length > 0 && (
                                                 <div className="chats__reactions">
@@ -1431,6 +1545,50 @@ function ChatsPage() {
                                     )
                                 })}
                             </div>
+
+                            {activeMenuMessage && (
+                                <div
+                                    className="chats__floating-menu"
+                                    role="menu"
+                                    style={messageMenuPosition || undefined}
+                                >
+                                    {canEdit && (
+                                        <div className="chats__reaction-row">
+                                            {QUICK_REACTIONS.map((reaction) => (
+                                                <button key={reaction} type="button" onClick={() => {
+                                                    closeMessageMenu()
+                                                    void handleReaction(activeMenuMessage, reaction)
+                                                }}>
+                                                    {reaction}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {canEdit && (
+                                        <button type="button" onClick={() => { setReplyToMessage(activeMenuMessage); closeMessageMenu(); textareaRef.current?.focus() }}>Ответить</button>
+                                    )}
+                                    {canEdit && activeMenuMessage.senderUserId === currentUser?.id && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(activeMenuMessage.messageType) && (
+                                        <button type="button" onClick={() => { setEditingMessageId(activeMenuMessage.id); setEditingBody(activeMenuMessage.body || ''); closeMessageMenu() }}>Редактировать</button>
+                                    )}
+                                    <button type="button" onClick={() => { setConfirmAction({ type: 'deleteMe', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у себя</button>
+                                    {canEdit && activeMenuMessage.senderUserId === currentUser?.id && (
+                                        <button type="button" onClick={() => { setConfirmAction({ type: 'deleteAll', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у всех</button>
+                                    )}
+                                    {canEdit && (
+                                        <button type="button" disabled={isPinUpdating} onClick={() => { closeMessageMenu(); void handlePinToggle(activeMenuMessage) }}>
+                                            {state.activeDialog?.pinnedMessage?.messageId === activeMenuMessage.id ? 'Открепить' : 'Закрепить'}
+                                        </button>
+                                    )}
+                                    {canEdit && (
+                                        <button type="button" onClick={() => {
+                                            setForwardingMessage(activeMenuMessage)
+                                            setForwardSearch('')
+                                            setForwardClientMessageId(createClientMessageId())
+                                            closeMessageMenu()
+                                        }}>Переслать</button>
+                                    )}
+                                </div>
+                            )}
 
                             {showJumpToNew && (
                                 <button
@@ -1576,6 +1734,11 @@ function ChatsPage() {
                                 <div className="chats__modal-backdrop" role="presentation" onClick={() => setConfirmAction(null)}>
                                     <div className="chats__confirm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
                                         <h3>{confirmAction.type === 'deleteAll' ? 'Удалить сообщение у всех?' : 'Удалить сообщение у себя?'}</h3>
+                                        <p>
+                                            {confirmAction.type === 'deleteAll'
+                                                ? 'Сообщение исчезнет из переписки для обоих участников.'
+                                                : 'Оно исчезнет только у вас. У собеседника сообщение останется.'}
+                                        </p>
                                         <div>
                                             <button type="button" onClick={() => setConfirmAction(null)}>Отмена</button>
                                             <button
@@ -1591,7 +1754,7 @@ function ChatsPage() {
                                                     }
                                                 }}
                                             >
-                                                Удалить
+                                                {confirmAction.type === 'deleteAll' ? 'Удалить у всех' : 'Удалить у себя'}
                                             </button>
                                         </div>
                                     </div>
