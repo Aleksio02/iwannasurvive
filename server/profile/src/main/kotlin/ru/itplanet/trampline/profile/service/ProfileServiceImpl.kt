@@ -49,6 +49,7 @@ import ru.itplanet.trampline.profile.model.EmployerProfile
 import ru.itplanet.trampline.profile.model.enums.ApplicantTagRelationType
 import ru.itplanet.trampline.profile.model.enums.ProfileVisibility
 import ru.itplanet.trampline.profile.model.enums.ResumeVisibility
+import ru.itplanet.trampline.profile.model.enums.VerificationStatus
 import ru.itplanet.trampline.profile.model.request.ApplicantProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerCompanyPatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerProfilePatchRequest
@@ -418,9 +419,17 @@ class ProfileServiceImpl(
                 }
             }
 
-            val verificationAttachment = verificationAttachments?.firstOrNull { it.fileId == fileId }
+            val verificationAttachment = verificationAttachments?.firstOrNull {
+                it.fileId == fileId && it.attachmentRole == FileAttachmentRole.VERIFICATION
+            }
             if (verificationAttachment != null) {
-                // Удаляем attachment верификации
+                if (verification.status != VerificationStatus.PENDING) {
+                    throw ProfileConflictException(
+                        message = "Нельзя удалить файл закрытой заявки на верификацию",
+                        code = "employer_verification_attachment_delete_not_allowed",
+                    )
+                }
+
                 runMediaAction(
                     logMessage = "Не удалось удалить файл верификации fileId=$fileId, verificationId=${verification.id}",
                     errorMessage = "Не удалось удалить файл верификации",

@@ -10,6 +10,7 @@ import {
     submitEmployerProfileForModeration,
     uploadEmployerLogo,
     deleteEmployerFile,
+    deleteEmployerOwnedFile,
     getEmployerOpportunities,
     getEmployerOpportunityById,
     createOpportunity,
@@ -28,6 +29,7 @@ import {
     getEmployerVerificationModerationTask,
     cancelEmployerVerificationModerationTask,
     getEmployerVerificationAttachments,
+    getEmployerVerificationAttachmentOpenUrl,
 } from '@/shared/api/profile'
 
 import {
@@ -2475,15 +2477,26 @@ function EmployerDashboard() {
         }
     }
 
-    const handleOpenVerificationAttachment = (attachment) => {
-        const url = attachment?.url || attachment?.file?.url
+    const handleOpenVerificationAttachment = async (attachment) => {
+        const fileId = attachment?.fileId || attachment?.file?.fileId || attachment?.id
+        const verificationId = attachment?.entityId || currentVerification?.id
 
-        if (url) {
-            window.open(url, '_blank', 'noopener,noreferrer')
-        } else {
+        if (!verificationId || !fileId) {
             toast({
                 title: 'Ошибка',
-                description: 'Не удалось открыть файл: URL не найден',
+                description: 'Не удалось открыть файл: не найден идентификатор файла',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        try {
+            const url = await getEmployerVerificationAttachmentOpenUrl(verificationId, fileId)
+            window.open(url, '_blank', 'noopener,noreferrer')
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось открыть файл',
                 variant: 'destructive',
             })
         }
@@ -2495,20 +2508,35 @@ function EmployerDashboard() {
         setIsDeletingAttachment(true)
 
         try {
-            await deleteEmployerFile(fileId)
+            await deleteEmployerOwnedFile(fileId)
 
-            setVerificationAttachments((prev) => {
-                const newAttachments = prev.filter((item) => {
-                    const itemFileId = item?.fileId || item?.id
-                    return itemFileId !== fileId
-                })
+            if (currentVerification?.id) {
+                try {
+                    const attachments = await getEmployerVerificationAttachments(currentVerification.id)
+                    setVerificationAttachments(attachments)
+                    persistVerification(currentVerification, attachments)
+                } catch {
+                    setVerificationAttachments((prev) => {
+                        const newAttachments = prev.filter((item) => {
+                            const itemFileId = item?.fileId || item?.file?.fileId || item?.id
+                            return itemFileId !== fileId
+                        })
 
-                if (currentVerification) {
-                    persistVerification(currentVerification, newAttachments)
+                        persistVerification(currentVerification, newAttachments)
+
+                        return newAttachments
+                    })
                 }
+            } else {
+                setVerificationAttachments((prev) => {
+                    const newAttachments = prev.filter((item) => {
+                        const itemFileId = item?.fileId || item?.file?.fileId || item?.id
+                        return itemFileId !== fileId
+                    })
 
-                return newAttachments
-            })
+                    return newAttachments
+                })
+            }
 
             toast({
                 title: 'Файл удалён',
@@ -2524,7 +2552,7 @@ function EmployerDashboard() {
 
                 setVerificationAttachments((prev) => {
                     const newAttachments = prev.filter((item) => {
-                        const itemFileId = item?.fileId || item?.id
+                        const itemFileId = item?.fileId || item?.file?.fileId || item?.id
                         return itemFileId !== fileId
                     })
                     return newAttachments

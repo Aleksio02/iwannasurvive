@@ -3,6 +3,7 @@ package ru.itplanet.trampline.profile.controller
 import jakarta.validation.constraints.Positive
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -18,6 +19,7 @@ import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.profile.exception.ProfileForbiddenException
 import ru.itplanet.trampline.profile.security.AuthenticatedUser
 import ru.itplanet.trampline.profile.service.EmployerVerificationService
+import java.net.URI
 
 @Validated
 @RestController
@@ -44,6 +46,34 @@ class EmployerVerificationAttachmentController(
             employerUserId = currentUser.userId,
             verificationId = verificationId,
         )
+    }
+
+    @GetMapping("/{verificationId}/attachments/{fileId}")
+    fun openAttachment(
+        @PathVariable
+        @Positive(message = "Идентификатор запроса на верификацию должен быть положительным")
+        verificationId: Long,
+        @PathVariable
+        @Positive(message = "Идентификатор файла должен быть положительным")
+        fileId: Long,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): ResponseEntity<Void> {
+        if (currentUser.role != Role.EMPLOYER) {
+            throw ProfileForbiddenException(
+                message = "Только работодатель может открывать вложения для верификации",
+                code = "employer_role_required",
+            )
+        }
+
+        val downloadUrl = employerVerificationService.getAttachmentDownloadUrl(
+            employerUserId = currentUser.userId,
+            verificationId = verificationId,
+            fileId = fileId,
+        )
+
+        return ResponseEntity.status(HttpStatus.FOUND)
+            .location(URI.create(downloadUrl.url))
+            .build()
     }
 
     @PostMapping(

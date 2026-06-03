@@ -64,6 +64,12 @@ interface ModerationCommandService {
         attachmentId: Long,
     )
 
+    fun deleteEntityAttachment(
+        taskId: Long,
+        currentUser: AuthenticatedUser,
+        attachmentId: Long,
+    )
+
     fun cancel(
         taskId: Long,
         currentUser: AuthenticatedUser,

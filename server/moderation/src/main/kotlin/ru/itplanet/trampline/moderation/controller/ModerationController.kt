@@ -151,6 +151,15 @@ class ModerationController(
         return moderationQueryService.getTaskAttachmentDownloadUrl(taskId, currentUser, fileId)
     }
 
+    @GetMapping("/tasks/{taskId}/entity-attachments/{fileId}/download-url")
+    fun getEntityAttachmentDownloadUrl(
+        @PathVariable @Positive(message = "Идентификатор задачи модерации должен быть положительным") taskId: Long,
+        @PathVariable @Positive(message = "Идентификатор файла должен быть положительным") fileId: Long,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): InternalFileDownloadUrlResponse {
+        return moderationQueryService.getEntityAttachmentDownloadUrl(taskId, currentUser, fileId)
+    }
+
     @PostMapping(
         value = ["/tasks/{taskId}/attachments"],
         consumes = [MediaType.MULTIPART_FORM_DATA_VALUE],
@@ -171,6 +180,16 @@ class ModerationController(
         @CurrentUser currentUser: AuthenticatedUser,
     ): ModerationTaskDetailResponse {
         moderationCommandService.deleteAttachment(taskId, currentUser, attachmentId)
+        return moderationQueryService.getTask(taskId, currentUser)
+    }
+
+    @DeleteMapping("/tasks/{taskId}/entity-attachments/{attachmentId}")
+    fun deleteEntityAttachment(
+        @PathVariable @Positive(message = "Идентификатор задачи модерации должен быть положительным") taskId: Long,
+        @PathVariable @Positive(message = "Идентификатор вложения должен быть положительным") attachmentId: Long,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): ModerationTaskDetailResponse {
+        moderationCommandService.deleteEntityAttachment(taskId, currentUser, attachmentId)
         return moderationQueryService.getTask(taskId, currentUser)
     }
 

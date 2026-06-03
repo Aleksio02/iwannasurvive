@@ -343,6 +343,35 @@ export async function deleteModerationTaskAttachment(taskId, attachmentId) {
     })
 }
 
+export async function deleteModerationEntityAttachment(taskId, attachmentId) {
+    const currentUser = await getRequiredCurrentUserPayload()
+
+    if (!taskId || Number(taskId) <= 0) {
+        throw createApiError('Некорректный идентификатор задачи модерации', 400, {
+            details: { taskId },
+        })
+    }
+
+    if (!attachmentId || Number(attachmentId) <= 0) {
+        throw createApiError('Некорректный идентификатор вложения', 400, {
+            details: { attachmentId },
+        })
+    }
+
+    const query = buildQueryString({
+        currentUser: {
+            userId: currentUser.userId,
+            email: currentUser.email,
+            role: currentUser.role,
+        },
+    })
+
+    return apiRequest(
+        `${API_BASE}/tasks/${Number(taskId)}/entity-attachments/${Number(attachmentId)}?${query}`,
+        { method: 'DELETE' }
+    )
+}
+
 export async function getModerationTaskAttachmentDownloadUrl(taskId, fileId) {
     const currentUser = await getRequiredCurrentUserPayload()
 
@@ -368,5 +397,33 @@ export async function getModerationTaskAttachmentDownloadUrl(taskId, fileId) {
 
     return apiRequest(
         `${API_BASE}/tasks/${Number(taskId)}/attachments/${Number(fileId)}/download-url?${query}`
+    )
+}
+
+export async function getModerationEntityAttachmentDownloadUrl(taskId, fileId) {
+    const currentUser = await getRequiredCurrentUserPayload()
+
+    if (!taskId || Number(taskId) <= 0) {
+        throw createApiError('Некорректный идентификатор задачи модерации', 400, {
+            details: { taskId },
+        })
+    }
+
+    if (!fileId || Number(fileId) <= 0) {
+        throw createApiError('Некорректный идентификатор файла', 400, {
+            details: { fileId },
+        })
+    }
+
+    const query = buildQueryString({
+        currentUser: {
+            userId: currentUser.userId,
+            email: currentUser.email,
+            role: currentUser.role,
+        },
+    })
+
+    return apiRequest(
+        `${API_BASE}/tasks/${Number(taskId)}/entity-attachments/${Number(fileId)}/download-url?${query}`
     )
 }

@@ -253,6 +253,45 @@ class ModerationQueryServiceImpl(
     }
 
     @Transactional(readOnly = true)
+    override fun getEntityAttachmentDownloadUrl(
+        taskId: Long,
+        currentUser: AuthenticatedUser,
+        fileId: Long,
+    ): InternalFileDownloadUrlResponse {
+        val task = moderationTaskDao.findById(taskId)
+            .orElseThrow { ModerationTaskNotFoundException(taskId) }
+
+        ensureTaskVisible(task, currentUser)
+        ensureCanViewAttachments(currentUser)
+
+        val entityAttachmentType = task.entityType.toFileAttachmentEntityTypeOrNull()
+            ?: throw ModerationNotFoundException(
+                message = "Файл сущности модерации не найден",
+                code = "moderation_entity_attachment_not_found",
+            )
+
+        val attachment = try {
+            mediaServiceClient.getAttachments(
+                entityType = entityAttachmentType,
+                entityId = task.entityId,
+            )
+        } catch (ex: FeignException) {
+            throw translateMediaServiceException(ex)
+        }.firstOrNull { attachment ->
+            attachment.fileId == fileId
+        } ?: throw ModerationNotFoundException(
+            message = "Файл сущности модерации не найден",
+            code = "moderation_entity_attachment_not_found",
+        )
+
+        return try {
+            mediaServiceClient.getDownloadUrl(attachment.fileId)
+        } catch (ex: FeignException) {
+            throw translateMediaServiceException(ex)
+        }
+    }
+
+    @Transactional(readOnly = true)
     override fun getEntityHistory(
         entityType: ModerationEntityType,
         entityId: Long,
@@ -553,6 +592,16 @@ class ModerationQueryServiceImpl(
             ModerationEntityType.EMPLOYER_VERIFICATION,
             ModerationEntityType.OPPORTUNITY,
             ModerationEntityType.TAG -> true
+        }
+    }
+
+    private fun ModerationEntityType.toFileAttachmentEntityTypeOrNull(): FileAttachmentEntityType? {
+        return when (this) {
+            ModerationEntityType.APPLICANT_PROFILE -> FileAttachmentEntityType.APPLICANT_PROFILE
+            ModerationEntityType.EMPLOYER_PROFILE -> FileAttachmentEntityType.EMPLOYER_PROFILE
+            ModerationEntityType.EMPLOYER_VERIFICATION -> FileAttachmentEntityType.EMPLOYER_VERIFICATION
+            ModerationEntityType.OPPORTUNITY -> FileAttachmentEntityType.OPPORTUNITY
+            ModerationEntityType.TAG -> null
         }
     }
 

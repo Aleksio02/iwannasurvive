@@ -473,6 +473,48 @@ class ModerationCommandServiceImpl(
         }
     }
 
+    override fun deleteEntityAttachment(
+        taskId: Long,
+        currentUser: AuthenticatedUser,
+        attachmentId: Long,
+    ) {
+        val attachment = transactionTemplate.execute<InternalFileAttachmentResponse> {
+            val task = getTaskForUpdate(taskId)
+            ensureCurrentUserCanModerateTask(task, currentUser)
+            ensureCurrentUserHasModerationRole(currentUser)
+            validateAttachmentAllowed(task)
+            loadEntityAttachment(task, attachmentId)
+        } ?: throw ModerationNotFoundException(
+            message = "Файл сущности модерации не найден",
+            code = "moderation_entity_attachment_not_found",
+        )
+
+        try {
+            mediaServiceClient.deleteAttachment(attachment.attachmentId)
+        } catch (ex: FeignException) {
+            throw translateMediaServiceException(ex)
+        }
+
+        transactionTemplate.executeWithoutResult {
+            val task = getTaskForUpdate(taskId)
+            ensureCurrentUserCanModerateTask(task, currentUser)
+            ensureCurrentUserHasModerationRole(currentUser)
+            validateAttachmentAllowed(task)
+
+            val now = OffsetDateTime.now()
+            task.updatedAt = now
+            moderationTaskDao.save(task)
+
+            saveLog(
+                task = task,
+                action = ModerationLogAction.UPDATED,
+                actorUserId = currentUser.userId,
+                payload = buildEntityAttachmentDeletedPayload(attachment),
+                createdAt = now,
+            )
+        }
+    }
+
     @Transactional
     override fun cancel(
         taskId: Long,
@@ -554,6 +596,31 @@ class ModerationCommandServiceImpl(
             )
     }
 
+    private fun loadEntityAttachment(
+        task: ModerationTaskDto,
+        attachmentId: Long,
+    ): InternalFileAttachmentResponse {
+        val entityAttachmentType = task.entityType.toFileAttachmentEntityTypeOrNull()
+            ?: throw ModerationNotFoundException(
+                message = "Файл сущности модерации не найден",
+                code = "moderation_entity_attachment_not_found",
+            )
+
+        return try {
+            mediaServiceClient.getAttachments(
+                entityType = entityAttachmentType,
+                entityId = task.entityId,
+            )
+        } catch (ex: FeignException) {
+            throw translateMediaServiceException(ex)
+        }.firstOrNull { attachment ->
+            attachment.attachmentId == attachmentId
+        } ?: throw ModerationNotFoundException(
+            message = "Файл сущности модерации не найден",
+            code = "moderation_entity_attachment_not_found",
+        )
+    }
+
     private fun buildAttachmentAddedPayload(
         attachment: InternalFileAttachmentResponse,
     ): ObjectNode {
@@ -581,6 +648,20 @@ class ModerationCommandServiceImpl(
             put("visibility", attachment.visibility)
             put("status", attachment.status)
             put("attachmentRole", attachment.attachmentRole)
+        }
+    }
+
+    private fun buildEntityAttachmentDeletedPayload(
+        attachment: InternalFileAttachmentResponse,
+    ): ObjectNode {
+        return JsonNodeFactory.instance.objectNode().apply {
+            put("updateType", "ENTITY_ATTACHMENT_DELETED")
+            put("attachmentId", attachment.attachmentId)
+            put("fileId", attachment.fileId)
+            put("originalFileName", attachment.file.originalFileName)
+            put("mediaType", attachment.file.mediaType)
+            put("sizeBytes", attachment.file.sizeBytes)
+            put("attachmentRole", attachment.attachmentRole.name)
         }
     }
 
@@ -814,6 +895,15 @@ class ModerationCommandServiceImpl(
         }
     }
 
+    private fun ensureCurrentUserHasModerationRole(currentUser: AuthenticatedUser) {
+        if (currentUser.role != Role.CURATOR && currentUser.role != Role.ADMIN) {
+            throw forbidden(
+                message = "Доступ к вложениям модерации запрещён",
+                code = "moderation_attachment_access_denied",
+            )
+        }
+    }
+
     private fun ensureRejectSupported(task: ModerationTaskDto) {
         if (!supportsHardReject(task.entityType)) {
             throw conflict(
@@ -831,6 +921,16 @@ class ModerationCommandServiceImpl(
             ModerationEntityType.EMPLOYER_VERIFICATION,
             ModerationEntityType.OPPORTUNITY,
             ModerationEntityType.TAG -> true
+        }
+    }
+
+    private fun ModerationEntityType.toFileAttachmentEntityTypeOrNull(): FileAttachmentEntityType? {
+        return when (this) {
+            ModerationEntityType.APPLICANT_PROFILE -> FileAttachmentEntityType.APPLICANT_PROFILE
+            ModerationEntityType.EMPLOYER_PROFILE -> FileAttachmentEntityType.EMPLOYER_PROFILE
+            ModerationEntityType.EMPLOYER_VERIFICATION -> FileAttachmentEntityType.EMPLOYER_VERIFICATION
+            ModerationEntityType.OPPORTUNITY -> FileAttachmentEntityType.OPPORTUNITY
+            ModerationEntityType.TAG -> null
         }
     }
 
