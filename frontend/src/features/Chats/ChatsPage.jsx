@@ -12,6 +12,7 @@ import {
     deleteChatMessageReaction,
     editChatMessage,
     forwardChatMessage,
+    getChatAttachmentContent,
     getChatDialog,
     getChatDialogs,
     getChatAttachmentDownloadUrl,
@@ -240,16 +241,6 @@ function openDownloadUrl(url) {
     link.click()
 }
 
-function downloadFile(url, filename = '') {
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.rel = 'noopener noreferrer'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-}
-
 function getFileExtension(filename = '') {
     const match = filename.match(/\.[a-z0-9]+$/i)
     return match ? match[0] : ''
@@ -267,18 +258,12 @@ function downloadBlobFallback(blob, filename = 'attachment') {
 }
 
 async function fetchAttachmentBlob(dialogId, attachment) {
-    const response = await getChatAttachmentDownloadUrl(dialogId, attachment.id)
-    const fileResponse = await fetch(response.url)
-    if (!fileResponse.ok) {
-        const error = new Error('Не удалось загрузить файл')
-        error.status = fileResponse.status
-        throw error
-    }
-    const blob = await fileResponse.blob()
+    const response = await getChatAttachmentContent(dialogId, attachment.id)
+    const blob = response.blob
     return {
         blob,
-        filename: attachment.originalFileName || 'attachment',
-        mediaType: attachment.mediaType || blob.type || 'application/octet-stream',
+        filename: response.filename || attachment.originalFileName || 'attachment',
+        mediaType: response.contentType || attachment.mediaType || blob.type || 'application/octet-stream',
     }
 }
 
@@ -518,7 +503,6 @@ function ChatsPage() {
     const [isEditSaving, setIsEditSaving] = useState(false)
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
     const [messageMenuPosition, setMessageMenuPosition] = useState(null)
-    const [savingAttachmentMessageId, setSavingAttachmentMessageId] = useState(null)
     const [savingAsAttachmentMessageId, setSavingAsAttachmentMessageId] = useState(null)
     const [copyingAttachmentMessageId, setCopyingAttachmentMessageId] = useState(null)
     const [isReactionMoreOpen, setIsReactionMoreOpen] = useState(false)
@@ -1339,45 +1323,6 @@ function ChatsPage() {
         }
     }
 
-    const saveMessageAttachments = async (message) => {
-        if (!routeDialogId || !message?.id || message.pending || message.failed) return
-        const attachments = (message.attachments || []).filter((attachment) => attachment.id)
-        if (attachments.length === 0 || savingAttachmentMessageId === message.id) return
-
-        setSavingAttachmentMessageId(message.id)
-        closeMessageMenu()
-        try {
-            const results = await Promise.allSettled(
-                attachments.map(async (attachment) => {
-                    const response = await getChatAttachmentDownloadUrl(routeDialogId, attachment.id)
-                    downloadFile(response.url, attachment.originalFileName || '')
-                })
-            )
-            const failedCount = results.filter((result) => result.status === 'rejected').length
-
-            if (failedCount === 0) {
-                toast({ title: attachments.length === 1 ? 'Вложение сохранено' : 'Вложения сохранены' })
-            } else if (failedCount < attachments.length) {
-                toast({
-                    title: 'Часть вложений не удалось сохранить',
-                    description: `${attachments.length - failedCount} из ${attachments.length} сохранено`,
-                    variant: 'destructive',
-                })
-            } else {
-                const firstError = results.find((result) => result.status === 'rejected')?.reason
-                toast({
-                    title: firstError?.status === 403 || firstError?.status === 404
-                        ? 'Файл недоступен'
-                        : 'Не удалось сохранить вложения',
-                    description: 'Файлы недоступны или срок ссылки истёк',
-                    variant: 'destructive',
-                })
-            }
-        } finally {
-            setSavingAttachmentMessageId(null)
-        }
-    }
-
     const saveMessageAttachmentsAs = async (message) => {
         if (!routeDialogId || !message?.id || message.pending || message.failed) return
         const attachments = (message.attachments || []).filter((attachment) => attachment.id)
@@ -1389,8 +1334,8 @@ function ChatsPage() {
             try {
                 const results = await Promise.allSettled(
                     attachments.map(async (attachment) => {
-                        const response = await getChatAttachmentDownloadUrl(routeDialogId, attachment.id)
-                        downloadFile(response.url, attachment.originalFileName || '')
+                        const file = await fetchAttachmentBlob(routeDialogId, attachment)
+                        downloadBlobFallback(file.blob, file.filename)
                     })
                 )
                 const failedCount = results.filter((result) => result.status === 'rejected').length
@@ -2130,19 +2075,6 @@ function ChatsPage() {
                                     )}
                                     {!activeMenuMessage.deletedAt && !activeMenuMessage.pending && !activeMenuMessage.failed && (activeMenuMessage.attachments || []).some((attachment) => attachment.id) && (
                                         <>
-                                            <button
-                                                type="button"
-                                                role="menuitem"
-                                                disabled={savingAttachmentMessageId === activeMenuMessage.id}
-                                                onClick={() => void saveMessageAttachments(activeMenuMessage)}
-                                            >
-                                                {savingAttachmentMessageId === activeMenuMessage.id
-                                                    ? <LoaderCircle className="chats__spinner" size={15} aria-hidden="true" />
-                                                    : <Download size={15} aria-hidden="true" />}
-                                                {(activeMenuMessage.attachments || []).filter((attachment) => attachment.id).length === 1
-                                                    ? 'Сохранить'
-                                                    : 'Сохранить все'}
-                                            </button>
                                             <button
                                                 type="button"
                                                 role="menuitem"
