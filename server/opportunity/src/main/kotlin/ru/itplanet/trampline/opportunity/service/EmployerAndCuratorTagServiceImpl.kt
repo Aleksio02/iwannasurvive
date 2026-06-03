@@ -1,6 +1,8 @@
 package ru.itplanet.trampline.opportunity.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import feign.FeignException
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import ru.itplanet.trampline.commons.model.enums.TagCategory
@@ -15,8 +17,10 @@ import ru.itplanet.trampline.opportunity.dao.TagDao
 import ru.itplanet.trampline.opportunity.dao.dto.TagDto
 import ru.itplanet.trampline.opportunity.exception.OpportunityConflictException
 import ru.itplanet.trampline.opportunity.exception.OpportunityForbiddenException
+import ru.itplanet.trampline.opportunity.exception.OpportunityIntegrationException
 import ru.itplanet.trampline.opportunity.exception.OpportunityNotFoundDomainException
 import ru.itplanet.trampline.opportunity.model.EmployerTagResponse
+import ru.itplanet.trampline.opportunity.model.TagModerationDetailsResponse
 import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerTagRequest
@@ -113,17 +117,23 @@ class EmployerAndCuratorTagServiceImpl(
             )
         }
 
-        val saved = tagDao.save(
-            TagDto().apply {
-                name = normalizedName
-                this.normalizedName = normalizedName
-                category = request.category
-                this.createdByType = createdByType
-                createdByUserId = currentUserId
-                moderationStatus = TagModerationStatus.PENDING
-                isActive = false
-            },
-        )
+        val saved = try {
+            tagDao.saveAndFlush(
+                TagDto().apply {
+                    name = normalizedName
+                    category = request.category
+                    this.createdByType = createdByType
+                    createdByUserId = currentUserId
+                    moderationStatus = TagModerationStatus.PENDING
+                    isActive = false
+                },
+            )
+        } catch (ex: DataIntegrityViolationException) {
+            throw OpportunityConflictException(
+                message = "Тег с таким названием и категорией уже существует",
+                code = "tag_already_exists",
+            )
+        }
 
         ensureModerationTask(
             currentUserId = currentUserId,
@@ -159,7 +169,7 @@ class EmployerAndCuratorTagServiceImpl(
                 )
             !search.isNullOrBlank() ->
                 tagDao.findAllByCreatedByTypeAndCreatedByUserIdAndNameContainingIgnoreCaseOrderByIdDesc(
-                    createdByType, currentUserId, search!!
+                    createdByType, currentUserId, search
                 )
             else ->
                 tagDao.findAllByCreatedByTypeAndCreatedByUserIdOrderByIdDesc(
@@ -177,6 +187,19 @@ class EmployerAndCuratorTagServiceImpl(
     ): EmployerTagResponse {
         val tag = getOwnedTag(currentUserId, createdByType, tagId)
         return toResponse(tag)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getEmployerTagModerationDetails(
+        currentUserId: Long,
+        tagId: Long,
+    ): TagModerationDetailsResponse {
+        val tag = getOwnedTag(
+            currentUserId = currentUserId,
+            createdByType = CreatedByType.EMPLOYER,
+            tagId = tagId,
+        )
+        return buildModerationDetails(tag)
     }
 
     @Transactional(readOnly = true)
@@ -199,7 +222,7 @@ class EmployerAndCuratorTagServiceImpl(
             category != null ->
                 tagDao.findAllByCreatedByTypeAndCategoryOrderByIdDesc(createdByType, category)
             !search.isNullOrBlank() ->
-                tagDao.findAllByCreatedByTypeAndNameContainingIgnoreCaseOrderByIdDesc(createdByType, search!!)
+                tagDao.findAllByCreatedByTypeAndNameContainingIgnoreCaseOrderByIdDesc(createdByType, search)
             else ->
                 tagDao.findAllByCreatedByTypeOrderByIdDesc(createdByType)
         }
@@ -220,6 +243,19 @@ class EmployerAndCuratorTagServiceImpl(
             throw OpportunityForbiddenException("Доступ запрещён", "not_owner")
         }
         return toResponse(tag)
+    }
+
+    @Transactional(readOnly = true)
+    override fun getCuratorTagModerationDetails(
+        currentUserId: Long,
+        createdByType: CreatedByType,
+        tagId: Long,
+    ): TagModerationDetailsResponse {
+        val tag = getCuratorAccessibleTag(
+            createdByType = createdByType,
+            tagId = tagId,
+        )
+        return buildModerationDetails(tag)
     }
 
     @Transactional
@@ -312,17 +348,42 @@ class EmployerAndCuratorTagServiceImpl(
         createdByType: CreatedByType,
         tag: TagDto,
     ) {
-        moderationServiceClient.createTask(
-            CreateInternalModerationTaskRequest(
-                entityType = ModerationEntityType.TAG,
-                entityId = requireNotNull(tag.id),
-                taskType = ModerationTaskType.TAG_REVIEW,
-                priority = ModerationTaskPriority.MEDIUM,
-                createdByUserId = currentUserId,
-                snapshot = objectMapper.valueToTree(toResponse(tag)),
-                sourceService = "opportunity",
-                sourceAction = sourceAction(createdByType),
-            ),
+        try {
+            moderationServiceClient.createTask(
+                CreateInternalModerationTaskRequest(
+                    entityType = ModerationEntityType.TAG,
+                    entityId = requireNotNull(tag.id),
+                    taskType = ModerationTaskType.TAG_REVIEW,
+                    priority = ModerationTaskPriority.MEDIUM,
+                    createdByUserId = currentUserId,
+                    snapshot = objectMapper.valueToTree(toResponse(tag)),
+                    sourceService = "opportunity",
+                    sourceAction = sourceAction(createdByType),
+                ),
+            )
+        } catch (ex: FeignException) {
+            throw OpportunityIntegrationException(
+                message = "Сервис модерации временно недоступен",
+                code = "moderation_service_unavailable",
+            )
+        }
+    }
+
+    private fun buildModerationDetails(
+        tag: TagDto,
+    ): TagModerationDetailsResponse {
+        val taskLookup = moderationServiceClient.getLatestTaskByEntity(
+            entityType = ModerationEntityType.TAG,
+            entityId = requireNotNull(tag.id),
+            taskType = ModerationTaskType.TAG_REVIEW,
+        )
+        val task = taskLookup.task
+
+        return TagModerationDetailsResponse(
+            tag = toResponse(tag),
+            task = task,
+            hasTask = taskLookup.exists,
+            hasActiveTask = task?.active == true,
         )
     }
 
@@ -365,6 +426,27 @@ class EmployerAndCuratorTagServiceImpl(
                 message = "Изменять состояние модерации может только владелец тега",
                 code = "tag_owner_required",
             )
+        }
+
+        return tag
+    }
+
+    private fun getCuratorAccessibleTag(
+        createdByType: CreatedByType,
+        tagId: Long,
+    ): TagDto {
+        ensureSupportedCreatedByType(createdByType)
+
+        val tag = tagDao.findById(tagId)
+            .orElseThrow {
+                OpportunityNotFoundDomainException(
+                    message = "Тег не найден",
+                    code = "tag_not_found",
+                )
+            }
+
+        if (tag.createdByType != createdByType) {
+            throw OpportunityForbiddenException("Доступ запрещён", "not_owner")
         }
 
         return tag

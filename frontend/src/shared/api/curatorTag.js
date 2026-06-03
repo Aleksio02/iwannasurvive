@@ -22,6 +22,10 @@ export async function getModerationTask(id) {
   return httpJson(`${BASE_URL}/${id}/moderation-task`);
 }
 
+export async function getCuratorTagModerationDetails(id) {
+  return httpJson(`${BASE_URL}/${id}/moderation-details`);
+}
+
 export async function approveModerationTag(id) {
   return httpJson(`${BASE_URL}/${id}/approve`, {
     method: 'POST',

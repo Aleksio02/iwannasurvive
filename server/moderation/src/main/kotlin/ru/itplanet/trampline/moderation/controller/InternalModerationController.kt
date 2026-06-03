@@ -16,6 +16,7 @@ import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTa
 import ru.itplanet.trampline.commons.model.moderation.InternalCuratorModerationStatsResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskResponse
+import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskSummaryLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 import ru.itplanet.trampline.moderation.service.ModerationCommandService
@@ -45,6 +46,19 @@ class InternalModerationController(
         @RequestParam taskType: ModerationTaskType,
     ): InternalModerationTaskLookupResponse {
         return moderationQueryService.findActiveTaskByEntity(
+            entityType = entityType,
+            entityId = entityId,
+            taskType = taskType,
+        )
+    }
+
+    @GetMapping("/tasks/by-entity/latest")
+    fun getLatestTaskByEntity(
+        @RequestParam entityType: ModerationEntityType,
+        @RequestParam @Positive(message = "Идентификатор сущности должен быть положительным") entityId: Long,
+        @RequestParam taskType: ModerationTaskType,
+    ): InternalModerationTaskSummaryLookupResponse {
+        return moderationQueryService.findLatestTaskSummaryByEntity(
             entityType = entityType,
             entityId = entityId,
             taskType = taskType,

@@ -17,6 +17,7 @@ function CustomSelect({
                           error,
                           required = false,
                           inModal = false,
+                          disabled = false,
                       }) {
     const [isOpen, setIsOpen] = useState(false)
     const [activeIndex, setActiveIndex] = useState(-1)
@@ -81,6 +82,7 @@ function CustomSelect({
 
     const handleKeyDown = (event) => {
         if (!safeOptions.length) return
+        if (disabled) return
 
         if (event.key === 'ArrowDown') {
             event.preventDefault()
@@ -112,6 +114,7 @@ function CustomSelect({
             onMouseEnter={() => setActiveIndex(idx)}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
+                if (disabled) return
                 onChange(option.value)
                 setIsOpen(false)
             }}
@@ -171,11 +174,13 @@ function CustomSelect({
                     ref={buttonRef}
                     type="button"
                     className={`custom-select__button ${error ? 'is-error' : ''}`}
-                    onClick={() => setIsOpen((v) => !v)}
+                    onClick={() => {
+                        if (!disabled) setIsOpen((v) => !v)
+                    }}
                     onKeyDown={handleKeyDown}
                     aria-expanded={isOpen}
                     title={displayText}
-                    disabled={safeOptions.length === 0}
+                    disabled={disabled || safeOptions.length === 0}
                 >
                     <span className="custom-select__text">{truncatedText}</span>
                     <span className={`custom-select__arrow ${isOpen ? 'is-open' : ''}`}>▾</span>
