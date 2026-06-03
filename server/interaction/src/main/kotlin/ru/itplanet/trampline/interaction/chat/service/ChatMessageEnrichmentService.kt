@@ -106,6 +106,6 @@ class ChatMessageEnrichmentService(
     }
 
     companion object {
-        val ALLOWED_REACTIONS = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
+        val ALLOWED_REACTIONS = listOf("👍", "❤️", "😂", "😮", "🙏", "😢", "🔥", "👏", "🎉", "🤔", "👀", "✅", "🚀")
     }
 }
