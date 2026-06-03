@@ -19,6 +19,9 @@
   width: 90%;
   max-width: 520px;
   box-shadow: 0 24px 60px rgba(16, 42, 67, 0.18);
+  position: relative;
+  overflow: visible;
+  z-index: 1001;
 }
 
 .formContainer h3 {
@@ -31,6 +34,11 @@
   display: grid;
   gap: 8px;
   margin-bottom: 14px;
+  position: relative;
+}
+
+:global(.custom-select__menu-portal) {
+  z-index: 1100 !important;
 }
 
 .error {
@@ -45,6 +53,8 @@
   justify-content: flex-start;
   gap: 12px;
   margin-top: 20px;
+  position: relative;
+  z-index: 1;
 }
 
 .actions :global(.button) {
