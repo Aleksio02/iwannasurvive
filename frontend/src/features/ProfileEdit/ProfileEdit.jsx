@@ -1411,13 +1411,6 @@ function ProfileEdit() {
         <div className="profile-edit">
             <Card className="profile-edit__card">
                 <CardHeader>
-                    <button
-                        type="button"
-                        className="profile-edit__back"
-                        onClick={() => navigate(returnTo)}
-                    >
-                        ← Назад
-                    </button>
                     <CardTitle>
                         {isEmployer ? 'Профиль компании' : 'Личная информация'}
                     </CardTitle>
@@ -1907,14 +1900,6 @@ function ProfileEdit() {
                                     : isEmployer
                                         ? 'Сохранить и перейти в кабинет'
                                         : 'Сохранить профиль'}
-                            </Button>
-                            <Button
-                                type="button"
-                                className="button--ghost"
-                                onClick={() => navigate(returnTo)}
-                                disabled={isSubmitting}
-                            >
-                                Отмена
                             </Button>
                         </div>
                     </form>
