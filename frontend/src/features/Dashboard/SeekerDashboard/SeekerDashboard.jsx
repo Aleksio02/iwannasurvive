@@ -43,7 +43,12 @@ import {
     invalidateSavedFavoritesCache,
     removeEmployerFromSaved,
 } from '@/shared/api/favorites'
-import { listOpportunities, listTags } from '@/shared/api/opportunities'
+import {
+    analyzeResumeForRecommendations,
+    listOpportunities,
+    listTags,
+    OPPORTUNITY_LABELS,
+} from '@/shared/api/opportunities'
 import { ensureChatByResponse } from '@/shared/api/chats'
 import ApplicantTagsEditor from '@/features/ProfileEdit/components/ApplicantTagsEditor'
 const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
@@ -76,6 +81,8 @@ const CONTACTS_BASED_VISIBILITY_OPTIONS = [
 ]
 const DASHBOARD_LIST_INITIAL_LIMIT = 12
 const DASHBOARD_LIST_PAGE_STEP = 12
+const MAX_PROFILE_SKILLS = 12
+const MAX_PROFILE_INTERESTS = 8
 
 const DASHBOARD_TAB_ITEMS = [
     { key: 'profile', label: 'Профиль' },
@@ -424,6 +431,12 @@ function SeekerDashboard() {
     const [draftSkillTagIds, setDraftSkillTagIds] = useState([])
     const [draftInterestTagIds, setDraftInterestTagIds] = useState([])
     const [isSavingTags, setIsSavingTags] = useState(false)
+    const [resumeAnalysisSource, setResumeAnalysisSource] = useState('TEXT')
+    const [resumeAnalysisResult, setResumeAnalysisResult] = useState(null)
+    const [isResumeAnalysisResultCollapsed, setIsResumeAnalysisResultCollapsed] = useState(false)
+    const [isResumeAnalysisLoading, setIsResumeAnalysisLoading] = useState(false)
+    const [resumeAnalysisError, setResumeAnalysisError] = useState('')
+    const [isApplyingResumeTags, setIsApplyingResumeTags] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [isContactsLoading, setIsContactsLoading] = useState(false)
     const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(false)
@@ -435,6 +448,7 @@ function SeekerDashboard() {
 
     const avatarInputRef = useRef(null)
     const resumeFileInputRef = useRef(null)
+    const resumeBlockRef = useRef(null)
     const portfolioFileInputRef = useRef(null)
     const dashboardTabsRef = useRef(null)
     const dashboardTabButtonRefs = useRef({})
@@ -521,6 +535,32 @@ function SeekerDashboard() {
         () => Array.isArray(profile.interests) ? profile.interests : [],
         [profile.interests]
     )
+    const profileSkillIdSet = useMemo(
+        () => new Set(profileSkills.map((tag) => tag.id).filter(Boolean)),
+        [profileSkills]
+    )
+    const profileInterestIdSet = useMemo(
+        () => new Set(profileInterests.map((tag) => tag.id).filter(Boolean)),
+        [profileInterests]
+    )
+    const canShowResumeAnalysis = Boolean(user?.id) && (!user?.role || user.role === 'APPLICANT')
+    const hasProfileResumeText = Boolean(profile.resumeText?.trim())
+    const hasProfileResumeFile = Boolean(profile.resumeFile?.fileId)
+    const hasAnyResumeAnalysisSource = hasProfileResumeText || hasProfileResumeFile
+    const hasMultipleResumeAnalysisSources = hasProfileResumeText && hasProfileResumeFile
+    const canAnalyzeSelectedResumeSource =
+        (resumeAnalysisSource === 'TEXT' && hasProfileResumeText) ||
+        (resumeAnalysisSource === 'FILE' && hasProfileResumeFile)
+    const resumeAnalysisInputText = resumeAnalysisSource === 'TEXT' ? profile.resumeText : ''
+    const resumeAnalysisSkillSuggestions = Array.isArray(resumeAnalysisResult?.suggestedSkillTags)
+        ? resumeAnalysisResult.suggestedSkillTags
+        : []
+    const resumeAnalysisInterestSuggestions = Array.isArray(resumeAnalysisResult?.suggestedInterestTags)
+        ? resumeAnalysisResult.suggestedInterestTags
+        : []
+    const newResumeSkillSuggestions = resumeAnalysisSkillSuggestions.filter((tag) => !profileSkillIdSet.has(tag.id))
+    const newResumeInterestSuggestions = resumeAnalysisInterestSuggestions.filter((tag) => !profileInterestIdSet.has(tag.id))
+    const hasNewResumeTagSuggestions = newResumeSkillSuggestions.length > 0 || newResumeInterestSuggestions.length > 0
     const hasSkills = profileSkills.length > 0
     const hasInterests = profileInterests.length > 0
 
@@ -610,6 +650,121 @@ function SeekerDashboard() {
         }
     }
 
+    const handleAnalyzeResume = async () => {
+        const text = String(resumeAnalysisInputText || '').trim()
+
+        if (!canAnalyzeSelectedResumeSource) {
+            setResumeAnalysisError('Добавьте резюме в блоке ниже.')
+            return
+        }
+
+        setIsResumeAnalysisLoading(true)
+        setResumeAnalysisError('')
+        setResumeAnalysisResult(null)
+        setIsResumeAnalysisResultCollapsed(false)
+
+        try {
+            const result = await analyzeResumeForRecommendations({
+                source: resumeAnalysisSource,
+                resumeText: resumeAnalysisSource === 'TEXT' ? text : '',
+            })
+            setResumeAnalysisResult(result)
+            setIsResumeAnalysisResultCollapsed(false)
+        } catch {
+            setResumeAnalysisError('Не удалось выполнить анализ. Попробуйте позже.')
+        } finally {
+            setIsResumeAnalysisLoading(false)
+        }
+    }
+
+    const mergeTagIdsWithLimit = (currentTags, suggestedTags, maxCount) => {
+        const currentIds = currentTags.map((tag) => tag.id).filter(Boolean)
+        const mergedIds = [...currentIds]
+
+        suggestedTags.forEach((tag) => {
+            if (tag?.id && !mergedIds.includes(tag.id)) {
+                mergedIds.push(tag.id)
+            }
+        })
+
+        const limitedIds = mergedIds.slice(0, maxCount)
+        const addedCount = limitedIds.filter((id) => !currentIds.includes(id)).length
+
+        return {
+            ids: limitedIds,
+            addedCount,
+            wasLimited: mergedIds.length > limitedIds.length,
+        }
+    }
+
+    const handleApplyResumeTags = async () => {
+        if (!resumeAnalysisResult || !hasNewResumeTagSuggestions) return
+
+        const mergedSkills = mergeTagIdsWithLimit(
+            profileSkills,
+            resumeAnalysisSkillSuggestions,
+            MAX_PROFILE_SKILLS
+        )
+        const mergedInterests = mergeTagIdsWithLimit(
+            profileInterests,
+            resumeAnalysisInterestSuggestions,
+            MAX_PROFILE_INTERESTS
+        )
+        const addedCount = mergedSkills.addedCount + mergedInterests.addedCount
+
+        if (addedCount === 0) {
+            toast({
+                title: 'Лимит достигнут',
+                description: 'Удалите часть тегов, чтобы добавить новые.',
+            })
+            return
+        }
+
+        setIsApplyingResumeTags(true)
+
+        try {
+            const updatedProfile = await updateApplicantProfile({
+                ...profile,
+                skillTagIds: mergedSkills.ids,
+                interestTagIds: mergedInterests.ids,
+            })
+
+            applyProfileFromApi({ ...profile, ...updatedProfile }, user)
+            toast({
+                title: 'Профиль обновлён',
+                description: mergedSkills.wasLimited || mergedInterests.wasLimited
+                    ? 'Добавили часть тегов: достигнут лимит.'
+                    : 'Профиль обновлён',
+            })
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось применить теги',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsApplyingResumeTags(false)
+        }
+    }
+
+    const handleOpenResumeTextEditor = () => {
+        setIsEditing(false)
+        setIsEditingResume(true)
+
+        window.setTimeout(() => {
+            resumeBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 0)
+    }
+
+    const handleResumeAnalysisSourceChange = (nextSource) => {
+        if (nextSource === resumeAnalysisSource) return
+
+        setResumeAnalysisSource(nextSource)
+        setResumeAnalysisResult(null)
+        setResumeAnalysisError('')
+        setIsResumeAnalysisResultCollapsed(false)
+    }
+
     useEffect(() => {
         const shouldOpenSkillsEditor = new URLSearchParams(window.location.search).get('edit') === 'skills'
 
@@ -626,6 +781,17 @@ function SeekerDashboard() {
         setActiveTab('profile')
         void openTagsEditor()
     }, [isLoading, openTagsEditor, profile.userId])
+
+    useEffect(() => {
+        if (resumeAnalysisSource === 'TEXT' && !hasProfileResumeText && hasProfileResumeFile) {
+            setResumeAnalysisSource('FILE')
+            return
+        }
+
+        if (resumeAnalysisSource === 'FILE' && !hasProfileResumeFile && hasProfileResumeText) {
+            setResumeAnalysisSource('TEXT')
+        }
+    }, [hasProfileResumeFile, hasProfileResumeText, resumeAnalysisSource])
 
     const applyWorkspaceFromApi = useCallback((workspaceData, currentUser) => {
         const currentProfile = workspaceData?.currentProfile || workspaceData
@@ -2058,6 +2224,246 @@ function SeekerDashboard() {
         </div>
     )
 
+    const renderResumeAnalysisTagChips = (tags, existingIds) => {
+        if (!tags.length) {
+            return <span className="resume-analysis-card__empty">Не найдены</span>
+        }
+
+        return (
+            <div className="resume-analysis-card__chips">
+                {tags.map((tag) => {
+                    const isExisting = existingIds.has(tag.id)
+
+                    return (
+                        <span
+                            key={`${tag.category}-${tag.id}`}
+                            className={`resume-analysis-card__chip ${isExisting ? 'is-existing' : ''}`}
+                        >
+                            {tag.name}
+                            {isExisting && <small>уже в профиле</small>}
+                        </span>
+                    )
+                })}
+            </div>
+        )
+    }
+
+    const renderResumeAnalysisBlock = () => {
+        if (!canShowResumeAnalysis) return null
+
+        const improvementTips = Array.isArray(resumeAnalysisResult?.improvementTips)
+            ? resumeAnalysisResult.improvementTips
+            : []
+        const opportunityPreview = Array.isArray(resumeAnalysisResult?.opportunityPreview)
+            ? resumeAnalysisResult.opportunityPreview
+            : []
+        const resumeTextLength = String(profile.resumeText || '').trim().length
+        const resumeFileName = profile.resumeFile?.originalFileName || 'Файл резюме'
+        const selectedSourceTitle = resumeAnalysisSource === 'FILE'
+            ? 'PDF из профиля'
+            : 'Текст из профиля'
+        const selectedSourceDetail = resumeAnalysisSource === 'FILE'
+            ? resumeFileName
+            : 'Готов к анализу.'
+        const selectedSourceMeta = resumeAnalysisSource === 'FILE'
+            ? (profile.resumeFile?.sizeBytes ? formatFileSize(profile.resumeFile.sizeBytes) : 'PDF')
+            : `${resumeTextLength} симв.`
+        const totalSuggestionsCount = resumeAnalysisSkillSuggestions.length + resumeAnalysisInterestSuggestions.length
+        const newSuggestionsCount = newResumeSkillSuggestions.length + newResumeInterestSuggestions.length
+        const resultMetrics = [
+            `${totalSuggestionsCount} тегов`,
+            `${improvementTips.length} советов`,
+            opportunityPreview.length > 0 ? `${opportunityPreview.length} возможностей` : null,
+        ].filter(Boolean)
+
+        return (
+            <section className="profile-overview-card profile-overview-card--wide resume-analysis-card">
+                <div className="profile-overview-card__header resume-analysis-card__header">
+                    <div>
+                        <h3>Анализ резюме</h3>
+                        <p>Проверим текст и предложим навыки.</p>
+                    </div>
+                    <button
+                        type="button"
+                        className="profile-overview-card__action"
+                        onClick={() => void handleAnalyzeResume()}
+                        disabled={isResumeAnalysisLoading || !canAnalyzeSelectedResumeSource}
+                    >
+                        {isResumeAnalysisLoading ? 'Анализируем...' : 'Проанализировать'}
+                    </button>
+                </div>
+
+                {hasAnyResumeAnalysisSource ? (
+                    <div className="resume-analysis-card__source">
+                        <div>
+                            <span>{selectedSourceTitle}</span>
+                            <p>{selectedSourceDetail}</p>
+                        </div>
+                        {hasMultipleResumeAnalysisSources ? (
+                            <div className="resume-analysis-card__source-switch" role="group" aria-label="Источник анализа резюме">
+                                <button
+                                    type="button"
+                                    className={resumeAnalysisSource === 'TEXT' ? 'is-active' : ''}
+                                    onClick={() => handleResumeAnalysisSourceChange('TEXT')}
+                                >
+                                    Текст
+                                </button>
+                                <button
+                                    type="button"
+                                    className={resumeAnalysisSource === 'FILE' ? 'is-active' : ''}
+                                    onClick={() => handleResumeAnalysisSourceChange('FILE')}
+                                >
+                                    PDF
+                                </button>
+                            </div>
+                        ) : (
+                            <strong>{selectedSourceMeta}</strong>
+                        )}
+                    </div>
+                ) : (
+                    <div className="resume-analysis-card__missing">
+                        <p>Добавьте текст или PDF в блоке ниже.</p>
+                        <button
+                            type="button"
+                            className="btn-secondary-small"
+                            onClick={handleOpenResumeTextEditor}
+                        >
+                            Добавить резюме
+                        </button>
+                    </div>
+                )}
+
+                {isResumeAnalysisLoading && (
+                    <div className="resume-analysis-card__loading">
+                        <div className="loading-spinner"></div>
+                        <div>
+                            <span>Анализируем...</span>
+                            <div className="resume-analysis-card__skeleton">
+                                <i></i>
+                                <i></i>
+                                <i></i>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {!isResumeAnalysisLoading && resumeAnalysisError && (
+                    <div className="resume-analysis-card__error">
+                        <p>{resumeAnalysisError}</p>
+                        <button
+                            type="button"
+                            className="btn-secondary-small"
+                            onClick={() => void handleAnalyzeResume()}
+                        >
+                            Повторить
+                        </button>
+                    </div>
+                )}
+
+                {!isResumeAnalysisLoading && resumeAnalysisResult && (
+                    <div className={`resume-analysis-card__result ${isResumeAnalysisResultCollapsed ? 'is-collapsed' : ''}`}>
+                        <div className="resume-analysis-card__result-head">
+                            <div className="resume-analysis-card__result-copy">
+                                {resumeAnalysisResult.summary && (
+                                    <p className="resume-analysis-card__summary">{resumeAnalysisResult.summary}</p>
+                                )}
+                                <div className="resume-analysis-card__result-meta">
+                                    {resultMetrics.map((item) => (
+                                        <span key={item}>{item}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="resume-analysis-card__result-actions">
+                                <button
+                                    type="button"
+                                    className="btn-primary-small"
+                                    onClick={() => void handleApplyResumeTags()}
+                                    disabled={!hasNewResumeTagSuggestions || isApplyingResumeTags}
+                                >
+                                    {isApplyingResumeTags ? 'Сохраняем...' : 'Применить к профилю'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn-secondary-small"
+                                    onClick={() => setIsResumeAnalysisResultCollapsed((prev) => !prev)}
+                                >
+                                    {isResumeAnalysisResultCollapsed ? 'Показать результат' : 'Скрыть результат'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {!isResumeAnalysisResultCollapsed && (
+                            <>
+                                <div className="resume-analysis-card__section">
+                                    <div className="resume-analysis-card__section-head">
+                                        <h4>Предложенные теги</h4>
+                                        {newSuggestionsCount > 0 && <span>{newSuggestionsCount} новых</span>}
+                                    </div>
+                                    <div className="resume-analysis-card__suggestions">
+                                        <div>
+                                            <span className="profile-overview-card__label">Навыки</span>
+                                            {renderResumeAnalysisTagChips(resumeAnalysisSkillSuggestions, profileSkillIdSet)}
+                                        </div>
+                                        <div>
+                                            <span className="profile-overview-card__label">Интересы</span>
+                                            {renderResumeAnalysisTagChips(resumeAnalysisInterestSuggestions, profileInterestIdSet)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {improvementTips.length > 0 && (
+                                    <div className="resume-analysis-card__section resume-analysis-card__tips">
+                                        <div className="resume-analysis-card__section-head">
+                                            <h4>Что улучшить</h4>
+                                        </div>
+                                        <ul>
+                                            {improvementTips.slice(0, 5).map((tip) => (
+                                                <li key={tip}>{tip}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {opportunityPreview.length > 0 && (
+                                    <div className="resume-analysis-card__section resume-analysis-card__opportunities">
+                                        <div className="resume-analysis-card__section-head">
+                                            <h4>Может подойти</h4>
+                                        </div>
+                                        <div className="resume-analysis-card__opportunity-list">
+                                            {opportunityPreview.slice(0, 3).map((opportunity) => (
+                                                <article key={opportunity.id} className="resume-analysis-card__opportunity">
+                                                    <div>
+                                                        <h5>{opportunity.title}</h5>
+                                                        <p>{opportunity.companyName}</p>
+                                                        <div className="resume-analysis-card__opportunity-meta">
+                                                            {opportunity.type && (
+                                                                <span>{OPPORTUNITY_LABELS.type[opportunity.type] || opportunity.type}</span>
+                                                            )}
+                                                            {opportunity.workFormat && (
+                                                                <span>{OPPORTUNITY_LABELS.workFormat[opportunity.workFormat] || opportunity.workFormat}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-secondary-small"
+                                                        onClick={() => navigate(`/opportunities/${opportunity.id}`)}
+                                                    >
+                                                        Подробнее
+                                                    </button>
+                                                </article>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                )}
+            </section>
+        )
+    }
+
     useEffect(() => {
         setVisibleApplicationsCount(DASHBOARD_LIST_INITIAL_LIMIT)
     }, [applications.length])
@@ -2426,6 +2832,7 @@ function SeekerDashboard() {
                                     </div>
                                 )}
                             </section>
+                            {renderResumeAnalysisBlock()}
                         </div>
 
                         {isEditing && (
@@ -2600,7 +3007,7 @@ function SeekerDashboard() {
                                     )}
                                 </div>
 
-                                <div className="info-block">
+                                <div className="info-block" ref={resumeBlockRef}>
                                     <div className="info-block__header">
                                         <h3>Резюме</h3>
                                         <button className="info-block__edit-btn" onClick={() => setIsEditingResume(!isEditingResume)}>

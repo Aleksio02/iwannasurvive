@@ -85,6 +85,18 @@ app:
       max-partial-skill-tags: ${AI_RECOMMENDATION_MAX_PARTIAL_SKILL_TAGS:3}
       max-reasons: 3
       max-improvement-tips: 3
+    resume-analysis:
+      enabled: ${AI_RESUME_ANALYSIS_ENABLED:false}
+      prompt-version: ai-resume-analysis-v1
+      max-input-chars: 6000
+      max-candidate-tags: 300
+      max-suggested-skills: 10
+      max-suggested-interests: 5
+      max-strengths: 4
+      max-improvement-tips: 5
+      max-opportunity-preview: 3
+      min-input-chars: 80
+      max-file-bytes: 20971520
     yandex-gpt:
       endpoint: ${YANDEX_AI_ENDPOINT:https://llm.api.cloud.yandex.net/foundationModels/v1/completion}
       folder-id: ${YANDEX_AI_FOLDER_ID:}

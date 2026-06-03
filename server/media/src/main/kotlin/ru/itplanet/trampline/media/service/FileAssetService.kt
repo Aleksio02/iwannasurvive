@@ -52,6 +52,34 @@ class FileAssetService(
         }
     }
 
+    @Transactional(readOnly = true)
+    fun getContent(fileId: Long): FileContent {
+        val fileAsset = findExistingNotDeletedFile(fileId)
+
+        if (fileAsset.status != FileAssetStatus.READY) {
+            throw MediaConflictException(
+                message = "Скачать содержимое можно только для файла в статусе READY",
+                code = "file_download_not_ready",
+                details = mapOf("status" to fileAsset.status.name),
+            )
+        }
+
+        val bytes = try {
+            objectStorage.getObjectBytes(fileAsset.storageKey)
+        } catch (_: Exception) {
+            throw MediaIntegrationException(
+                message = "Не удалось скачать содержимое файла",
+                code = "file_content_download_failed",
+            )
+        }
+
+        return FileContent(
+            bytes = bytes,
+            mediaType = fileAsset.mediaType,
+            originalFileName = fileAsset.originalFileName,
+        )
+    }
+
     fun upload(
         file: MultipartFile,
         ownerUserId: Long,
@@ -166,4 +194,10 @@ class FileAssetService(
             "%02x".format(byte)
         }
     }
+
+    data class FileContent(
+        val bytes: ByteArray,
+        val mediaType: String,
+        val originalFileName: String,
+    )
 }
