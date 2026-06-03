@@ -111,6 +111,50 @@ export function getChatAttachmentDownloadUrl(dialogId, attachmentId) {
     })
 }
 
+function extractFilenameFromContentDisposition(value = '') {
+    const utfMatch = value.match(/filename\*=UTF-8''([^;]+)/i)
+    if (utfMatch) {
+        try {
+            return decodeURIComponent(utfMatch[1])
+        } catch {
+            return utfMatch[1]
+        }
+    }
+
+    const plainMatch = value.match(/filename="?([^";]+)"?/i)
+    return plainMatch?.[1] || ''
+}
+
+export async function getChatAttachmentContent(dialogId, attachmentId) {
+    let response
+    try {
+        response = await fetch(`${API_BASE}/${dialogId}/attachments/${attachmentId}/content`, {
+            method: 'GET',
+            credentials: 'include',
+        })
+    } catch {
+        throw new Error('Сервер недоступен. Попробуйте позже.')
+    }
+
+    if (!response.ok) {
+        const data = await parseResponseBody(response)
+        const error = new Error(
+            (typeof data === 'object' && (data?.message || data?.error)) ||
+            (typeof data === 'string' && data) ||
+            'Не удалось загрузить файл'
+        )
+        error.status = response.status
+        throw error
+    }
+
+    const blob = await response.blob()
+    return {
+        blob,
+        contentType: response.headers.get('content-type') || blob.type || 'application/octet-stream',
+        filename: extractFilenameFromContentDisposition(response.headers.get('content-disposition') || ''),
+    }
+}
+
 export function markChatRead(dialogId, lastReadMessageId) {
     return httpJson(`${API_BASE}/${dialogId}/read`, {
         method: 'POST',

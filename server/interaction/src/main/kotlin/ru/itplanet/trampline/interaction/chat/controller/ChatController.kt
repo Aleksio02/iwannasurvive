@@ -2,8 +2,10 @@ package ru.itplanet.trampline.interaction.chat.controller
 
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Positive
+import org.springframework.core.io.Resource
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -323,6 +325,23 @@ class ChatController(
         @CurrentUser currentUser: AuthenticatedUser,
     ): ChatAttachmentDownloadUrlResponse {
         return chatMessageCommandService.getAttachmentDownloadUrl(
+            dialogId = dialogId,
+            attachmentId = attachmentId,
+            currentUser = currentUser,
+        )
+    }
+
+    @GetMapping("/{dialogId}/attachments/{attachmentId}/content")
+    fun getAttachmentContent(
+        @PathVariable
+        @Positive(message = "Идентификатор диалога должен быть положительным")
+        dialogId: Long,
+        @PathVariable
+        @Positive(message = "Идентификатор вложения должен быть положительным")
+        attachmentId: Long,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): ResponseEntity<Resource> {
+        return chatMessageCommandService.getAttachmentContent(
             dialogId = dialogId,
             attachmentId = attachmentId,
             currentUser = currentUser,

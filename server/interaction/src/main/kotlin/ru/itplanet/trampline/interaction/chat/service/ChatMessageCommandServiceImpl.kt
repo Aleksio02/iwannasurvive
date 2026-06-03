@@ -1,6 +1,14 @@
 package ru.itplanet.trampline.interaction.chat.service
 
 import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.core.io.ByteArrayResource
+import org.springframework.core.io.Resource
+import org.springframework.http.CacheControl
+import org.springframework.http.ContentDisposition
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
@@ -25,9 +33,15 @@ import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentDownl
 import ru.itplanet.trampline.interaction.client.MediaServiceClient
 import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
 import ru.itplanet.trampline.interaction.exception.InteractionForbiddenException
+import ru.itplanet.trampline.interaction.exception.InteractionIntegrationException
 import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.time.OffsetDateTime
+import java.util.concurrent.TimeUnit
 
 @Service
 class ChatMessageCommandServiceImpl(
@@ -44,6 +58,10 @@ class ChatMessageCommandServiceImpl(
     private companion object {
         const val MAX_MESSAGE_ATTACHMENTS = 10
     }
+
+    private val fileHttpClient: HttpClient = HttpClient.newBuilder()
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build()
 
     @Transactional
     override fun sendMessage(
@@ -571,6 +589,70 @@ class ChatMessageCommandServiceImpl(
             url = downloadUrl.url,
             expiresAt = downloadUrl.expiresAt,
         )
+    }
+
+    @Transactional(readOnly = true)
+    override fun getAttachmentContent(
+        dialogId: Long,
+        attachmentId: Long,
+        currentUser: AuthenticatedUser,
+    ): ResponseEntity<Resource> {
+        val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
+        chatAccessService.assertCanRead(dialog, currentUser)
+
+        val attachment = chatMessageAttachmentDao.findVisibleByIdAndMessageDialogIdForUser(
+            id = attachmentId,
+            dialogId = dialogId,
+            currentUserId = currentUser.userId,
+        ) ?: throw InteractionNotFoundException(
+            message = "Вложение чата не найдено",
+            code = "chat_attachment_not_found",
+        )
+
+        val downloadUrl = mediaServiceClient.getDownloadUrl(attachment.fileId)
+        val storageResponse = try {
+            val request = HttpRequest.newBuilder(URI.create(downloadUrl.url))
+                .GET()
+                .build()
+            fileHttpClient.send(request, HttpResponse.BodyHandlers.ofByteArray())
+        } catch (ex: Exception) {
+            throw InteractionIntegrationException(
+                message = "Не удалось загрузить файл",
+                code = "chat_attachment_file_unavailable",
+                status = HttpStatus.BAD_GATEWAY,
+            )
+        }
+
+        if (storageResponse.statusCode() == HttpStatus.NOT_FOUND.value() ||
+            storageResponse.statusCode() == HttpStatus.FORBIDDEN.value()
+        ) {
+            throw InteractionNotFoundException(
+                message = "Вложение чата не найдено",
+                code = "chat_attachment_not_found",
+            )
+        }
+        if (storageResponse.statusCode() !in 200..299) {
+            throw InteractionIntegrationException(
+                message = "Не удалось загрузить файл",
+                code = "chat_attachment_file_unavailable",
+                status = HttpStatus.BAD_GATEWAY,
+            )
+        }
+
+        val mediaType = attachment.mediaType.takeIf { it.isNotBlank() } ?: MediaType.APPLICATION_OCTET_STREAM_VALUE
+        val resource = ByteArrayResource(storageResponse.body())
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(mediaType))
+            .contentLength(storageResponse.body().size.toLong())
+            .cacheControl(CacheControl.maxAge(60, TimeUnit.SECONDS).cachePrivate())
+            .header(
+                HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition.attachment()
+                    .filename(attachment.originalFileName, Charsets.UTF_8)
+                    .build()
+                    .toString(),
+            )
+            .body(resource)
     }
 
     private fun normalizeClientMessageId(
