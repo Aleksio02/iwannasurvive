@@ -54,7 +54,10 @@ class ChatReactionServiceImpl(
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanRead(dialog, currentUser)
         val message = requireMessage(dialogId, messageId)
-        chatMessageReactionDao.deleteById(ChatMessageReactionId(messageId, currentUser.userId))
+        val reactionId = ChatMessageReactionId(messageId, currentUser.userId)
+        if (chatMessageReactionDao.existsById(reactionId)) {
+            chatMessageReactionDao.deleteById(reactionId)
+        }
         return chatMessageEnrichmentService.enrich(chatDomainMapper.toChatMessage(message), currentUser.userId)
     }
 

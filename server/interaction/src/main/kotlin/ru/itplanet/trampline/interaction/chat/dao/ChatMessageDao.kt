@@ -29,6 +29,25 @@ interface ChatMessageDao : JpaRepository<ChatMessageDto, Long> {
     @Query(
         """
         SELECT m FROM ChatMessageDto m
+        WHERE m.id = :messageId
+          AND m.dialogId = :dialogId
+          AND NOT EXISTS (
+              SELECT 1 FROM ChatMessageUserStateDto s
+              WHERE s.id.messageId = m.id
+                AND s.id.userId = :currentUserId
+                AND s.hiddenAt IS NOT NULL
+          )
+        """,
+    )
+    fun findVisibleByIdAndDialogIdForUser(
+        @Param("messageId") messageId: Long,
+        @Param("dialogId") dialogId: Long,
+        @Param("currentUserId") currentUserId: Long,
+    ): ChatMessageDto?
+
+    @Query(
+        """
+        SELECT m FROM ChatMessageDto m
         WHERE m.dialogId = :dialogId
           AND m.id < :beforeMessageId
           AND NOT EXISTS (

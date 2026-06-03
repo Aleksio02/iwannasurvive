@@ -31,6 +31,7 @@ interface ChatRealtimeService {
     ): ChatMessageCommandResult
 
     fun broadcastMessageUpdated(dialogId: Long, message: ChatMessage)
+    fun broadcastMessageCreated(dialogId: Long, message: ChatMessage)
     fun broadcastMessageDeleted(dialogId: Long, message: ChatMessage)
     fun broadcastMessageReactionsUpdated(dialogId: Long, message: ChatMessage)
     fun broadcastMessageHidden(dialogId: Long, targetUserId: Long, messageId: Long)

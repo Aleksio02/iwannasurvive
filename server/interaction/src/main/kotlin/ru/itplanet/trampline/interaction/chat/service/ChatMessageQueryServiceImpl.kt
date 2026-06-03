@@ -119,12 +119,14 @@ class ChatMessageQueryServiceImpl(
     ): List<ChatMessage> {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         chatAccessService.assertCanRead(dialog, currentUser)
-        val target = chatMessageDao.findById(messageId).orElseThrow {
-            InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
-        }
-        if (target.dialogId != dialogId) {
-            throw InteractionNotFoundException("Сообщение чата не найдено", "chat_message_not_found")
-        }
+        val target = chatMessageDao.findVisibleByIdAndDialogIdForUser(
+            messageId = messageId,
+            dialogId = dialogId,
+            currentUserId = currentUser.userId,
+        ) ?: throw InteractionNotFoundException(
+            message = "Сообщение чата не найдено",
+            code = "chat_message_not_found",
+        )
         val olderLimit = before.coerceIn(0, 50)
         val afterLimit = after.coerceIn(0, 50)
         val older = if (olderLimit == 0) {

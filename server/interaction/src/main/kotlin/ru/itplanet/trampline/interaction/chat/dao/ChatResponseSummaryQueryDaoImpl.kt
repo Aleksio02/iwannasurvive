@@ -41,6 +41,13 @@ class ChatResponseSummaryQueryDaoImpl(
                         WHERE unread_message.dialog_id = d.id
                           AND unread_message.sender_user_id <> :currentUserId
                           AND unread_message.id > COALESCE(ps.last_read_message_id, 0)
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM chat_message_user_state unread_hidden
+                              WHERE unread_hidden.message_id = unread_message.id
+                                AND unread_hidden.user_id = :currentUserId
+                                AND unread_hidden.hidden_at IS NOT NULL
+                          )
                     ), 0)
                 END AS unread_count,
                 CASE

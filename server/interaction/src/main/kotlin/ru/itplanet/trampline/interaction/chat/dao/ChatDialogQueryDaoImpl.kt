@@ -90,6 +90,13 @@ class ChatDialogQueryDaoImpl(
                     WHERE unread_message.dialog_id = d.id
                       AND unread_message.sender_user_id <> :currentUserId
                       AND unread_message.id > COALESCE(ps.last_read_message_id, 0)
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM chat_message_user_state unread_hidden
+                          WHERE unread_hidden.message_id = unread_message.id
+                            AND unread_hidden.user_id = :currentUserId
+                            AND unread_hidden.hidden_at IS NOT NULL
+                      )
                 )), 0) AS unread_count,
                 MAX(COALESCE(d.last_message_at, d.created_at)) AS sort_at
             FROM chat_dialog d
@@ -135,6 +142,13 @@ class ChatDialogQueryDaoImpl(
                     WHERE unread_message.dialog_id = d.id
                       AND unread_message.sender_user_id <> :currentUserId
                       AND unread_message.id > COALESCE(ps.last_read_message_id, 0)
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM chat_message_user_state unread_hidden
+                          WHERE unread_hidden.message_id = unread_message.id
+                            AND unread_hidden.user_id = :currentUserId
+                            AND unread_hidden.hidden_at IS NOT NULL
+                      )
                 )
             """.trimIndent()
         }
@@ -304,6 +318,13 @@ class ChatDialogQueryDaoImpl(
                     WHERE unread_message.dialog_id = d.id
                       AND unread_message.sender_user_id <> :currentUserId
                       AND unread_message.id > COALESCE(ps.last_read_message_id, 0)
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM chat_message_user_state unread_hidden
+                          WHERE unread_hidden.message_id = unread_message.id
+                            AND unread_hidden.user_id = :currentUserId
+                            AND unread_hidden.hidden_at IS NOT NULL
+                      )
                 ), 0) AS unread_count,
                 CASE
                     WHEN d.status = 'OPEN' AND r.status IN (:writableResponseStatuses) THEN TRUE
@@ -317,6 +338,13 @@ class ChatDialogQueryDaoImpl(
             JOIN chat_participant_state ps ON ps.dialog_id = d.id
                 AND ps.user_id = :currentUserId
             LEFT JOIN chat_pinned_message pm ON pm.dialog_id = d.id
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM chat_message_user_state hidden_pinned
+                    WHERE hidden_pinned.message_id = pm.message_id
+                      AND hidden_pinned.user_id = :currentUserId
+                      AND hidden_pinned.hidden_at IS NOT NULL
+                )
             LEFT JOIN chat_message pinned_message ON pinned_message.id = pm.message_id
             LEFT JOIN LATERAL (
                 SELECT a.original_file_name
