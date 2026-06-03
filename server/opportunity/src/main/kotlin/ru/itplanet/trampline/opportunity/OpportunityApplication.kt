@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import ru.itplanet.trampline.opportunity.ai.config.AiTagSuggestionProperties
 import ru.itplanet.trampline.opportunity.ai.config.AiOpportunityDescriptionProperties
 import ru.itplanet.trampline.opportunity.ai.config.AiRecommendationExplanationProperties
+import ru.itplanet.trampline.opportunity.ai.config.AiResumeAnalysisProperties
 import ru.itplanet.trampline.opportunity.ai.config.YandexGptProperties
 import ru.itplanet.trampline.opportunity.config.InternalApiProperties
 
@@ -19,6 +20,7 @@ import ru.itplanet.trampline.opportunity.config.InternalApiProperties
     AiTagSuggestionProperties::class,
     AiOpportunityDescriptionProperties::class,
     AiRecommendationExplanationProperties::class,
+    AiResumeAnalysisProperties::class,
     YandexGptProperties::class,
 )
 @EnableJpaRepositories(basePackages = ["ru.itplanet.trampline.opportunity", "ru.itplanet.trampline.commons"])

@@ -41,6 +41,11 @@ interface MediaServiceClient {
         @PathVariable fileId: Long,
     ): InternalFileDownloadUrlResponse
 
+    @GetMapping("/internal/files/{fileId}/content")
+    fun getFileContent(
+        @PathVariable fileId: Long,
+    ): ByteArray
+
     @PostMapping("/internal/attachments")
     fun createAttachment(
         @RequestBody request: InternalCreateFileAttachmentRequest,
