@@ -30,7 +30,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-right: auto;
   text-decoration: none;
   font-weight: 700;
   font-size: 20px;
@@ -60,7 +59,6 @@
   display: flex;
   align-items: center;
   gap: 28px;
-  margin-left: 28px;
   min-width: 0;
 
   @media (max-width: 768px) {

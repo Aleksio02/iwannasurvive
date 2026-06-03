@@ -56,7 +56,10 @@ function Navbar() {
             if (userData.role === 'APPLICANT') {
                 try {
                     const profile = await getApplicantProfile()
-                    const fullName = `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim()
+                    const firstName = profile?.firstName || ''
+                    const lastName = profile?.lastName || ''
+                    // Фамилия + Имя
+                    const fullName = `${lastName} ${firstName}`.trim()
                     setDisplayName(fullName || fallbackName)
                 } catch {
                     setDisplayName(fallbackName)
@@ -91,12 +94,17 @@ function Navbar() {
         const handleProfileUpdate = (event) => {
             const { firstName, lastName, companyName, role } = event.detail || {}
 
-            if (role === 'APPLICANT' && (firstName || lastName)) {
-                const fullName = `${firstName || ''} ${lastName || ''}`.trim()
+            if (role === 'APPLICANT') {
+                // Фамилия + Имя
+                const fullName = `${lastName || ''} ${firstName || ''}`.trim()
                 if (fullName) {
                     setDisplayName(fullName)
                     const localUser = getSessionUser()
-                    if (localUser) setSessionUser({ ...localUser, displayName: fullName })
+                    if (localUser) {
+                        setSessionUser({ ...localUser, firstName, lastName, displayName: fullName })
+                    }
+                } else {
+                    loadUserData()
                 }
                 return
             }
@@ -190,6 +198,23 @@ function Navbar() {
         return '/seeker'
     }
 
+    const getUserShortName = () => {
+        if (displayName) {
+            return displayName
+        }
+
+        const firstName = user?.firstName || ''
+        const lastName = user?.lastName || ''
+
+        if (lastName && firstName) {
+            return `${lastName} ${firstName}`
+        }
+        if (lastName) return lastName
+        if (firstName) return firstName
+
+        return user?.displayName || user?.email?.split('@')[0] || 'Пользователь'
+    }
+
     return (
         <nav className="navbar">
             <div className="navbar__container container">
@@ -233,7 +258,7 @@ function Navbar() {
                             </button>
 
                             <span className="navbar__user">
-                                {displayName || user.displayName || user.email?.split('@')[0]}
+                                {getUserShortName()}
                             </span>
                         </>
                     ) : (
