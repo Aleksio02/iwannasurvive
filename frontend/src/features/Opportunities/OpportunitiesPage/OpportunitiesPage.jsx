@@ -9,6 +9,7 @@ import { useToast } from '@/shared/hooks/use-toast'
 import {
     listOpportunityMap,
     listOpportunities,
+    listPersonalizedOpportunityRecommendations,
     listNearbyOpportunities,
     listTags,
     getOpportunity,
@@ -35,6 +36,7 @@ import {
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
 import './OpportunitiesPage.scss'
+import PersonalizedRecommendationsSection from './components/PersonalizedRecommendationsSection'
 
 import locationIcon from '@/assets/icons/location.svg'
 import briefcaseIcon from '@/assets/icons/briefcase.svg'
@@ -390,6 +392,11 @@ function OpportunitiesPage() {
     const [error, setError] = useState('')
     const [focusedOpportunityId, setFocusedOpportunityId] = useState(null)
     const [tags, setTags] = useState([])
+    const [personalizedRecommendations, setPersonalizedRecommendations] = useState([])
+    const [isRecommendationsLoading, setIsRecommendationsLoading] = useState(false)
+    const [recommendationsError, setRecommendationsError] = useState('')
+    const [isRecommendationsOpen, setIsRecommendationsOpen] = useState(false)
+    const [hasRequestedRecommendations, setHasRequestedRecommendations] = useState(false)
 
     const [pendingMapCenter, setPendingMapCenter] = useState(null)
     const [appliedMapCenter, setAppliedMapCenter] = useState(null)
@@ -408,6 +415,14 @@ function OpportunitiesPage() {
 
     const isApplicant = currentUser?.role === 'APPLICANT'
 
+    const resetPersonalizedRecommendations = useCallback(() => {
+        setPersonalizedRecommendations([])
+        setRecommendationsError('')
+        setIsRecommendationsLoading(false)
+        setIsRecommendationsOpen(false)
+        setHasRequestedRecommendations(false)
+    }, [])
+
     const debouncedSearch = useDebounce(filters.search, 500)
     const debouncedSkills = useDebounce(filters.skillsQuery, 500)
 
@@ -418,6 +433,7 @@ function OpportunitiesPage() {
 
     useEffect(() => {
         const unsubscribe = subscribeSessionChange((nextUser) => {
+            resetPersonalizedRecommendations()
             setCurrentUser(nextUser)
 
             if (!nextUser?.id) {
@@ -433,7 +449,7 @@ function OpportunitiesPage() {
         })
 
         return unsubscribe
-    }, [])
+    }, [resetPersonalizedRecommendations])
 
     const syncFavoriteOpportunities = useCallback(async () => {
         if (!currentUser?.id) {
@@ -508,6 +524,34 @@ function OpportunitiesPage() {
     useEffect(() => {
         syncFavoriteOpportunities()
     }, [syncFavoriteOpportunities])
+
+    const loadPersonalizedRecommendations = useCallback(async () => {
+        if (!isApplicant || isRecommendationsLoading || hasRequestedRecommendations) return
+        setIsRecommendationsLoading(true)
+        setRecommendationsError('')
+
+        try {
+            const data = await listPersonalizedOpportunityRecommendations()
+            setPersonalizedRecommendations(data?.items || [])
+            setHasRequestedRecommendations(true)
+        } catch (requestError) {
+            setPersonalizedRecommendations([])
+            setRecommendationsError(requestError?.message || 'Не удалось загрузить рекомендации')
+            setHasRequestedRecommendations(true)
+        } finally {
+            setIsRecommendationsLoading(false)
+        }
+    }, [hasRequestedRecommendations, isApplicant, isRecommendationsLoading])
+
+    const togglePersonalizedRecommendations = () => {
+        if (isRecommendationsOpen) {
+            setIsRecommendationsOpen(false)
+            return
+        }
+
+        setIsRecommendationsOpen(true)
+        loadPersonalizedRecommendations()
+    }
 
     useEffect(() => {
         const handleFavoritesUpdated = async () => {
@@ -1088,6 +1132,21 @@ function OpportunitiesPage() {
             </header>
 
             <main className="container opportunities-page__main">
+                {isApplicant && (
+                    <PersonalizedRecommendationsSection
+                        items={personalizedRecommendations}
+                        isLoading={isRecommendationsLoading}
+                        error={recommendationsError}
+                        isOpen={isRecommendationsOpen}
+                        hasRequested={hasRequestedRecommendations}
+                        onToggleOpen={togglePersonalizedRecommendations}
+                        onOpenOpportunity={(id) => navigate(`/opportunities/${id}`)}
+                        onApply={handleApply}
+                        onToggleFavorite={toggleOpportunityFavorite}
+                        favoriteOpportunities={favoriteOpportunities}
+                    />
+                )}
+
                 <section className="opportunities-page__toolbar">
                     <h2>Найдено возможностей: {visibleTotal}</h2>
 

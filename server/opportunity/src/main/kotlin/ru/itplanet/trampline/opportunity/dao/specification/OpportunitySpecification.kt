@@ -53,6 +53,8 @@ object OpportunitySpecification {
         )
     }
 
+    fun recommendationCandidates(now: OffsetDateTime): Specification<OpportunityDto> = publicVisible(now)
+
     private fun publicVisible(now: OffsetDateTime): Specification<OpportunityDto> {
         val today = now.toLocalDate()
 

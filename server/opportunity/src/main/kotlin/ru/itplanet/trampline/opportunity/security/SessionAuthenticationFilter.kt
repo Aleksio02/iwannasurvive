@@ -35,6 +35,10 @@ class SessionAuthenticationFilter(
         }
 
         if (request.method == HttpMethod.GET.name()) {
+            if (path.startsWith("/api/opportunities/recommendations")) {
+                return false
+            }
+
             if (path.startsWith("/api/opportunities")) {
                 return true
             }

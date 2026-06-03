@@ -47,6 +47,10 @@ profile:
   service:
     url: ${PROFILE_SERVER_HOST:http://localhost:8080}
 
+interaction:
+  service:
+    url: ${INTERACTION_SERVER_HOST:http://localhost:8083}
+
 internal-api:
   api-key: ${INTERNAL_API_KEY}
 
@@ -67,6 +71,20 @@ app:
       max-short-description-chars: 1000
       max-full-description-chars: 4000
       max-requirements-chars: 2000
+    recommendation-explanations:
+      enabled: ${AI_RECOMMENDATION_EXPLANATIONS_ENABLED:false}
+      prompt-version: ai-recommendation-explanations-v1
+      max-candidates: 120
+      max-recommendations: 6
+      min-score: ${AI_RECOMMENDATION_MIN_SCORE:55}
+      min-skill-matches: ${AI_RECOMMENDATION_MIN_SKILL_MATCHES:1}
+      min-skill-coverage: ${AI_RECOMMENDATION_MIN_SKILL_COVERAGE:0.30}
+      strong-skill-matches: ${AI_RECOMMENDATION_STRONG_SKILL_MATCHES:2}
+      strong-skill-coverage: ${AI_RECOMMENDATION_STRONG_SKILL_COVERAGE:0.60}
+      min-partial-skill-coverage: ${AI_RECOMMENDATION_MIN_PARTIAL_SKILL_COVERAGE:0.30}
+      max-partial-skill-tags: ${AI_RECOMMENDATION_MAX_PARTIAL_SKILL_TAGS:3}
+      max-reasons: 3
+      max-improvement-tips: 3
     yandex-gpt:
       endpoint: ${YANDEX_AI_ENDPOINT:https://llm.api.cloud.yandex.net/foundationModels/v1/completion}
       folder-id: ${YANDEX_AI_FOLDER_ID:}

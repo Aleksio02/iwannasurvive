@@ -26,6 +26,7 @@ import {
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
 import { createEmployerVerification } from '@/shared/api/profile'
+import { listTags } from '@/shared/api/opportunities'
 import {
     Card,
     CardContent,
@@ -42,6 +43,7 @@ import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
+import ApplicantTagsEditor from './components/ApplicantTagsEditor'
 import './ProfileEdit.scss'
 
 const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
@@ -286,6 +288,12 @@ function createEmptyEmployerLocationForm() {
     }
 }
 
+function normalizeReturnTo(value, role) {
+    const fallback = role === 'EMPLOYER' ? '/employer' : '/seeker'
+    if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback
+    return value
+}
+
 function ProfileEdit() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
@@ -332,6 +340,9 @@ function ProfileEdit() {
     const applicantCityCacheRef = useRef(new Map())
     const locationCityCacheRef = useRef(new Map())
     const locationAddressCacheRef = useRef(new Map())
+    const skillsSectionRef = useRef(null)
+    const skillSearchInputRef = useRef(null)
+    const hasFocusedSkillsRef = useRef(false)
 
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
@@ -356,6 +367,12 @@ function ProfileEdit() {
     const [contactsVisibility, setContactsVisibility] = useState('AUTHENTICATED')
     const [openToWork, setOpenToWork] = useState(true)
     const [openToEvents, setOpenToEvents] = useState(true)
+    const [availableTags, setAvailableTags] = useState([])
+    const [selectedSkillTagIds, setSelectedSkillTagIds] = useState([])
+    const [selectedInterestTagIds, setSelectedInterestTagIds] = useState([])
+    const [tagsLoadError, setTagsLoadError] = useState('')
+    const [areApplicantTagsLoaded, setAreApplicantTagsLoaded] = useState(false)
+    const [isSkillsSectionHighlighted, setIsSkillsSectionHighlighted] = useState(false)
 
     const [companyName, setCompanyName] = useState('')
     const [legalName, setLegalName] = useState('')
@@ -420,6 +437,9 @@ function ProfileEdit() {
 
     const role = user?.role
     const isEmployer = role === 'EMPLOYER'
+    const searchParams = new URLSearchParams(window.location.search)
+    const shouldFocusSkills = searchParams.get('focus') === 'skills'
+    const returnTo = normalizeReturnTo(searchParams.get('returnTo'), role)
 
     useEffect(() => {
         if (!user?.id && !user?.userId) return
@@ -489,6 +509,16 @@ function ProfileEdit() {
                         setContactsVisibility(profile.contactsVisibility || 'AUTHENTICATED')
                         setOpenToWork(profile.openToWork ?? true)
                         setOpenToEvents(profile.openToEvents ?? true)
+                        setSelectedSkillTagIds(
+                            Array.isArray(profile.skills)
+                                ? profile.skills.map((tag) => tag.id).filter(Boolean)
+                                : []
+                        )
+                        setSelectedInterestTagIds(
+                            Array.isArray(profile.interests)
+                                ? profile.interests.map((tag) => tag.id).filter(Boolean)
+                                : []
+                        )
                     }
                 }
             } catch (error) {
@@ -505,7 +535,66 @@ function ProfileEdit() {
         return () => {
             isCancelled = true
         }
+    }, [isEmployer, user?.displayName, user?.id, user?.userId])
+
+    useEffect(() => {
+        if ((!user?.id && !user?.userId) || isEmployer) {
+            setAvailableTags([])
+            setTagsLoadError('')
+            setAreApplicantTagsLoaded(false)
+            return
+        }
+
+        let isCancelled = false
+        setAreApplicantTagsLoaded(false)
+        listTags()
+            .then((items) => {
+                if (!isCancelled) {
+                    setAvailableTags(Array.isArray(items) ? items : [])
+                    setTagsLoadError('')
+                    setAreApplicantTagsLoaded(true)
+                }
+            })
+            .catch(() => {
+                if (!isCancelled) {
+                    setAvailableTags([])
+                    setTagsLoadError('Не удалось загрузить список навыков')
+                    setAreApplicantTagsLoaded(true)
+                }
+            })
+
+        return () => {
+            isCancelled = true
+        }
     }, [isEmployer, user?.id, user?.userId])
+
+    useEffect(() => {
+        if (
+            !shouldFocusSkills ||
+            isEmployer ||
+            isProfileLoading ||
+            !areApplicantTagsLoaded ||
+            hasFocusedSkillsRef.current
+        ) {
+            return
+        }
+
+        setIsSkillsSectionHighlighted(true)
+
+        const focusTimer = window.setTimeout(() => {
+            hasFocusedSkillsRef.current = true
+            skillsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            skillSearchInputRef.current?.focus({ preventScroll: true })
+        }, 0)
+        const highlightTimer = window.setTimeout(() => {
+            setIsSkillsSectionHighlighted(false)
+        }, 1800)
+
+        return () => {
+            window.clearTimeout(focusTimer)
+            window.clearTimeout(highlightTimer)
+        }
+    }, [areApplicantTagsLoaded, isEmployer, isProfileLoading, shouldFocusSkills])
 
     useEffect(() => {
         if (user && isEmployer && !companyName) {
@@ -1259,7 +1348,7 @@ function ProfileEdit() {
                     }
                 }
 
-                navigate('/employer')
+                navigate(returnTo)
             } else {
                 const applicantProfileData = {
                     firstName: firstName.trim(),
@@ -1281,6 +1370,8 @@ function ProfileEdit() {
                     contactsVisibility,
                     openToWork,
                     openToEvents,
+                    skillTagIds: selectedSkillTagIds,
+                    interestTagIds: selectedInterestTagIds,
                 }
 
                 await updateApplicantProfile(applicantProfileData)
@@ -1290,7 +1381,7 @@ function ProfileEdit() {
                     description: 'Ваши данные успешно обновлены',
                 })
 
-                navigate('/seeker')
+                navigate(returnTo)
             }
         } catch (error) {
             console.error('[ProfileEdit] Ошибка сохранения:', error)
@@ -1320,6 +1411,13 @@ function ProfileEdit() {
         <div className="profile-edit">
             <Card className="profile-edit__card">
                 <CardHeader>
+                    <button
+                        type="button"
+                        className="profile-edit__back"
+                        onClick={() => navigate(returnTo)}
+                    >
+                        ← Назад
+                    </button>
                     <CardTitle>
                         {isEmployer ? 'Профиль компании' : 'Личная информация'}
                     </CardTitle>
@@ -1582,6 +1680,28 @@ function ProfileEdit() {
                                         placeholder="Расскажите о своих навыках, увлечениях, достижениях и карьерных целях"
                                     />
                                 </div>
+
+                                <section
+                                    ref={skillsSectionRef}
+                                    className={`profile-tags-section ${isSkillsSectionHighlighted ? 'is-highlighted' : ''}`}
+                                >
+                                    <div>
+                                        <h3>Навыки и интересы</h3>
+                                        <p>Добавьте основные технологии и направления, чтобы рекомендации стали точнее.</p>
+                                    </div>
+
+                                    {tagsLoadError && <p className="field-hint">{tagsLoadError}</p>}
+
+                                    <ApplicantTagsEditor
+                                        availableTags={availableTags}
+                                        selectedSkillTagIds={selectedSkillTagIds}
+                                        selectedInterestTagIds={selectedInterestTagIds}
+                                        onSkillTagIdsChange={setSelectedSkillTagIds}
+                                        onInterestTagIdsChange={setSelectedInterestTagIds}
+                                        layout="stacked"
+                                        skillInputRef={skillSearchInputRef}
+                                    />
+                                </section>
                             </>
                         )}
 
@@ -1780,13 +1900,23 @@ function ProfileEdit() {
                             </div>
                         )}
 
-                        <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting
-                                ? 'Сохранение...'
-                                : isEmployer
-                                    ? 'Сохранить и перейти в кабинет'
-                                    : 'Сохранить профиль'}
-                        </Button>
+                        <div className="profile-edit-form__actions">
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting
+                                    ? 'Сохранение...'
+                                    : isEmployer
+                                        ? 'Сохранить и перейти в кабинет'
+                                        : 'Сохранить профиль'}
+                            </Button>
+                            <Button
+                                type="button"
+                                className="button--ghost"
+                                onClick={() => navigate(returnTo)}
+                                disabled={isSubmitting}
+                            >
+                                Отмена
+                            </Button>
+                        </div>
                     </form>
                 </CardContent>
             </Card>

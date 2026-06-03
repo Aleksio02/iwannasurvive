@@ -56,6 +56,24 @@ export async function listOpportunities(params = {}) {
     })
 }
 
+export async function listPersonalizedOpportunityRecommendations(params = {}) {
+    const query = toQuery({
+        limit: params.limit ?? 6,
+    })
+
+    const data = await httpJson(`${API_BASE}/opportunities/recommendations/personalized?${query}`, {
+        dedupe: true,
+        cacheTtlMs: 30_000,
+    })
+
+    return {
+        ...data,
+        items: Array.isArray(data?.items) ? data.items : [],
+        emptyReason: data?.emptyReason || null,
+        profileHints: data?.profileHints || null,
+    }
+}
+
 export async function listOpportunityMap(params = {}) {
     const query = toQuery(params)
     return httpJson(`${API_BASE}/opportunities/map${query ? `?${query}` : ''}`, {
