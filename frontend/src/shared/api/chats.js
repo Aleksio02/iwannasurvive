@@ -131,6 +131,36 @@ export function editChatMessage(dialogId, messageId, body) {
     })
 }
 
+export async function updateChatMessageContent(dialogId, messageId, { body = '', removeAttachmentIds = [], file = null }) {
+    const formData = new FormData()
+    const normalizedBody = (body || '').trim()
+    if (normalizedBody) formData.append('body', normalizedBody)
+    removeAttachmentIds.forEach((attachmentId) => formData.append('removeAttachmentIds', String(attachmentId)))
+    if (file) formData.append('file', file)
+
+    let response
+    try {
+        response = await fetch(`${API_BASE}/${dialogId}/messages/${messageId}/content`, {
+            method: 'PATCH',
+            credentials: 'include',
+            body: formData,
+        })
+    } catch {
+        throw new Error('Сервер недоступен. Попробуйте позже.')
+    }
+
+    const data = await parseResponseBody(response)
+    if (!response.ok) {
+        throw new Error(
+            (typeof data === 'object' && (data?.message || data?.error)) ||
+            (typeof data === 'string' && data) ||
+            'Не удалось изменить сообщение'
+        )
+    }
+
+    return data
+}
+
 export function deleteChatMessageForMe(dialogId, messageId) {
     return httpJson(`${API_BASE}/${dialogId}/messages/${messageId}/delete-for-me`, {
         method: 'POST',

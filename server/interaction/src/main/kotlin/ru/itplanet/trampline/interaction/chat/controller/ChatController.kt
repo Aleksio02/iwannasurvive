@@ -172,6 +172,32 @@ class ChatController(
     ): ChatMessageResponse {
         val result = chatMessageCommandService.editMessage(dialogId, messageId, currentUser, request.body)
         chatRealtimeService.broadcastMessageUpdated(dialogId, result.message)
+        chatRealtimeService.broadcastDialogUpdated(chatDialogQueryService.getDialog(dialogId, currentUser))
+        return chatRestMapper.toChatMessageResponse(result.message)
+    }
+
+    @PatchMapping(
+        "/{dialogId}/messages/{messageId}/content",
+        consumes = [MediaType.MULTIPART_FORM_DATA_VALUE],
+    )
+    fun editMessageContent(
+        @PathVariable @Positive(message = "Идентификатор диалога должен быть положительным") dialogId: Long,
+        @PathVariable @Positive(message = "Идентификатор сообщения должен быть положительным") messageId: Long,
+        @RequestParam(required = false) body: String?,
+        @RequestParam(required = false) removeAttachmentIds: List<Long>?,
+        @RequestPart("file", required = false) file: MultipartFile?,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): ChatMessageResponse {
+        val result = chatMessageCommandService.editMessageContent(
+            dialogId = dialogId,
+            messageId = messageId,
+            currentUser = currentUser,
+            body = body,
+            removeAttachmentIds = removeAttachmentIds.orEmpty(),
+            file = file,
+        )
+        chatRealtimeService.broadcastMessageUpdated(dialogId, result.message)
+        chatRealtimeService.broadcastDialogUpdated(chatDialogQueryService.getDialog(dialogId, currentUser))
         return chatRestMapper.toChatMessageResponse(result.message)
     }
 

@@ -249,13 +249,117 @@ class ChatMessageCommandServiceImpl(
             message.messageType = ChatMessageType.MIXED
         }
         message.editedAt = OffsetDateTime.now()
-        val saved = chatMessageDao.save(message)
+        val saved = chatMessageDao.saveAndFlush(message)
 
         if (dialog.lastMessageId == messageId) {
             dialog.lastMessagePreview = chatDomainMapper.buildPreview(
                 body = normalizedBody,
                 attachmentFileName = message.attachments.firstOrNull()?.originalFileName,
                 isImage = message.attachments.firstOrNull()?.attachmentKind == ChatAttachmentKind.IMAGE,
+            )
+            chatDialogDao.save(dialog)
+        }
+
+        return ChatMessageCommandResult(
+            message = chatMessageEnrichmentService.enrich(chatDomainMapper.toChatMessage(saved), currentUser.userId),
+            created = false,
+        )
+    }
+
+    @Transactional
+    override fun editMessageContent(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+        body: String?,
+        removeAttachmentIds: List<Long>,
+        file: MultipartFile?,
+    ): ChatMessageCommandResult {
+        val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
+        chatAccessService.assertCanWrite(dialog, currentUser)
+        val message = requireVisibleMessageInDialog(dialogId, messageId, currentUser.userId)
+        if (message.senderUserId != currentUser.userId) {
+            throw InteractionForbiddenException(
+                message = "Редактировать можно только своё сообщение",
+                code = "chat_message_edit_own_required",
+            )
+        }
+        if (message.deletedAt != null) {
+            throw InteractionBadRequestException(
+                message = "Удалённое сообщение нельзя редактировать",
+                code = "chat_message_deleted",
+            )
+        }
+
+        val normalizedBody = normalizeOptionalBody(body)
+        val messageAttachmentIds = message.attachments.mapNotNull { it.id }.toSet()
+        val requestedRemoveIds = removeAttachmentIds.toSet()
+        if (!messageAttachmentIds.containsAll(requestedRemoveIds)) {
+            throw InteractionNotFoundException(
+                message = "Вложение чата не найдено",
+                code = "chat_attachment_not_found",
+            )
+        }
+
+        if (requestedRemoveIds.isNotEmpty()) {
+            message.attachments.removeIf { it.id in requestedRemoveIds }
+        }
+
+        if (file != null && !file.isEmpty) {
+            val messageIdValue = message.id
+                ?: throw IllegalStateException("Идентификатор сообщения чата не должен быть null")
+            val uploadedFile = mediaServiceClient.upload(
+                file = file,
+                ownerUserId = currentUser.userId,
+                kind = FileAssetKind.CHAT_ATTACHMENT,
+                visibility = FileAssetVisibility.PRIVATE,
+            )
+            val attachmentKind = if (uploadedFile.mediaType.startsWith("image/")) {
+                ChatAttachmentKind.IMAGE
+            } else {
+                ChatAttachmentKind.FILE
+            }
+            message.attachments.add(
+                ChatMessageAttachmentDto().apply {
+                    this.message = message
+                    fileId = uploadedFile.fileId
+                    originalFileName = uploadedFile.originalFileName
+                    mediaType = uploadedFile.mediaType
+                    sizeBytes = uploadedFile.sizeBytes
+                    this.attachmentKind = attachmentKind
+                },
+            )
+            mediaServiceClient.createAttachment(
+                InternalCreateFileAttachmentRequest(
+                    fileId = uploadedFile.fileId,
+                    entityType = FileAttachmentEntityType.CHAT_MESSAGE,
+                    entityId = messageIdValue,
+                    attachmentRole = FileAttachmentRole.ATTACHMENT,
+                ),
+            )
+        }
+
+        if (normalizedBody == null && message.attachments.isEmpty()) {
+            throw InteractionBadRequestException(
+                message = "Добавьте текст или файл",
+                code = "chat_message_empty",
+            )
+        }
+
+        message.body = normalizedBody
+        message.messageType = when {
+            normalizedBody != null && message.attachments.isNotEmpty() -> ChatMessageType.MIXED
+            normalizedBody != null -> ChatMessageType.TEXT
+            else -> ChatMessageType.ATTACHMENT
+        }
+        message.editedAt = OffsetDateTime.now()
+        val saved = chatMessageDao.saveAndFlush(message)
+
+        if (dialog.lastMessageId == messageId) {
+            dialog.lastMessagePreview = chatDomainMapper.buildPreview(
+                body = saved.body,
+                attachmentFileName = saved.attachments.firstOrNull()?.originalFileName,
+                isImage = saved.attachments.firstOrNull()?.attachmentKind == ChatAttachmentKind.IMAGE,
             )
             chatDialogDao.save(dialog)
         }
