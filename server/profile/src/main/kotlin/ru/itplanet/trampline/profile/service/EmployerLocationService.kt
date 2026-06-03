@@ -48,7 +48,6 @@ class EmployerLocationService(
         validateCoordinatesPair(request.latitude, request.longitude)
         validateUnrestrictedValueConsistency(
             city = city,
-            addressLine = addressLine,
             unrestrictedValue = unrestrictedValue,
         )
         validateUniqueLocation(
@@ -117,7 +116,6 @@ class EmployerLocationService(
         validateCoordinatesPair(location.latitude, location.longitude)
         validateUnrestrictedValueConsistency(
             city = resolvedCity,
-            addressLine = resolvedAddressLine,
             unrestrictedValue = location.unrestrictedValue,
         )
         validateUniqueLocation(
@@ -227,24 +225,15 @@ class EmployerLocationService(
 
     private fun validateUnrestrictedValueConsistency(
         city: CityDto,
-        addressLine: String,
         unrestrictedValue: String?,
     ) {
         val normalizedUnrestrictedValue = normalizeOptionalForContains(unrestrictedValue) ?: return
         val normalizedCityName = normalizeForContains(city.name)
-        val normalizedAddressLine = normalizeForContains(addressLine)
 
         if (!normalizedUnrestrictedValue.contains(normalizedCityName)) {
             throw ProfileBadRequestException(
                 message = "Полный адрес не соответствует выбранному городу",
                 code = "location_unrestricted_value_city_mismatch",
-            )
-        }
-
-        if (!normalizedUnrestrictedValue.contains(normalizedAddressLine)) {
-            throw ProfileBadRequestException(
-                message = "Полный адрес не содержит указанный addressLine",
-                code = "location_unrestricted_value_address_mismatch",
             )
         }
     }
@@ -315,7 +304,10 @@ class EmployerLocationService(
         return value
             .trim()
             .lowercase()
+            .replace('ё', 'е')
+            .replace(Regex("[,.;]+"), " ")
             .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     private fun normalizeOptionalForContains(
@@ -325,7 +317,10 @@ class EmployerLocationService(
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
             ?.lowercase()
+            ?.replace('ё', 'е')
+            ?.replace(Regex("[,.;]+"), " ")
             ?.replace(Regex("\\s+"), " ")
+            ?.trim()
     }
 
     private fun normalizeOptionalIdentifier(
