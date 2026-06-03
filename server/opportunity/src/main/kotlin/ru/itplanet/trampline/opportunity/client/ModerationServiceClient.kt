@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import ru.itplanet.trampline.commons.model.moderation.CreateInternalModerationTaskRequest
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskResponse
+import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskSummaryLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 
@@ -30,6 +31,13 @@ interface ModerationServiceClient {
         @RequestParam entityId: Long,
         @RequestParam taskType: ModerationTaskType,
     ): InternalModerationTaskLookupResponse
+
+    @GetMapping("/internal/moderation/tasks/by-entity/latest")
+    fun getLatestTaskByEntity(
+        @RequestParam entityType: ModerationEntityType,
+        @RequestParam entityId: Long,
+        @RequestParam taskType: ModerationTaskType,
+    ): InternalModerationTaskSummaryLookupResponse
 
     @PostMapping("/internal/moderation/tasks/{taskId}/cancel")
     fun cancelTask(

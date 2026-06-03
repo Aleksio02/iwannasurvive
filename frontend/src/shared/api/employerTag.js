@@ -22,6 +22,10 @@ export async function getEmployerTagModerationTask(id) {
   return httpJson(`${BASE_URL}/${id}/moderation-task`);
 }
 
+export async function getEmployerTagModerationDetails(id) {
+  return httpJson(`${BASE_URL}/${id}/moderation-details`);
+}
+
 export async function cancelEmployerTagModeration(id) {
   return httpJson(`${BASE_URL}/${id}/moderation-task/cancel`, {
     method: 'POST',
