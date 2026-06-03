@@ -30,6 +30,15 @@ interface ChatMessageCommandService {
         body: String,
     ): ChatMessageCommandResult
 
+    fun editMessageContent(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+        body: String?,
+        removeAttachmentIds: List<Long>,
+        file: MultipartFile?,
+    ): ChatMessageCommandResult
+
     fun deleteForMe(
         dialogId: Long,
         messageId: Long,

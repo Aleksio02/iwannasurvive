@@ -27,6 +27,7 @@ import {
     setChatMessageReaction,
     unarchiveChat,
     unpinChatMessage,
+    updateChatMessageContent,
 } from '@/shared/api/chats'
 import { useChatRealtime } from './useChatRealtime'
 import ChatImageLightbox from './ChatImageLightbox'
@@ -393,6 +394,11 @@ function ChatsPage() {
     const [replyToMessage, setReplyToMessage] = useState(null)
     const [editingMessageId, setEditingMessageId] = useState(null)
     const [editingBody, setEditingBody] = useState('')
+    const [editingRemoveAttachmentIds, setEditingRemoveAttachmentIds] = useState([])
+    const [editingFile, setEditingFile] = useState(null)
+    const [editingFilePreview, setEditingFilePreview] = useState('')
+    const [editingError, setEditingError] = useState('')
+    const [isEditSaving, setIsEditSaving] = useState(false)
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
     const [messageMenuPosition, setMessageMenuPosition] = useState(null)
     const [confirmAction, setConfirmAction] = useState(null)
@@ -419,6 +425,8 @@ function ChatsPage() {
     const emojiButtonRef = useRef(null)
     const emojiPickerRef = useRef(null)
     const opportunityFilterRef = useRef(null)
+    const editFileInputRef = useRef(null)
+    const longPressTimerRef = useRef(null)
     const shouldStickToBottomRef = useRef(true)
     const previousScrollMetricsRef = useRef(null)
     const olderMessagesLoadingRef = useRef(false)
@@ -472,6 +480,17 @@ function ChatsPage() {
         setSelectedFilePreview(previewUrl)
         return () => URL.revokeObjectURL(previewUrl)
     }, [selectedFile])
+
+    useEffect(() => {
+        if (!editingFile || !editingFile.type.startsWith('image/')) {
+            setEditingFilePreview('')
+            return undefined
+        }
+
+        const previewUrl = URL.createObjectURL(editingFile)
+        setEditingFilePreview(previewUrl)
+        return () => URL.revokeObjectURL(previewUrl)
+    }, [editingFile])
 
     useEffect(() => {
         if (!isEmojiOpen) return undefined
@@ -577,7 +596,7 @@ function ChatsPage() {
         setMessageMenuPosition(null)
     }
 
-    const openMessageMenu = (event, messageId) => {
+    const openMessageMenu = (event, messageId, anchor = null) => {
         if (openMenuMessageId === messageId) {
             closeMessageMenu()
             return
@@ -592,23 +611,57 @@ function ChatsPage() {
         }
 
         const menuWidth = Math.min(220, containerRect.width - 16)
-        const menuHeight = canEdit ? 292 : 74
+        const menuHeight = canEdit ? 340 : 116
         const gap = 8
         const maxLeft = Math.max(gap, containerRect.width - menuWidth - gap)
         const maxTop = Math.max(gap, containerRect.height - menuHeight - gap)
-        const openUp = buttonRect.bottom + menuHeight + gap > containerRect.bottom
+        const anchorX = anchor?.clientX ?? buttonRect.right
+        const anchorY = anchor?.clientY ?? buttonRect.bottom
+        const openUp = anchorY + menuHeight + gap > containerRect.bottom
 
         const left = Math.min(
-            Math.max(buttonRect.right - containerRect.left - menuWidth, gap),
+            Math.max(anchorX - containerRect.left - menuWidth, gap),
             maxLeft
         )
         const preferredTop = openUp
-            ? buttonRect.top - containerRect.top - menuHeight - gap
-            : buttonRect.bottom - containerRect.top + gap
+            ? anchorY - containerRect.top - menuHeight - gap
+            : anchorY - containerRect.top + gap
         const top = Math.min(Math.max(preferredTop, gap), maxTop)
 
         setOpenMenuMessageId(messageId)
         setMessageMenuPosition({ top, left, width: menuWidth })
+    }
+
+    const isMessageControlTarget = (target) => Boolean(target.closest?.(
+        'button, a, input, textarea, select, .chats__attachment-image, .chats__attachment-file, .chats__reactions, .chats__inline-edit'
+    ))
+
+    const handleMessageContextMenu = (event, message) => {
+        if (!message.id || message.deletedAt || message.pending || message.failed || isMessageControlTarget(event.target)) return
+        event.preventDefault()
+        openMessageMenu(event, message.id, { clientX: event.clientX, clientY: event.clientY })
+    }
+
+    const handleMessagePointerDown = (event, message) => {
+        if (
+            event.pointerType === 'mouse' ||
+            !message.id ||
+            message.deletedAt ||
+            message.pending ||
+            message.failed ||
+            isMessageControlTarget(event.target)
+        ) return
+
+        longPressTimerRef.current = window.setTimeout(() => {
+            openMessageMenu(event, message.id, { clientX: event.clientX, clientY: event.clientY })
+        }, 520)
+    }
+
+    const clearLongPressTimer = () => {
+        if (longPressTimerRef.current) {
+            window.clearTimeout(longPressTimerRef.current)
+            longPressTimerRef.current = null
+        }
     }
 
     const loadDialogs = useCallback(async ({ append = false } = {}) => {
@@ -1001,6 +1054,7 @@ function ChatsPage() {
 
     useEffect(() => () => {
         reconcileTimersRef.current.forEach(clearTimeout)
+        clearLongPressTimer()
     }, [])
 
     const handleArchive = async () => {
@@ -1031,16 +1085,88 @@ function ChatsPage() {
         }
     }
 
+    const startEditingMessage = (message) => {
+        setEditingMessageId(message.id)
+        setEditingBody(message.body || '')
+        setEditingRemoveAttachmentIds([])
+        setEditingFile(null)
+        setEditingError('')
+    }
+
+    const cancelEditingMessage = () => {
+        setEditingMessageId(null)
+        setEditingBody('')
+        setEditingRemoveAttachmentIds([])
+        setEditingFile(null)
+        setEditingError('')
+        setIsEditSaving(false)
+    }
+
+    const handleEditFileSelect = (file) => {
+        if (!file) return
+
+        const validationError = validateAttachment(file)
+        if (validationError) {
+            setEditingError(validationError)
+            return
+        }
+
+        setEditingFile(file)
+        setEditingError('')
+    }
+
+    const copyMessageText = async (message) => {
+        if (!message.body) return
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(message.body)
+            } else {
+                const textarea = document.createElement('textarea')
+                textarea.value = message.body
+                textarea.setAttribute('readonly', '')
+                textarea.style.position = 'fixed'
+                textarea.style.top = '-1000px'
+                document.body.appendChild(textarea)
+                textarea.select()
+                document.execCommand('copy')
+                document.body.removeChild(textarea)
+            }
+            toast({ title: 'Текст скопирован' })
+        } catch {
+            toast({ title: 'Не удалось скопировать текст', variant: 'destructive' })
+        } finally {
+            closeMessageMenu()
+        }
+    }
+
     const handleSaveEdit = async (message) => {
         const body = editingBody.trim()
-        if (!canEdit || !routeDialogId || !message.id || !body) return
+        if (!canEdit || !routeDialogId || !message.id || isEditSaving) return
+
+        const keptAttachments = (message.attachments || []).filter((attachment) =>
+            !editingRemoveAttachmentIds.includes(attachment.id)
+        )
+        if (!body && keptAttachments.length === 0 && !editingFile) {
+            setEditingError('Добавьте текст или файл')
+            return
+        }
+
+        setIsEditSaving(true)
         try {
-            const saved = await editChatMessage(routeDialogId, message.id, body)
+            const shouldUseMultipart = editingFile || editingRemoveAttachmentIds.length > 0 || (message.attachments || []).length > 0
+            const saved = shouldUseMultipart
+                ? await updateChatMessageContent(routeDialogId, message.id, {
+                    body,
+                    removeAttachmentIds: editingRemoveAttachmentIds,
+                    file: editingFile,
+                })
+                : await editChatMessage(routeDialogId, message.id, body)
             dispatch({ type: 'MESSAGE_UPSERT', dialogId: routeDialogId, message: saved })
-            setEditingMessageId(null)
-            setEditingBody('')
+            cancelEditingMessage()
         } catch (error) {
             toast({ title: 'Не удалось изменить сообщение', description: error.message, variant: 'destructive' })
+        } finally {
+            setIsEditSaving(false)
         }
     }
 
@@ -1414,133 +1540,189 @@ function ChatsPage() {
                                 )}
                                 {messages.map((message) => {
                                     const isOwn = message.senderUserId === currentUser?.id
+                                    const visibleEditAttachments = (message.attachments || []).filter((attachment) =>
+                                        !editingRemoveAttachmentIds.includes(attachment.id)
+                                    )
                                     return (
                                         <div
                                             key={message.id || message.clientMessageId}
-                                            className={`chats__message ${isOwn ? 'chats__message--own' : ''} ${message.deletedAt ? 'chats__message--deleted' : ''}`}
-                                            data-message-id={message.id || ''}
+                                            className={`chats__message-row ${isOwn ? 'chats__message-row--own' : ''}`}
                                         >
-                                            {message.deletedAt ? (
-                                                <p className="chats__deleted">Сообщение удалено</p>
-                                            ) : (
-                                                <>
-                                                    {message.forwardedFrom && (
-                                                        <small className="chats__forwarded">
-                                                            Переслано от {message.forwardedFrom.senderName || 'участника'}
-                                                        </small>
-                                                    )}
-                                                    {message.replyTo && (
-                                                        <button
-                                                            type="button"
-                                                            className="chats__reply-quote"
-                                                            onClick={() => void openMessageContext(message.replyTo.id)}
-                                                        >
-                                                            <strong>{message.replyTo.senderDisplayName}</strong>
-                                                            <span>{message.replyTo.bodyPreview || 'Вложение'}</span>
-                                                        </button>
-                                                    )}
-                                                    {editingMessageId === message.id ? (
-                                                        <div className="chats__inline-edit">
-                                                            <textarea
-                                                                value={editingBody}
-                                                                onChange={(event) => setEditingBody(event.target.value.slice(0, 4000))}
-                                                                onKeyDown={(event) => {
-                                                                    if (event.key === 'Enter' && !event.shiftKey) {
-                                                                        event.preventDefault()
-                                                                        void handleSaveEdit(message)
-                                                                    }
-                                                                }}
-                                                            />
-                                                            <div>
-                                                                <button type="button" onClick={() => void handleSaveEdit(message)}>Сохранить</button>
-                                                                <button type="button" onClick={() => setEditingMessageId(null)}>Отмена</button>
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            {message.body && <p>{message.body}</p>}
-                                                            {(message.attachments || []).map((attachment) => (
-                                                                <ChatAttachment
-                                                                    key={attachment.id || `${message.clientMessageId}-${attachment.originalFileName}`}
-                                                                    dialogId={message.dialogId}
-                                                                    attachment={attachment}
-                                                                    failed={message.failed}
-                                                                    pending={message.pending}
+                                            <div
+                                                className={`chats__message ${isOwn ? 'chats__message--own' : ''} ${message.deletedAt ? 'chats__message--deleted' : ''}`}
+                                                data-message-id={message.id || ''}
+                                                onContextMenu={(event) => handleMessageContextMenu(event, message)}
+                                                onPointerDown={(event) => handleMessagePointerDown(event, message)}
+                                                onPointerUp={clearLongPressTimer}
+                                                onPointerCancel={clearLongPressTimer}
+                                                onPointerLeave={clearLongPressTimer}
+                                            >
+                                                {message.deletedAt ? (
+                                                    <p className="chats__deleted">Сообщение удалено</p>
+                                                ) : (
+                                                    <>
+                                                        {message.forwardedFrom && (
+                                                            <small className="chats__forwarded">
+                                                                Переслано от {message.forwardedFrom.senderName || 'участника'}
+                                                            </small>
+                                                        )}
+                                                        {message.replyTo && (
+                                                            <button
+                                                                type="button"
+                                                                className="chats__reply-quote"
+                                                                onClick={() => void openMessageContext(message.replyTo.id)}
+                                                            >
+                                                                <strong>{message.replyTo.senderDisplayName}</strong>
+                                                                <span>{message.replyTo.bodyPreview || 'Вложение'}</span>
+                                                            </button>
+                                                        )}
+                                                        {editingMessageId === message.id ? (
+                                                            <div className="chats__inline-edit">
+                                                                <textarea
+                                                                    value={editingBody}
+                                                                    onChange={(event) => setEditingBody(event.target.value.slice(0, 4000))}
+                                                                    onKeyDown={(event) => {
+                                                                        if (event.key === 'Enter' && !event.shiftKey) {
+                                                                            event.preventDefault()
+                                                                            void handleSaveEdit(message)
+                                                                        }
+                                                                    }}
                                                                 />
-                                                            ))}
-                                                        </>
-                                                    )}
-                                                </>
-                                            )}
-                                            <span>
-                                                {formatTime(message.createdAt)}
-                                                {message.pending && ' · отправляется'}
-                                                {message.failed && ' · не отправлено'}
-                                                {message.editedAt && !message.deletedAt && ' · изменено'}
-                                            </span>
-                                            {!message.failed && !message.pending && !message.deletedAt && message.id && (
-                                                <button
-                                                    type="button"
-                                                    className="chats__message-menu-button"
-                                                    aria-label="Действия с сообщением"
-                                                    aria-haspopup="menu"
-                                                    aria-expanded={openMenuMessageId === message.id}
-                                                    onClick={(event) => openMessageMenu(event, message.id)}
-                                                >
-                                                    <MoreHorizontal size={16} aria-hidden="true" />
-                                                </button>
-                                            )}
-                                            {message.reactions?.length > 0 && (
-                                                <div className="chats__reactions">
-                                                    {message.reactions.map((reaction) => (
+                                                                {visibleEditAttachments.length > 0 && (
+                                                                    <div className="chats__edit-attachments">
+                                                                        {visibleEditAttachments.map((attachment) => (
+                                                                            <div key={attachment.id} className="chats__edit-attachment">
+                                                                                <span>
+                                                                                    <strong>{attachment.originalFileName}</strong>
+                                                                                    <small>{formatFileSize(attachment.sizeBytes)}</small>
+                                                                                </span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setEditingRemoveAttachmentIds((current) => [...current, attachment.id])}
+                                                                                >
+                                                                                    Удалить вложение
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                                {editingFile && (
+                                                                    <div className="chats__edit-attachment">
+                                                                        {editingFilePreview
+                                                                            ? <img src={editingFilePreview} alt="" />
+                                                                            : <FileText size={20} aria-hidden="true" />}
+                                                                        <span>
+                                                                            <strong>{editingFile.name}</strong>
+                                                                            <small>{formatFileSize(editingFile.size)}</small>
+                                                                        </span>
+                                                                        <button type="button" onClick={() => setEditingFile(null)}>Убрать файл</button>
+                                                                    </div>
+                                                                )}
+                                                                {editingError && <small className="chats__edit-error">{editingError}</small>}
+                                                                <input
+                                                                    ref={editFileInputRef}
+                                                                    className="chats__file-input"
+                                                                    type="file"
+                                                                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                                                                    onChange={(event) => {
+                                                                        handleEditFileSelect(event.target.files?.[0])
+                                                                        event.target.value = ''
+                                                                    }}
+                                                                />
+                                                                <div>
+                                                                    <button type="button" onClick={() => editFileInputRef.current?.click()}>
+                                                                        {visibleEditAttachments.length > 0 ? 'Заменить файл' : 'Добавить файл'}
+                                                                    </button>
+                                                                    <button type="button" disabled={isEditSaving} onClick={() => void handleSaveEdit(message)}>Сохранить</button>
+                                                                    <button type="button" disabled={isEditSaving} onClick={cancelEditingMessage}>Отмена</button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                {message.body && <p>{message.body}</p>}
+                                                                {(message.attachments || []).map((attachment) => (
+                                                                    <ChatAttachment
+                                                                        key={attachment.id || `${message.clientMessageId}-${attachment.originalFileName}`}
+                                                                        dialogId={message.dialogId}
+                                                                        attachment={attachment}
+                                                                        failed={message.failed}
+                                                                        pending={message.pending}
+                                                                    />
+                                                                ))}
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+                                                <span className="chats__message-meta">
+                                                    {formatTime(message.createdAt)}
+                                                    {message.pending && ' · отправляется'}
+                                                    {message.failed && ' · не отправлено'}
+                                                    {message.editedAt && !message.deletedAt && ' · изменено'}
+                                                </span>
+                                                {!message.failed && !message.pending && !message.deletedAt && message.id && (
+                                                    <button
+                                                        type="button"
+                                                        className="chats__message-menu-button"
+                                                        aria-label="Действия с сообщением"
+                                                        aria-haspopup="menu"
+                                                        aria-expanded={openMenuMessageId === message.id}
+                                                        onClick={(event) => openMessageMenu(event, message.id)}
+                                                    >
+                                                        <MoreHorizontal size={16} aria-hidden="true" />
+                                                    </button>
+                                                )}
+                                                {message.reactions?.length > 0 && (
+                                                    <div className="chats__reactions">
+                                                        {message.reactions.map((reaction) => (
+                                                            <button
+                                                                key={reaction.reaction}
+                                                                type="button"
+                                                                className={`chats__reaction-chip ${reaction.reactedByMe ? 'is-active' : ''}`}
+                                                                disabled={!canEdit}
+                                                                onClick={() => {
+                                                                    if (canEdit) void handleReaction(message, reaction.reaction)
+                                                                }}
+                                                            >
+                                                                {reaction.reaction} {reaction.count}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {message.failed && (
+                                                    <div className="chats__message-actions">
                                                         <button
-                                                            key={reaction.reaction}
-                                                            type="button"
-                                                            className={reaction.reactedByMe ? 'is-active' : ''}
-                                                            disabled={!canEdit}
+                                                            className="chats__message-action"
+                                                            disabled={message.retryFile ? isUploading : false}
                                                             onClick={() => {
-                                                                if (canEdit) void handleReaction(message, reaction.reaction)
+                                                                if (message.retryFile) {
+                                                                    void sendAttachmentMessage(
+                                                                        message.retryFile,
+                                                                        message.body || '',
+                                                                        message.clientMessageId,
+                                                                        message.attachments?.[0]?.localPreviewUrl || ''
+                                                                    )
+                                                                } else {
+                                                                    void sendMessage(message.body, message.clientMessageId)
+                                                                }
                                                             }}
                                                         >
-                                                            {reaction.reaction} {reaction.count}
+                                                            <RefreshCw size={13} aria-hidden="true" />
+                                                            Повторить
                                                         </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {message.failed && (
-                                                <div className="chats__message-actions">
-                                                <button
-                                                    className="chats__message-action"
-                                                    disabled={message.retryFile ? isUploading : false}
-                                                    onClick={() => {
-                                                        if (message.retryFile) {
-                                                            void sendAttachmentMessage(
-                                                                message.retryFile,
-                                                                message.body || '',
-                                                                message.clientMessageId,
-                                                                message.attachments?.[0]?.localPreviewUrl || ''
-                                                            )
-                                                        } else {
-                                                            void sendMessage(message.body, message.clientMessageId)
-                                                        }
-                                                    }}
-                                                >
-                                                    <RefreshCw size={13} aria-hidden="true" />
-                                                    Повторить
-                                                </button>
-                                                    {message.retryFile && (
-                                                        <button
-                                                            type="button"
-                                                            className="chats__message-action"
-                                                            disabled={isUploading}
-                                                            onClick={() => removeFailedMessage(message)}
-                                                        >
-                                                            <Trash2 size={13} aria-hidden="true" />
-                                                            Удалить
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
+                                                        {message.retryFile && (
+                                                            <button
+                                                                type="button"
+                                                                className="chats__message-action"
+                                                                disabled={isUploading}
+                                                                onClick={() => removeFailedMessage(message)}
+                                                            >
+                                                                <Trash2 size={13} aria-hidden="true" />
+                                                                Удалить
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )
                                 })}
@@ -1555,7 +1737,7 @@ function ChatsPage() {
                                     {canEdit && (
                                         <div className="chats__reaction-row">
                                             {QUICK_REACTIONS.map((reaction) => (
-                                                <button key={reaction} type="button" onClick={() => {
+                                                <button key={reaction} type="button" role="menuitem" onClick={() => {
                                                     closeMessageMenu()
                                                     void handleReaction(activeMenuMessage, reaction)
                                                 }}>
@@ -1565,27 +1747,30 @@ function ChatsPage() {
                                         </div>
                                     )}
                                     {canEdit && (
-                                        <button type="button" onClick={() => { setReplyToMessage(activeMenuMessage); closeMessageMenu(); textareaRef.current?.focus() }}>Ответить</button>
+                                        <button type="button" role="menuitem" onClick={() => { setReplyToMessage(activeMenuMessage); closeMessageMenu(); textareaRef.current?.focus() }}>Ответить</button>
+                                    )}
+                                    {activeMenuMessage.body && (
+                                        <button type="button" role="menuitem" onClick={() => void copyMessageText(activeMenuMessage)}>Копировать текст</button>
                                     )}
                                     {canEdit && activeMenuMessage.senderUserId === currentUser?.id && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(activeMenuMessage.messageType) && (
-                                        <button type="button" onClick={() => { setEditingMessageId(activeMenuMessage.id); setEditingBody(activeMenuMessage.body || ''); closeMessageMenu() }}>Редактировать</button>
-                                    )}
-                                    <button type="button" onClick={() => { setConfirmAction({ type: 'deleteMe', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у себя</button>
-                                    {canEdit && activeMenuMessage.senderUserId === currentUser?.id && (
-                                        <button type="button" onClick={() => { setConfirmAction({ type: 'deleteAll', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у всех</button>
+                                        <button type="button" role="menuitem" onClick={() => { startEditingMessage(activeMenuMessage); closeMessageMenu() }}>Редактировать</button>
                                     )}
                                     {canEdit && (
-                                        <button type="button" disabled={isPinUpdating} onClick={() => { closeMessageMenu(); void handlePinToggle(activeMenuMessage) }}>
+                                        <button type="button" role="menuitem" disabled={isPinUpdating} onClick={() => { closeMessageMenu(); void handlePinToggle(activeMenuMessage) }}>
                                             {state.activeDialog?.pinnedMessage?.messageId === activeMenuMessage.id ? 'Открепить' : 'Закрепить'}
                                         </button>
                                     )}
                                     {canEdit && (
-                                        <button type="button" onClick={() => {
+                                        <button type="button" role="menuitem" onClick={() => {
                                             setForwardingMessage(activeMenuMessage)
                                             setForwardSearch('')
                                             setForwardClientMessageId(createClientMessageId())
                                             closeMessageMenu()
                                         }}>Переслать</button>
+                                    )}
+                                    <button type="button" role="menuitem" className="is-danger" onClick={() => { setConfirmAction({ type: 'deleteMe', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у себя</button>
+                                    {canEdit && activeMenuMessage.senderUserId === currentUser?.id && (
+                                        <button type="button" role="menuitem" className="is-danger" onClick={() => { setConfirmAction({ type: 'deleteAll', message: activeMenuMessage }); closeMessageMenu() }}>Удалить у всех</button>
                                     )}
                                 </div>
                             )}
