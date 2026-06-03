@@ -17,6 +17,10 @@ import ru.itplanet.trampline.interaction.chat.model.response.ChatDialogResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatMessageResponse
 import ru.itplanet.trampline.interaction.chat.model.response.ChatParticipantSummaryResponse
+import ru.itplanet.trampline.interaction.chat.model.response.ChatForwardedMessageResponse
+import ru.itplanet.trampline.interaction.chat.model.response.ChatMessageReactionResponse
+import ru.itplanet.trampline.interaction.chat.model.response.ChatMessageReplyPreviewResponse
+import ru.itplanet.trampline.interaction.chat.model.response.ChatPinnedMessageResponse
 import ru.itplanet.trampline.interaction.exception.InteractionBadRequestException
 import java.nio.charset.StandardCharsets
 import java.time.OffsetDateTime
@@ -66,6 +70,14 @@ class ChatRestMapper {
             archived = dialog.archived,
             createdAt = dialog.createdAt,
             updatedAt = dialog.updatedAt,
+            pinnedMessage = dialog.pinnedMessage?.let {
+                ChatPinnedMessageResponse(
+                    messageId = it.messageId,
+                    pinnedByUserId = it.pinnedByUserId,
+                    pinnedAt = it.pinnedAt,
+                    preview = it.preview,
+                )
+            },
         )
     }
 
@@ -94,24 +106,33 @@ class ChatRestMapper {
             canSend = item.canSend,
             responseStatus = item.responseStatus,
             archived = item.archived,
+            pinnedMessage = item.pinnedMessage?.let {
+                ChatPinnedMessageResponse(
+                    messageId = it.messageId,
+                    pinnedByUserId = it.pinnedByUserId,
+                    pinnedAt = it.pinnedAt,
+                    preview = it.preview,
+                )
+            },
         )
     }
 
     fun toChatMessageResponse(
         message: ChatMessage,
     ): ChatMessageResponse {
+        val deleted = message.deletedAt != null
         return ChatMessageResponse(
             id = message.id,
             dialogId = message.dialogId,
             senderUserId = message.senderUserId,
             senderRole = message.senderRole,
             messageType = message.messageType,
-            body = message.body,
+            body = if (deleted) null else message.body,
             clientMessageId = message.clientMessageId,
             createdAt = message.createdAt,
             editedAt = message.editedAt,
             deletedAt = message.deletedAt,
-            attachments = message.attachments.map {
+            attachments = if (deleted) emptyList() else message.attachments.map {
                 ChatAttachmentResponse(
                     id = it.id,
                     fileId = it.fileId,
@@ -121,6 +142,30 @@ class ChatRestMapper {
                     attachmentKind = it.attachmentKind,
                 )
             },
+            reactions = message.reactions.map {
+                ChatMessageReactionResponse(
+                    reaction = it.reaction,
+                    count = it.count,
+                    reactedByMe = it.reactedByMe,
+                )
+            },
+            replyTo = message.replyTo?.let {
+                ChatMessageReplyPreviewResponse(
+                    id = it.id,
+                    senderUserId = it.senderUserId,
+                    senderDisplayName = it.senderDisplayName,
+                    bodyPreview = it.bodyPreview,
+                    attachmentKind = it.attachmentKind,
+                    deleted = it.deleted,
+                )
+            },
+            forwardedFrom = message.forwardedFrom?.let {
+                ChatForwardedMessageResponse(
+                    messageId = it.messageId,
+                    senderName = it.senderName,
+                )
+            },
+            pinned = message.pinned,
         )
     }
 

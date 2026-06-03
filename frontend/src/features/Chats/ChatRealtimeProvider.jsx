@@ -5,6 +5,7 @@ import { ChatRealtimeContext } from './useChatRealtime'
 import {
     publishChatMessage,
     publishChatRead,
+    publishChatTyping,
     releaseChatRealtime,
     retainChatRealtime,
     subscribeChatConnectionStatus,
@@ -53,6 +54,7 @@ export function ChatRealtimeProvider({ children }) {
         events,
         publishMessage: publishChatMessage,
         publishRead: publishChatRead,
+        publishTyping: publishChatTyping,
     }), [connectionStatus, events])
 
     return (

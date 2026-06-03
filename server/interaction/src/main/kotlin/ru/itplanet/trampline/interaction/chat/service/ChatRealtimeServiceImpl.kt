@@ -7,9 +7,11 @@ import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.interaction.chat.dao.ChatDialogQueryDao
 import ru.itplanet.trampline.interaction.chat.dao.ChatParticipantStateDao
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatDialogDto
+import ru.itplanet.trampline.interaction.chat.model.ChatDialog
 import ru.itplanet.trampline.interaction.chat.mapper.ChatRealtimeMapper
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 import ru.itplanet.trampline.interaction.chat.model.ChatMessageCommandResult
+import ru.itplanet.trampline.interaction.chat.model.ChatMessage
 import java.time.OffsetDateTime
 
 @Service
@@ -19,6 +21,7 @@ class ChatRealtimeServiceImpl(
     private val chatParticipantStateDao: ChatParticipantStateDao,
     private val chatMessageCommandService: ChatMessageCommandService,
     private val chatReadService: ChatReadService,
+    private val chatMessageEnrichmentService: ChatMessageEnrichmentService,
     private val chatRealtimeMapper: ChatRealtimeMapper,
     private val simpMessagingTemplate: SimpMessagingTemplate,
 ) : ChatRealtimeService {
@@ -28,7 +31,8 @@ class ChatRealtimeServiceImpl(
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String,
-    ) {
+        replyToMessageId: Long?,
+    ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
 
         val commandResult = chatMessageCommandService.sendMessage(
@@ -36,9 +40,11 @@ class ChatRealtimeServiceImpl(
             currentUser = currentUser,
             clientMessageId = clientMessageId,
             body = body,
+            replyToMessageId = replyToMessageId,
         )
 
         broadcastCreatedMessage(dialog, commandResult)
+        return commandResult
     }
 
     override fun handleSendAttachment(
@@ -47,6 +53,7 @@ class ChatRealtimeServiceImpl(
         clientMessageId: String,
         body: String?,
         file: MultipartFile,
+        replyToMessageId: Long?,
     ): ChatMessageCommandResult {
         val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
         val commandResult = chatMessageCommandService.sendAttachment(
@@ -55,6 +62,7 @@ class ChatRealtimeServiceImpl(
             clientMessageId = clientMessageId,
             body = body,
             file = file,
+            replyToMessageId = replyToMessageId,
         )
         broadcastCreatedMessage(dialog, commandResult)
         return commandResult
@@ -68,8 +76,10 @@ class ChatRealtimeServiceImpl(
 
         safeSendToParticipants(
             dialog = dialog,
-            eventSupplier = {
-                chatRealtimeMapper.toMessageCreatedEvent(commandResult.message)
+            eventSupplier = { targetUserId ->
+                chatRealtimeMapper.toMessageCreatedEvent(
+                    chatMessageEnrichmentService.enrich(commandResult.message, targetUserId),
+                )
             },
         )
 
@@ -124,6 +134,91 @@ class ChatRealtimeServiceImpl(
         safeSendDialogUpdated(dialog, currentUser.userId)
     }
 
+    override fun broadcastMessageUpdated(dialogId: Long, message: ChatMessage) {
+        val dialog = chatAccessService.requireDialog(dialogId)
+        safeSendToParticipants(dialog) { targetUserId ->
+            chatRealtimeMapper.toMessageUpdatedEvent(chatMessageEnrichmentService.enrich(message, targetUserId))
+        }
+        safeSendDialogUpdated(dialog, dialog.applicantUserId)
+        safeSendDialogUpdated(dialog, dialog.employerUserId)
+    }
+
+    override fun broadcastMessageDeleted(dialogId: Long, message: ChatMessage) {
+        val dialog = chatAccessService.requireDialog(dialogId)
+        safeSendToParticipants(dialog) { targetUserId ->
+            chatRealtimeMapper.toMessageDeletedEvent(chatMessageEnrichmentService.enrich(message, targetUserId))
+        }
+        safeSendDialogUpdated(dialog, dialog.applicantUserId)
+        safeSendDialogUpdated(dialog, dialog.employerUserId)
+    }
+
+    override fun broadcastMessageReactionsUpdated(dialogId: Long, message: ChatMessage) {
+        val dialog = chatAccessService.requireDialog(dialogId)
+        safeSendToParticipants(dialog) { targetUserId ->
+            chatRealtimeMapper.toMessageReactionsUpdatedEvent(chatMessageEnrichmentService.enrich(message, targetUserId))
+        }
+    }
+
+    override fun broadcastMessageHidden(dialogId: Long, targetUserId: Long, messageId: Long) {
+        try {
+            simpMessagingTemplate.convertAndSendToUser(
+                targetUserId.toString(),
+                CHAT_EVENTS_DESTINATION,
+                chatRealtimeMapper.toMessageHiddenEvent(dialogId, messageId),
+            )
+        } catch (ex: Exception) {
+            logger.warn("Не удалось отправить MESSAGE_HIDDEN пользователю {} по диалогу {}", targetUserId, dialogId, ex)
+        }
+    }
+
+    override fun broadcastDialogUpdated(dialog: ChatDialog) {
+        val persistedDialog = chatAccessService.requireDialog(dialog.dialogId)
+        safeSendDialogUpdated(persistedDialog, persistedDialog.applicantUserId)
+        safeSendDialogUpdated(persistedDialog, persistedDialog.employerUserId)
+    }
+
+    override fun broadcastReadStateUpdated(dialogId: Long, currentUser: AuthenticatedUser) {
+        val dialog = chatAccessService.requireDialog(dialogId)
+        val participantState = chatParticipantStateDao.findByIdDialogIdAndIdUserId(dialogId, currentUser.userId)
+            ?: return
+        val readAt = participantState.lastReadAt ?: OffsetDateTime.now()
+        try {
+            simpMessagingTemplate.convertAndSendToUser(
+                currentUser.userId.toString(),
+                CHAT_EVENTS_DESTINATION,
+                chatRealtimeMapper.toReadStateUpdatedEvent(
+                    dialogId = dialogId,
+                    readerUserId = currentUser.userId,
+                    lastReadMessageId = participantState.lastReadMessageId,
+                    readAt = readAt,
+                ),
+            )
+        } catch (ex: Exception) {
+            logger.warn("Не удалось отправить READ_STATE_UPDATED пользователю {} по диалогу {}", currentUser.userId, dialogId, ex)
+        }
+        safeSendDialogUpdated(dialog, currentUser.userId)
+    }
+
+    override fun handleTyping(dialogId: Long, currentUser: AuthenticatedUser, typing: Boolean) {
+        val dialog = chatAccessService.assertDialogParticipant(dialogId, currentUser.userId)
+        chatAccessService.assertCanWrite(dialog, currentUser)
+        val targetUserId = if (currentUser.userId == dialog.applicantUserId) dialog.employerUserId else dialog.applicantUserId
+        try {
+            simpMessagingTemplate.convertAndSendToUser(
+                targetUserId.toString(),
+                CHAT_EVENTS_DESTINATION,
+                chatRealtimeMapper.toTypingUpdatedEvent(
+                    dialogId = dialogId,
+                    userId = currentUser.userId,
+                    typing = typing,
+                    expiresAt = OffsetDateTime.now().plusSeconds(4),
+                ),
+            )
+        } catch (ex: Exception) {
+            logger.warn("Не удалось отправить TYPING_UPDATED пользователю {} по диалогу {}", targetUserId, dialogId, ex)
+        }
+    }
+
     private fun safeSendDialogUpdated(
         dialog: ChatDialogDto,
         targetUserId: Long,
@@ -150,7 +245,7 @@ class ChatRealtimeServiceImpl(
 
     private fun safeSendToParticipants(
         dialog: ChatDialogDto,
-        eventSupplier: () -> Any,
+        eventSupplier: (Long) -> Any,
     ) {
         val participantUserIds = linkedSetOf(
             dialog.applicantUserId,
@@ -162,7 +257,7 @@ class ChatRealtimeServiceImpl(
                 simpMessagingTemplate.convertAndSendToUser(
                     userId.toString(),
                     CHAT_EVENTS_DESTINATION,
-                    eventSupplier(),
+                    eventSupplier(userId),
                 )
             } catch (ex: Exception) {
                 logger.warn(

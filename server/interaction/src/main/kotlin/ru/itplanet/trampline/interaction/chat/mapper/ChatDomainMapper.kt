@@ -6,6 +6,7 @@ import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageAttachmentDto
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageDto
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatSenderRole
 import ru.itplanet.trampline.interaction.chat.model.ChatAttachment
+import ru.itplanet.trampline.interaction.chat.model.ChatForwardedMessage
 import ru.itplanet.trampline.interaction.chat.model.ChatMessage
 import ru.itplanet.trampline.interaction.dao.dto.ContactInfoApplicantProfileDto
 import ru.itplanet.trampline.interaction.exception.InteractionForbiddenException
@@ -31,6 +32,12 @@ class ChatDomainMapper {
             editedAt = dto.editedAt,
             deletedAt = dto.deletedAt,
             attachments = dto.attachments.map(::toChatAttachment),
+            forwardedFrom = dto.forwardedFromMessageId?.let {
+                ChatForwardedMessage(
+                    messageId = it,
+                    senderName = dto.forwardedFromSenderName,
+                )
+            },
         )
     }
 

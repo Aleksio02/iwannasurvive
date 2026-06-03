@@ -1,6 +1,7 @@
 package ru.itplanet.trampline.interaction.chat.model.request
 
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 
 data class SendChatMessageRequest(
@@ -11,4 +12,7 @@ data class SendChatMessageRequest(
     @field:NotBlank(message = "Текст сообщения не должен быть пустым")
     @field:Size(max = 4000, message = "Текст сообщения не должен превышать 4000 символов")
     val body: String,
+
+    @field:Positive(message = "Идентификатор сообщения для ответа должен быть положительным")
+    val replyToMessageId: Long? = null,
 )

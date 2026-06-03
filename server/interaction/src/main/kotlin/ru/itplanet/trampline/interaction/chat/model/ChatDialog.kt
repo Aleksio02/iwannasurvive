@@ -20,4 +20,5 @@ data class ChatDialog(
     val archived: Boolean,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?,
+    val pinnedMessage: ChatPinnedMessage? = null,
 )

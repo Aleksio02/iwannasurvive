@@ -11,6 +11,7 @@ interface ChatMessageCommandService {
         currentUser: AuthenticatedUser,
         clientMessageId: String,
         body: String,
+        replyToMessageId: Long? = null,
     ): ChatMessageCommandResult
 
     fun sendAttachment(
@@ -19,6 +20,34 @@ interface ChatMessageCommandService {
         clientMessageId: String,
         body: String?,
         file: MultipartFile,
+        replyToMessageId: Long? = null,
+    ): ChatMessageCommandResult
+
+    fun editMessage(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+        body: String,
+    ): ChatMessageCommandResult
+
+    fun deleteForMe(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+    )
+
+    fun deleteForEveryone(
+        dialogId: Long,
+        messageId: Long,
+        currentUser: AuthenticatedUser,
+    ): ChatMessageCommandResult
+
+    fun forwardMessage(
+        sourceDialogId: Long,
+        messageId: Long,
+        targetDialogId: Long,
+        currentUser: AuthenticatedUser,
+        clientMessageId: String,
     ): ChatMessageCommandResult
 
     fun getAttachmentDownloadUrl(

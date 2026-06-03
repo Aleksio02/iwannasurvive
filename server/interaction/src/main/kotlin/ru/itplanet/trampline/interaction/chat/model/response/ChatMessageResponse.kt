@@ -16,4 +16,28 @@ data class ChatMessageResponse(
     val editedAt: OffsetDateTime?,
     val deletedAt: OffsetDateTime?,
     val attachments: List<ChatAttachmentResponse> = emptyList(),
+    val reactions: List<ChatMessageReactionResponse> = emptyList(),
+    val replyTo: ChatMessageReplyPreviewResponse? = null,
+    val forwardedFrom: ChatForwardedMessageResponse? = null,
+    val pinned: Boolean = false,
+)
+
+data class ChatMessageReactionResponse(
+    val reaction: String,
+    val count: Long,
+    val reactedByMe: Boolean,
+)
+
+data class ChatMessageReplyPreviewResponse(
+    val id: Long,
+    val senderUserId: Long,
+    val senderDisplayName: String,
+    val bodyPreview: String?,
+    val attachmentKind: String?,
+    val deleted: Boolean,
+)
+
+data class ChatForwardedMessageResponse(
+    val messageId: Long?,
+    val senderName: String?,
 )

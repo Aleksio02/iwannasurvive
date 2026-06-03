@@ -10,6 +10,10 @@ interface ChatAccessService {
         currentUserId: Long,
     ): ChatDialogDto
 
+    fun requireDialog(
+        dialogId: Long,
+    ): ChatDialogDto
+
     fun assertCanRead(
         dialog: ChatDialogDto,
         currentUser: AuthenticatedUser,
