@@ -5,6 +5,7 @@ import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalCuratorModerationStatsResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
+import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskSummaryLookupResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
 import ru.itplanet.trampline.moderation.model.request.GetModerationTasksRequest
@@ -50,6 +51,12 @@ interface ModerationQueryService {
         entityId: Long,
         taskType: ModerationTaskType,
     ): InternalModerationTaskLookupResponse
+
+    fun findLatestTaskSummaryByEntity(
+        entityType: ModerationEntityType,
+        entityId: Long,
+        taskType: ModerationTaskType,
+    ): InternalModerationTaskSummaryLookupResponse
 
     fun getCuratorStats(
         userId: Long,

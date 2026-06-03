@@ -16,6 +16,9 @@ import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
 import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalCuratorModerationStatsResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
+import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskHistoryItemResponse
+import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskSummaryLookupResponse
+import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskSummaryResponse
 import ru.itplanet.trampline.commons.model.moderation.ModerationEntityType
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskPriority
 import ru.itplanet.trampline.commons.model.moderation.ModerationTaskType
@@ -278,6 +281,24 @@ class ModerationQueryServiceImpl(
     }
 
     @Transactional(readOnly = true)
+    override fun findLatestTaskSummaryByEntity(
+        entityType: ModerationEntityType,
+        entityId: Long,
+        taskType: ModerationTaskType,
+    ): InternalModerationTaskSummaryLookupResponse {
+        val task = moderationTaskDao.findFirstByEntityTypeAndEntityIdAndTaskTypeOrderByCreatedAtDescIdDesc(
+            entityType = entityType,
+            entityId = entityId,
+            taskType = taskType,
+        ) ?: return InternalModerationTaskSummaryLookupResponse(exists = false)
+
+        return InternalModerationTaskSummaryLookupResponse(
+            exists = true,
+            task = task.toSummaryResponse(),
+        )
+    }
+
+    @Transactional(readOnly = true)
     override fun getCuratorStats(
         userId: Long,
     ): InternalCuratorModerationStatsResponse {
@@ -426,6 +447,35 @@ class ModerationQueryServiceImpl(
             actor = actorUser?.toResponse(),
             payload = payload.deepCopy(),
             createdAt = createdAt ?: throw IllegalStateException("Дата создания записи истории не должна быть null"),
+        )
+    }
+
+    private fun ModerationTaskDto.toSummaryResponse(): InternalModerationTaskSummaryResponse {
+        val taskId = id ?: throw IllegalStateException("Идентификатор задачи модерации не должен быть null")
+        val history = moderationLogDao.findByTaskIdOrderByCreatedAtAscIdAsc(taskId)
+
+        return InternalModerationTaskSummaryResponse(
+            id = taskId,
+            entityType = entityType,
+            entityId = entityId,
+            taskType = taskType,
+            status = status.name,
+            priority = priority,
+            active = status in ACTIVE_TASK_STATUSES,
+            createdAt = createdAt ?: throw IllegalStateException("Дата создания задачи модерации не должна быть null"),
+            updatedAt = updatedAt ?: throw IllegalStateException("Дата обновления задачи модерации не должна быть null"),
+            resolvedAt = resolvedAt,
+            resolutionComment = resolutionComment,
+            history = history.map { it.toSummaryHistoryItemResponse() },
+        )
+    }
+
+    private fun ModerationLogDto.toSummaryHistoryItemResponse(): InternalModerationTaskHistoryItemResponse {
+        return InternalModerationTaskHistoryItemResponse(
+            action = action.name,
+            createdAt = createdAt ?: throw IllegalStateException("Дата создания записи истории не должна быть null"),
+            actorUserId = actorUser?.id,
+            comment = textValue(payload, "text").takeIf { action == ModerationLogAction.COMMENTED },
         )
     }
 

@@ -1,17 +1,37 @@
-import React, { useEffect } from 'react';
-import { getTagCategoryLabel } from '@/shared/lib/utils/tagCategories';
+import React, { useEffect, useState } from 'react';
+import { getEmployerTagModerationDetails } from '@/shared/api/employerTag';
+import TagModerationDetailsContent from './TagModerationDetailsContent.jsx';
 import styles from './TagModerationDetails.module.scss';
 
-const TAG_STATUS_LABELS = {
-  PENDING: 'На модерации',
-  APPROVED: 'Одобрен',
-  REJECTED: 'Отклонен',
-};
-
-const getTagStatusLabel = (status) => TAG_STATUS_LABELS[String(status || '').toUpperCase()] || 'Не указан';
-
 const TagModerationDetails = ({ tag, onClose }) => {
-  if (!tag) return null;
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(Boolean(tag?.id));
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const fetchDetails = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getEmployerTagModerationDetails(tag.id);
+        if (!ignore) setDetails(data);
+      } catch (err) {
+        if (!ignore) setError('Не удалось загрузить карточку тега');
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    };
+
+    if (tag?.id) {
+      fetchDetails();
+    }
+
+    return () => {
+      ignore = true;
+    };
+  }, [tag?.id]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -27,34 +47,24 @@ const TagModerationDetails = ({ tag, onClose }) => {
     return () => document.documentElement.classList.remove('is-lock');
   }, []);
 
+  if (!tag) return null;
+
   return (
-      <div
-        className={styles.overlay}
-        onClick={(event) => event.target === event.currentTarget && onClose?.()}
-      >
-        <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-          <button className={styles.closeBtn} onClick={onClose}>×</button>
-          <h3>Информация о теге</h3>
-          <div className={styles.field}>
-            <span className={styles.label}>Название:</span>
-            <span>{tag.name}</span>
-          </div>
-          <div className={styles.field}>
-            <span className={styles.label}>Категория:</span>
-            <span>{getTagCategoryLabel(tag.category)}</span>
-          </div>
-          <div className={styles.field}>
-            <span className={styles.label}>Статус:</span>
-            <span>{getTagStatusLabel(tag.moderationStatus)}</span>
-          </div>
-          {tag.moderationComment && (
-              <div className={styles.field}>
-                <span className={styles.label}>Комментарий модератора:</span>
-                <span className={styles.comment}>{tag.moderationComment}</span>
-              </div>
-          )}
-        </div>
+    <div
+      className={styles.overlay}
+      onClick={(event) => event.target === event.currentTarget && onClose?.()}
+    >
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <TagModerationDetailsContent
+          details={details}
+          title="Информация о теге"
+          loading={loading}
+          error={error}
+          onClose={onClose}
+          fallbackTag={tag}
+        />
       </div>
+    </div>
   );
 };
 

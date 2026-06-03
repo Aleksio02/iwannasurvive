@@ -18,7 +18,9 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('TECH');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const overlayMouseDownStartedOutsideRef = useRef(false);
+  const isBusy = isLoading || submitting;
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -36,12 +38,25 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) {
+    if (isBusy) return;
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setError('Введите название тега');
       return;
     }
+    if (trimmedName.length > 100) {
+      setError('Название тега не должно быть длиннее 100 символов');
+      return;
+    }
+
     setError('');
-    await onCreate({ name: name.trim(), category });
+    setSubmitting(true);
+    try {
+      await onCreate({ name: trimmedName, category });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleOverlayMouseDown = (event) => {
@@ -71,7 +86,7 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Например, JavaScript"
-                  disabled={isLoading}
+                  disabled={isBusy}
               />
             </div>
             <div className={styles.field}>
@@ -81,12 +96,15 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
                   onChange={setCategory}
                   options={CATEGORIES}
                   inModal={true}
+                  disabled={isBusy}
               />
             </div>
             {error && <div className={styles.error}>{error}</div>}
             <div className={styles.actions}>
-              <Button type="button" className="button--outline" onClick={onCancel} disabled={isLoading}>Отмена</Button>
-              <Button type="submit" className="button--primary" disabled={isLoading}>Создать</Button>
+              <Button type="button" className="button--outline" onClick={onCancel} disabled={isBusy}>Отмена</Button>
+              <Button type="submit" className="button--primary" disabled={isBusy}>
+                {submitting ? 'Создание...' : 'Создать'}
+              </Button>
             </div>
           </form>
         </div>

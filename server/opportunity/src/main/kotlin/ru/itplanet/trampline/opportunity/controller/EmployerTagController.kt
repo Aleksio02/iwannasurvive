@@ -12,6 +12,7 @@ import ru.itplanet.trampline.commons.model.enums.TagCategory
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.opportunity.exception.OpportunityForbiddenException
 import ru.itplanet.trampline.opportunity.model.EmployerTagResponse
+import ru.itplanet.trampline.opportunity.model.TagModerationDetailsResponse
 import ru.itplanet.trampline.opportunity.model.enums.CreatedByType
 import ru.itplanet.trampline.opportunity.model.enums.TagModerationStatus
 import ru.itplanet.trampline.opportunity.model.request.CreateEmployerTagRequest
@@ -80,6 +81,19 @@ class EmployerTagController(
         return employerAndCuratorTagService.getModerationTask(
             currentUserId = currentUser.userId,
             createdByType = CreatedByType.EMPLOYER,
+            tagId = id,
+        )
+    }
+
+    @GetMapping("/{id}/moderation-details")
+    fun getModerationDetails(
+        @CurrentUser currentUser: AuthenticatedUser,
+        @PathVariable @Positive(message = "Идентификатор тега должен быть положительным") id: Long,
+    ): TagModerationDetailsResponse {
+        ensureEmployer(currentUser)
+
+        return employerAndCuratorTagService.getEmployerTagModerationDetails(
+            currentUserId = currentUser.userId,
             tagId = id,
         )
     }
