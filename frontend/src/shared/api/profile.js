@@ -1655,6 +1655,7 @@ export async function openVerificationAttachment(attachment) {
     if (ownerUserId && fileId) {
         const url = `${API_BASE}/profile/employer/${ownerUserId}/files/${fileId}`
         window.open(url, '_blank', 'noopener,noreferrer')
+        return
     }
 
     throw new Error('Невозможно открыть файл: отсутствует URL')
