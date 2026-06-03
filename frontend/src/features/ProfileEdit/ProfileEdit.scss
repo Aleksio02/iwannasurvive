@@ -1,6 +1,13 @@
 @use '@/styles/helpers' as *;
 
+html, body, #root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .profile-edit {
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   padding: 20px 16px;
   display: flex;
@@ -10,6 +17,8 @@
           radial-gradient(circle at top left, rgba(31, 182, 170, 0.15), transparent 26%),
           radial-gradient(circle at bottom right, rgba(53, 203, 191, 0.1), transparent 24%),
           linear-gradient(180deg, #fbffff 0%, #f4fbfb 100%);
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .profile-edit__card {
@@ -17,6 +26,12 @@
   max-width: 860px;
   box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.1);
   transition: box-shadow 0.2s ease;
+  box-sizing: border-box;
+
+  .card-header,
+  .card-content {
+    padding: 24px;
+  }
 }
 
 .profile-edit__back {
@@ -59,7 +74,7 @@
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 
-  @media (max-width: 760px) {
+  @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 }
@@ -433,42 +448,6 @@
   }
 }
 
-@media (max-width: 560px) {
-  .profile-contact-editor__presets {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .profile-contact-editor__preset {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .profile-contact-editor__card {
-    padding: 14px;
-    border-radius: 16px;
-  }
-
-  .profile-contact-editor__card .input {
-    min-width: 0;
-    width: 100%;
-  }
-}
-
-@media (max-width: 420px) {
-  .profile-contact-editor__card-header {
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .profile-contact-editor__remove {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-    font-size: 20px;
-  }
-}
-
 .profile-edit-form__checkboxes {
   display: grid;
   gap: 8px;
@@ -646,5 +625,200 @@
 .modal__field--location-title {
   .label {
     margin-bottom: 6px;
+  }
+}
+
+@media (max-width: 900px) {
+  .profile-edit__card {
+    max-width: 95%;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-edit {
+    padding: 16px;
+    min-height: auto;
+  }
+
+  .profile-edit__card {
+    max-width: 100%;
+    border-radius: 20px;
+
+    .card-header,
+    .card-content {
+      padding: 16px;
+    }
+  }
+
+  .profile-edit-form {
+    gap: 16px;
+  }
+
+  .modal {
+    max-width: calc(100% - 24px);
+    padding: 16px;
+  }
+
+  .modal__actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .modal__actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-edit {
+    padding: 12px;
+  }
+
+  .profile-edit__card {
+    border-radius: 18px;
+
+    .card-header,
+    .card-content {
+      padding: 14px;
+    }
+  }
+
+  .profile-edit-form {
+    gap: 14px;
+  }
+
+  .advanced-block,
+  .profile-tags-section {
+    padding: 12px;
+  }
+
+  .profile-contact-editor__card {
+    padding: 12px;
+  }
+
+  .profile-contact-editor__card-header {
+    flex-wrap: wrap;
+  }
+
+  .profile-contact-editor__remove {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+  }
+
+  .links-editor__row {
+    gap: 8px;
+  }
+
+  .links-editor__remove {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-edit {
+    padding: 10px;
+  }
+
+  .profile-edit__card {
+    border-radius: 16px;
+
+    .card-header,
+    .card-content {
+      padding: 12px;
+    }
+  }
+
+  .profile-edit-form__grid-2,
+  .profile-edit-form__grid-3 {
+    gap: 12px;
+  }
+
+  .profile-edit-form__field .input,
+  .profile-edit-form__field .autocomplete input,
+  .profile-edit-form__field .custom-select__button {
+    font-size: 16px;
+  }
+
+  .advanced-toggle {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  .profile-tags-section h3 {
+    font-size: 15px;
+  }
+
+  .profile-tags-section > div > p {
+    font-size: 12px;
+  }
+
+  .profile-contact-editor__preset {
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .profile-contact-editor__preset-badge,
+  .profile-contact-editor__card-badge {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    font-size: 10px;
+  }
+
+  .profile-contact-editor__card-title strong {
+    font-size: 13px;
+  }
+
+  .profile-contact-editor__card-title > div span {
+    font-size: 11px;
+  }
+
+  .modal {
+    padding: 14px;
+  }
+
+  .modal h3 {
+    font-size: 18px;
+  }
+
+  .custom-checkbox {
+    min-height: 40px;
+    padding: 6px 10px;
+  }
+
+  .custom-checkbox__label {
+    font-size: 13px;
+  }
+
+  .field-hint,
+  .field-error {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 380px) {
+  .profile-edit {
+    padding: 8px;
+  }
+
+  .profile-edit__card .card-header,
+  .profile-edit__card .card-content {
+    padding: 10px;
+  }
+
+  .profile-contact-editor__preset {
+    font-size: 11px;
+    padding: 0 8px;
+  }
+
+  .profile-contact-editor__preset-badge {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    font-size: 9px;
   }
 }
