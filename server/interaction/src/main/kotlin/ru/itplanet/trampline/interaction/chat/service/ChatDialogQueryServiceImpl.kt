@@ -6,6 +6,7 @@ import ru.itplanet.trampline.interaction.chat.dao.ChatDialogQueryDao
 import ru.itplanet.trampline.interaction.chat.model.ChatDialog
 import ru.itplanet.trampline.interaction.chat.model.ChatDialogListQuery
 import ru.itplanet.trampline.interaction.chat.model.ChatDialogPage
+import ru.itplanet.trampline.interaction.chat.model.response.ChatOpportunityFilterResponse
 import ru.itplanet.trampline.interaction.exception.InteractionNotFoundException
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 
@@ -34,5 +35,11 @@ class ChatDialogQueryServiceImpl(
         query: ChatDialogListQuery,
     ): ChatDialogPage {
         return chatDialogQueryDao.findDialogs(currentUser.userId, query)
+    }
+
+    override fun getOpportunityFilters(
+        currentUser: AuthenticatedUser,
+    ): List<ChatOpportunityFilterResponse> {
+        return chatDialogQueryDao.findOpportunityFilters(currentUser.userId)
     }
 }

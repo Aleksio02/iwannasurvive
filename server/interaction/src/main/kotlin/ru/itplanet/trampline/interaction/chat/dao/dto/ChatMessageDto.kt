@@ -52,6 +52,15 @@ open class ChatMessageDto {
     @Column(name = "deleted_at")
     var deletedAt: OffsetDateTime? = null
 
+    @Column(name = "reply_to_message_id")
+    var replyToMessageId: Long? = null
+
+    @Column(name = "forwarded_from_message_id")
+    var forwardedFromMessageId: Long? = null
+
+    @Column(name = "forwarded_from_sender_name", length = 255)
+    var forwardedFromSenderName: String? = null
+
     @OneToMany(mappedBy = "message", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.EAGER)
     var attachments: MutableList<ChatMessageAttachmentDto> = mutableListOf()
 
@@ -64,6 +73,9 @@ open class ChatMessageDto {
         body: String?,
         clientMessageId: String,
         messageType: ChatMessageType = ChatMessageType.TEXT,
+        replyToMessageId: Long? = null,
+        forwardedFromMessageId: Long? = null,
+        forwardedFromSenderName: String? = null,
     ) {
         this.dialogId = dialogId
         this.senderUserId = senderUserId
@@ -71,6 +83,9 @@ open class ChatMessageDto {
         this.body = body
         this.clientMessageId = clientMessageId
         this.messageType = messageType
+        this.replyToMessageId = replyToMessageId
+        this.forwardedFromMessageId = forwardedFromMessageId
+        this.forwardedFromSenderName = forwardedFromSenderName
     }
 }
 

@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException
 import org.springframework.stereotype.Controller
 import org.springframework.validation.annotation.Validated
 import ru.itplanet.trampline.interaction.chat.service.ChatRealtimeService
+import ru.itplanet.trampline.interaction.chat.ws.model.ChatTypingWsRequest
 import ru.itplanet.trampline.interaction.chat.ws.model.MarkChatReadWsRequest
 import ru.itplanet.trampline.interaction.chat.ws.model.SendChatMessageWsRequest
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
@@ -30,6 +31,7 @@ class ChatWebSocketController(
             currentUser = principal.toAuthenticatedUser(),
             clientMessageId = request.clientMessageId,
             body = request.body,
+            replyToMessageId = request.replyToMessageId,
         )
     }
 
@@ -43,6 +45,19 @@ class ChatWebSocketController(
             dialogId = dialogId,
             currentUser = principal.toAuthenticatedUser(),
             lastReadMessageId = request.lastReadMessageId,
+        )
+    }
+
+    @MessageMapping("/chats/{dialogId}/typing")
+    fun typing(
+        @DestinationVariable dialogId: Long,
+        @Payload request: ChatTypingWsRequest,
+        principal: Principal,
+    ) {
+        chatRealtimeService.handleTyping(
+            dialogId = dialogId,
+            currentUser = principal.toAuthenticatedUser(),
+            typing = request.typing,
         )
     }
 

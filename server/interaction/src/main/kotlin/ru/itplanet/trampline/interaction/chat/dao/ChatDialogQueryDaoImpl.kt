@@ -11,6 +11,8 @@ import ru.itplanet.trampline.interaction.chat.model.ChatDialogListItem
 import ru.itplanet.trampline.interaction.chat.model.ChatDialogListQuery
 import ru.itplanet.trampline.interaction.chat.model.ChatDialogPage
 import ru.itplanet.trampline.interaction.chat.model.ChatParticipantSummary
+import ru.itplanet.trampline.interaction.chat.model.ChatPinnedMessage
+import ru.itplanet.trampline.interaction.chat.model.response.ChatOpportunityFilterResponse
 import ru.itplanet.trampline.interaction.chat.service.ChatPolicy
 import ru.itplanet.trampline.interaction.dao.dto.OpportunityResponseStatus
 import java.sql.ResultSet
@@ -70,6 +72,42 @@ class ChatDialogQueryDaoImpl(
             items = items.map { it.item },
             nextCursor = nextCursor,
         )
+    }
+
+    override fun findOpportunityFilters(
+        currentUserId: Long,
+    ): List<ChatOpportunityFilterResponse> {
+        val params = baseParams(currentUserId)
+        val sql = """
+            SELECT
+                d.opportunity_id,
+                d.opportunity_title_snapshot,
+                d.company_name_snapshot,
+                COUNT(*) AS dialogs_count,
+                COALESCE(SUM((
+                    SELECT COUNT(*)
+                    FROM chat_message unread_message
+                    WHERE unread_message.dialog_id = d.id
+                      AND unread_message.sender_user_id <> :currentUserId
+                      AND unread_message.id > COALESCE(ps.last_read_message_id, 0)
+                )), 0) AS unread_count,
+                MAX(COALESCE(d.last_message_at, d.created_at)) AS sort_at
+            FROM chat_dialog d
+            JOIN chat_participant_state ps ON ps.dialog_id = d.id
+                AND ps.user_id = :currentUserId
+            GROUP BY d.opportunity_id, d.opportunity_title_snapshot, d.company_name_snapshot
+            ORDER BY sort_at DESC, d.opportunity_id DESC
+        """.trimIndent()
+
+        return jdbcTemplate.query(sql, params) { rs, _ ->
+            ChatOpportunityFilterResponse(
+                opportunityId = rs.getLong("opportunity_id"),
+                opportunityTitle = rs.getString("opportunity_title_snapshot"),
+                companyName = rs.getString("company_name_snapshot"),
+                dialogsCount = rs.getLong("dialogs_count"),
+                unreadCount = rs.getLong("unread_count"),
+            )
+        }
     }
 
     private fun buildListWhereClause(
@@ -142,6 +180,7 @@ class ChatDialogQueryDaoImpl(
             archived = readOffsetDateTime(rs, "archived_at") != null,
             createdAt = readOffsetDateTime(rs, "created_at"),
             updatedAt = readOffsetDateTime(rs, "updated_at"),
+            pinnedMessage = mapPinnedMessage(rs),
         )
     }
 
@@ -161,6 +200,7 @@ class ChatDialogQueryDaoImpl(
             canSend = rs.getBoolean("can_send"),
             responseStatus = OpportunityResponseStatus.valueOf(rs.getString("response_status")),
             archived = readOffsetDateTime(rs, "archived_at") != null,
+            pinnedMessage = mapPinnedMessage(rs),
         )
 
         val sortAt = readOffsetDateTime(rs, "sort_at")
@@ -179,6 +219,21 @@ class ChatDialogQueryDaoImpl(
             userId = rs.getLong("counterpart_user_id"),
             role = Role.valueOf(rs.getString("counterpart_role")),
             displayName = rs.getString("counterpart_display_name"),
+        )
+    }
+
+    private fun mapPinnedMessage(
+        rs: ResultSet,
+    ): ChatPinnedMessage? {
+        val messageId = rs.getLong("pinned_message_id")
+        if (rs.wasNull()) return null
+
+        return ChatPinnedMessage(
+            messageId = messageId,
+            pinnedByUserId = rs.getLong("pinned_by_user_id"),
+            pinnedAt = readOffsetDateTime(rs, "pinned_at")
+                ?: throw IllegalStateException("Поле pinned_at не должно быть null"),
+            preview = rs.getString("pinned_preview") ?: "Сообщение",
         )
     }
 
@@ -222,6 +277,13 @@ class ChatDialogQueryDaoImpl(
                 d.created_at,
                 d.updated_at,
                 ps.archived_at,
+                pm.message_id AS pinned_message_id,
+                pm.pinned_by_user_id,
+                pm.pinned_at,
+                CASE
+                    WHEN pinned_message.deleted_at IS NOT NULL THEN 'Сообщение удалено'
+                    ELSE LEFT(REGEXP_REPLACE(COALESCE(pinned_message.body, pinned_attachment.original_file_name, 'Вложение'), '\s+', ' ', 'g'), 160)
+                END AS pinned_preview,
                 r.status AS response_status,
                 COALESCE(d.last_message_at, d.created_at) AS sort_at,
                 CASE
@@ -254,6 +316,15 @@ class ChatDialogQueryDaoImpl(
             JOIN opportunity_response r ON r.id = d.opportunity_response_id
             JOIN chat_participant_state ps ON ps.dialog_id = d.id
                 AND ps.user_id = :currentUserId
+            LEFT JOIN chat_pinned_message pm ON pm.dialog_id = d.id
+            LEFT JOIN chat_message pinned_message ON pinned_message.id = pm.message_id
+            LEFT JOIN LATERAL (
+                SELECT a.original_file_name
+                FROM chat_message_attachment a
+                WHERE a.message_id = pm.message_id
+                ORDER BY a.id ASC
+                LIMIT 1
+            ) pinned_attachment ON TRUE
         """.trimIndent()
     }
 }

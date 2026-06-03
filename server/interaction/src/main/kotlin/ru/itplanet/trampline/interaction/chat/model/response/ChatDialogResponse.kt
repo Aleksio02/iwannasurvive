@@ -20,4 +20,5 @@ data class ChatDialogResponse(
     val archived: Boolean,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?,
+    val pinnedMessage: ChatPinnedMessageResponse? = null,
 )

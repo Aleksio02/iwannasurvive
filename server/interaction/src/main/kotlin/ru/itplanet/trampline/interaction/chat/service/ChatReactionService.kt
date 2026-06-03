@@ -1,17 +1,19 @@
 package ru.itplanet.trampline.interaction.chat.service
 
+import ru.itplanet.trampline.interaction.chat.model.ChatMessage
 import ru.itplanet.trampline.interaction.security.AuthenticatedUser
 
-interface ChatReadService {
-    fun markRead(
+interface ChatReactionService {
+    fun setReaction(
         dialogId: Long,
+        messageId: Long,
         currentUser: AuthenticatedUser,
-        lastReadMessageId: Long,
-    )
+        reaction: String,
+    ): ChatMessage
 
-    fun markUnread(
+    fun deleteReaction(
         dialogId: Long,
+        messageId: Long,
         currentUser: AuthenticatedUser,
-        fromMessageId: Long? = null,
-    )
+    ): ChatMessage
 }

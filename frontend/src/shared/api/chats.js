@@ -30,6 +30,13 @@ export function getChatDialog(dialogId) {
     })
 }
 
+export function getChatOpportunityFilters() {
+    return httpJson(`${API_BASE}/filter-options/opportunities`, {
+        dedupe: true,
+        cacheTtlMs: 10_000,
+    })
+}
+
 export function getChatMessages(dialogId, params = {}) {
     const query = toQuery({
         beforeMessageId: params.beforeMessageId,
@@ -65,11 +72,12 @@ async function parseResponseBody(response) {
     return response.text()
 }
 
-export async function sendChatAttachment(dialogId, { clientMessageId, body, file }) {
+export async function sendChatAttachment(dialogId, { clientMessageId, body, file, replyToMessageId }) {
     const formData = new FormData()
     const normalizedBody = (body || '').trim()
     formData.append('clientMessageId', clientMessageId)
     if (normalizedBody) formData.append('body', normalizedBody)
+    if (replyToMessageId) formData.append('replyToMessageId', String(replyToMessageId))
     formData.append('file', file)
 
     let response
@@ -106,6 +114,86 @@ export function markChatRead(dialogId, lastReadMessageId) {
     return httpJson(`${API_BASE}/${dialogId}/read`, {
         method: 'POST',
         body: JSON.stringify({ lastReadMessageId }),
+    })
+}
+
+export function markChatUnread(dialogId, fromMessageId) {
+    return httpJson(`${API_BASE}/${dialogId}/unread`, {
+        method: 'POST',
+        body: JSON.stringify({ fromMessageId: fromMessageId || null }),
+    })
+}
+
+export function editChatMessage(dialogId, messageId, body) {
+    return httpJson(`${API_BASE}/${dialogId}/messages/${messageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body }),
+    })
+}
+
+export function deleteChatMessageForMe(dialogId, messageId) {
+    return httpJson(`${API_BASE}/${dialogId}/messages/${messageId}/delete-for-me`, {
+        method: 'POST',
+    })
+}
+
+export function deleteChatMessageForEveryone(dialogId, messageId) {
+    return httpJson(`${API_BASE}/${dialogId}/messages/${messageId}/delete-for-everyone`, {
+        method: 'POST',
+    })
+}
+
+export function setChatMessageReaction(dialogId, messageId, reaction) {
+    return httpJson(`${API_BASE}/${dialogId}/messages/${messageId}/reaction`, {
+        method: 'PUT',
+        body: JSON.stringify({ reaction }),
+    })
+}
+
+export function deleteChatMessageReaction(dialogId, messageId) {
+    return httpJson(`${API_BASE}/${dialogId}/messages/${messageId}/reaction`, {
+        method: 'DELETE',
+    })
+}
+
+export function pinChatMessage(dialogId, messageId) {
+    return httpJson(`${API_BASE}/${dialogId}/messages/${messageId}/pin`, {
+        method: 'POST',
+    })
+}
+
+export function unpinChatMessage(dialogId) {
+    return httpJson(`${API_BASE}/${dialogId}/pinned-message`, {
+        method: 'DELETE',
+    })
+}
+
+export function forwardChatMessage(sourceDialogId, messageId, payload) {
+    return httpJson(`${API_BASE}/${sourceDialogId}/messages/${messageId}/forward`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+    })
+}
+
+export function searchChatMessages(dialogId, params = {}) {
+    const query = toQuery({
+        query: params.query,
+        limit: params.limit ?? 20,
+        cursor: params.cursor,
+    })
+    return httpJson(`${API_BASE}/${dialogId}/messages/search?${query}`, {
+        dedupe: true,
+    })
+}
+
+export function getChatMessageContext(dialogId, params = {}) {
+    const query = toQuery({
+        messageId: params.messageId,
+        before: params.before ?? 25,
+        after: params.after ?? 25,
+    })
+    return httpJson(`${API_BASE}/${dialogId}/messages/context?${query}`, {
+        dedupe: true,
     })
 }
 

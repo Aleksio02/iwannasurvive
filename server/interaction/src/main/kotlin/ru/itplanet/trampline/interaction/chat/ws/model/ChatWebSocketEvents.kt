@@ -4,14 +4,23 @@ import ru.itplanet.trampline.commons.model.Role
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatDialogStatus
 import ru.itplanet.trampline.interaction.chat.dao.dto.ChatMessageType
 import ru.itplanet.trampline.interaction.chat.model.response.ChatAttachmentResponse
+import ru.itplanet.trampline.interaction.chat.model.response.ChatPinnedMessageResponse
 import ru.itplanet.trampline.interaction.dao.dto.OpportunityResponseStatus
 import java.time.OffsetDateTime
 
 enum class ChatEventType {
     MESSAGE_CREATED,
+    MESSAGE_UPDATED,
+    MESSAGE_DELETED,
+    MESSAGE_HIDDEN,
+    MESSAGE_REACTIONS_UPDATED,
+    MESSAGE_PINNED,
+    MESSAGE_UNPINNED,
     READ_UPDATED,
+    READ_STATE_UPDATED,
     DIALOG_UPDATED,
     DIALOG_CLOSED,
+    TYPING_UPDATED,
 }
 
 data class ChatEventEnvelope(
@@ -43,6 +52,7 @@ data class ChatDialogEventPayload(
     val archived: Boolean,
     val createdAt: OffsetDateTime?,
     val updatedAt: OffsetDateTime?,
+    val pinnedMessage: ChatPinnedMessageResponse? = null,
 )
 
 data class ChatMessageEventPayload(
@@ -57,10 +67,24 @@ data class ChatMessageEventPayload(
     val editedAt: OffsetDateTime?,
     val deletedAt: OffsetDateTime?,
     val attachments: List<ChatAttachmentResponse> = emptyList(),
+    val reactions: List<ru.itplanet.trampline.interaction.chat.model.response.ChatMessageReactionResponse> = emptyList(),
+    val replyTo: ru.itplanet.trampline.interaction.chat.model.response.ChatMessageReplyPreviewResponse? = null,
+    val forwardedFrom: ru.itplanet.trampline.interaction.chat.model.response.ChatForwardedMessageResponse? = null,
+    val pinned: Boolean = false,
 )
 
 data class ChatReadUpdatedEventPayload(
     val readerUserId: Long,
-    val lastReadMessageId: Long,
+    val lastReadMessageId: Long?,
     val readAt: OffsetDateTime,
+)
+
+data class ChatMessageHiddenEventPayload(
+    val messageId: Long,
+)
+
+data class ChatTypingUpdatedEventPayload(
+    val userId: Long,
+    val typing: Boolean,
+    val expiresAt: OffsetDateTime,
 )

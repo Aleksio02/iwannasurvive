@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { Download, FileText, LoaderCircle, Paperclip, RefreshCw, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
+import { Download, FileText, LoaderCircle, MoreHorizontal, Paperclip, Pin, RefreshCw, Search, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
 import { useLocation, useRoute } from 'wouter'
 import DashboardLayout from '@/features/Dashboard/DashboardLayout'
 import Textarea from '@/shared/ui/Textarea'
@@ -7,13 +7,26 @@ import { useToast } from '@/shared/hooks/use-toast'
 import { getSessionUser } from '@/shared/lib/utils/sessionStore'
 import {
     archiveChat,
+    deleteChatMessageForEveryone,
+    deleteChatMessageForMe,
+    deleteChatMessageReaction,
+    editChatMessage,
+    forwardChatMessage,
     getChatDialog,
     getChatDialogs,
     getChatAttachmentDownloadUrl,
+    getChatMessageContext,
     getChatMessages,
+    getChatOpportunityFilters,
     markChatRead,
+    markChatUnread,
+    pinChatMessage,
+    searchChatMessages,
+    sendChatMessageRest,
     sendChatAttachment,
+    setChatMessageReaction,
     unarchiveChat,
+    unpinChatMessage,
 } from '@/shared/api/chats'
 import { useChatRealtime } from './useChatRealtime'
 import ChatImageLightbox from './ChatImageLightbox'
@@ -31,6 +44,7 @@ const EMOJI_GROUPS = [
     ['Работа и учёба', ['💼', '📚', '✍️', '✅', '🚀', '🎯', '💡', '📌']],
     ['Объекты', ['📎', '📄', '📅', '📞', '💻', '☕', '🎁', '⭐']],
 ]
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 const INITIAL_STATE = {
     dialogs: [],
     nextCursor: null,
@@ -41,6 +55,7 @@ const INITIAL_STATE = {
     hasOlderByDialogId: {},
     messagesLoading: false,
     messagesError: '',
+    opportunityFilters: [],
 }
 
 function mergeMessages(current = [], incoming = []) {
@@ -89,6 +104,8 @@ function reducer(state, action) {
             return { ...state, dialogsLoading: false, dialogsError: action.message }
         case 'DIALOG_UPSERT':
             return { ...state, dialogs: upsertDialog(state.dialogs, action.dialog) }
+        case 'OPPORTUNITY_FILTERS_LOADED':
+            return { ...state, opportunityFilters: action.items }
         case 'ACTIVE_DIALOG_LOADING':
             return { ...state, activeDialog: null }
         case 'ACTIVE_DIALOG_LOADED':
@@ -141,6 +158,24 @@ function reducer(state, action) {
                     ...state.messagesByDialogId,
                     [action.dialogId]: (state.messagesByDialogId[action.dialogId] || []).filter((message) =>
                         message.clientMessageId !== action.clientMessageId
+                    ),
+                },
+            }
+        case 'MESSAGE_UPSERT':
+            return {
+                ...state,
+                messagesByDialogId: {
+                    ...state.messagesByDialogId,
+                    [action.dialogId]: mergeMessages(state.messagesByDialogId[action.dialogId], [action.message]),
+                },
+            }
+        case 'MESSAGE_HIDDEN':
+            return {
+                ...state,
+                messagesByDialogId: {
+                    ...state.messagesByDialogId,
+                    [action.dialogId]: (state.messagesByDialogId[action.dialogId] || []).filter((message) =>
+                        message.id !== action.messageId
                     ),
                 },
             }
@@ -345,7 +380,19 @@ function ChatsPage() {
     const routeDialogId = Number(routeParams?.dialogId) || null
     const [state, dispatch] = useReducer(reducer, INITIAL_STATE)
     const [filter, setFilter] = useState('all')
+    const [selectedOpportunityId, setSelectedOpportunityId] = useState('')
     const [draft, setDraft] = useState('')
+    const [replyToMessage, setReplyToMessage] = useState(null)
+    const [editingMessageId, setEditingMessageId] = useState(null)
+    const [editingBody, setEditingBody] = useState('')
+    const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
+    const [confirmAction, setConfirmAction] = useState(null)
+    const [forwardingMessage, setForwardingMessage] = useState(null)
+    const [forwardSearch, setForwardSearch] = useState('')
+    const [isSearchOpen, setIsSearchOpen] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchResults, setSearchResults] = useState([])
+    const [typingByDialogId, setTypingByDialogId] = useState({})
     const [showJumpToNew, setShowJumpToNew] = useState(false)
     const [isEmojiOpen, setIsEmojiOpen] = useState(false)
     const [selectedFile, setSelectedFile] = useState(null)
@@ -360,11 +407,14 @@ function ChatsPage() {
     const previousScrollMetricsRef = useRef(null)
     const olderMessagesLoadingRef = useRef(false)
     const lastMarkedReadByDialogRef = useRef(new Map())
+    const suppressAutoReadUntilByDialogRef = useRef(new Map())
+    const typingTimerRef = useRef(null)
+    const typingStopTimerRef = useRef(null)
     const reconcileTimersRef = useRef(new Map())
     const handledEventSequenceRef = useRef(0)
     const stateRef = useRef(state)
     const { toast } = useToast()
-    const { connectionStatus, events, publishMessage, publishRead } = useChatRealtime()
+    const { connectionStatus, events, publishMessage, publishRead, publishTyping } = useChatRealtime()
 
     const messages = useMemo(
         () => state.messagesByDialogId[routeDialogId] || [],
@@ -423,6 +473,24 @@ function ChatsPage() {
         return () => document.removeEventListener('pointerdown', handlePointerDown)
     }, [isEmojiOpen])
 
+    useEffect(() => {
+        if (!openMenuMessageId) return undefined
+        const close = (event) => {
+            if (event.key === 'Escape') setOpenMenuMessageId(null)
+        }
+        const handlePointer = (event) => {
+            if (!event.target.closest?.('.chats__message-menu') && !event.target.closest?.('.chats__message-menu-button')) {
+                setOpenMenuMessageId(null)
+            }
+        }
+        document.addEventListener('keydown', close)
+        document.addEventListener('pointerdown', handlePointer)
+        return () => {
+            document.removeEventListener('keydown', close)
+            document.removeEventListener('pointerdown', handlePointer)
+        }
+    }, [openMenuMessageId])
+
     const insertEmoji = (emoji) => {
         const textarea = textareaRef.current
         const start = textarea?.selectionStart ?? draft.length
@@ -459,15 +527,17 @@ function ChatsPage() {
                 limit: 20,
                 unreadOnly: filter === 'unread',
                 archived: filter === 'archive',
+                opportunityId: selectedOpportunityId || undefined,
                 cursor: append ? state.nextCursor : null,
             })
             dispatch({ type: 'DIALOGS_LOADED', page, append })
         } catch (error) {
             dispatch({ type: 'DIALOGS_ERROR', message: error.message || 'Не удалось загрузить диалоги' })
         }
-    }, [filter, state.nextCursor])
+    }, [filter, selectedOpportunityId, state.nextCursor])
 
     const markLatestAsRead = useCallback(async (dialogId, nextMessages) => {
+        if ((suppressAutoReadUntilByDialogRef.current.get(dialogId) || 0) > Date.now()) return
         const incomingMessages = nextMessages.filter((message) =>
             message.id && message.senderUserId !== currentUser?.id
         )
@@ -542,19 +612,11 @@ function ChatsPage() {
         reconcileTimersRef.current.set(clientMessageId, timer)
     }, [reconcileDialog])
 
-    const sendMessage = useCallback((body, clientMessageId = createClientMessageId()) => {
+    const sendMessage = useCallback(async (body, clientMessageId = createClientMessageId(), replyMessage = replyToMessage) => {
         const normalizedBody = body.trim()
         if (!routeDialogId || !normalizedBody || normalizedBody.length > 4000) return
-        if (connectionStatus !== 'connected') {
-            toast({
-                title: 'Нет подключения',
-                description: 'Дождитесь восстановления соединения и повторите отправку.',
-                variant: 'destructive',
-            })
-            return
-        }
 
-        const payload = { clientMessageId, body: normalizedBody }
+        const payload = { clientMessageId, body: normalizedBody, replyToMessageId: replyMessage?.id || undefined }
         dispatch({
             type: 'MESSAGE_OPTIMISTIC',
             dialogId: routeDialogId,
@@ -563,25 +625,40 @@ function ChatsPage() {
                 dialogId: routeDialogId,
                 senderUserId: currentUser?.id,
                 createdAt: new Date().toISOString(),
+                replyTo: replyMessage ? {
+                    id: replyMessage.id,
+                    senderUserId: replyMessage.senderUserId,
+                    senderDisplayName: replyMessage.senderUserId === currentUser?.id ? 'Вы' : state.activeDialog?.counterpart?.displayName || 'Участник',
+                    bodyPreview: replyMessage.deletedAt ? 'Сообщение удалено' : replyMessage.body || replyMessage.attachments?.[0]?.originalFileName || 'Вложение',
+                    attachmentKind: replyMessage.attachments?.[0]?.attachmentKind || null,
+                    deleted: Boolean(replyMessage.deletedAt),
+                } : null,
                 pending: true,
                 failed: false,
             },
         })
         setDraft('')
+        setReplyToMessage(null)
         requestAnimationFrame(() => scrollToBottom())
 
-        if (!publishMessage(routeDialogId, payload)) {
-            dispatch({ type: 'MESSAGE_FAILED', dialogId: routeDialogId, clientMessageId })
-            toast({
-                title: 'Сообщение не отправлено',
-                description: 'Соединение прервалось. Повторите отправку после переподключения.',
-                variant: 'destructive',
-            })
+        const published = connectionStatus === 'connected' && publishMessage(routeDialogId, payload)
+        if (published) {
+            scheduleReconciliation(routeDialogId, clientMessageId)
             return
         }
 
-        scheduleReconciliation(routeDialogId, clientMessageId)
-    }, [connectionStatus, currentUser?.id, publishMessage, routeDialogId, scheduleReconciliation, scrollToBottom, toast])
+        try {
+            const saved = await sendChatMessageRest(routeDialogId, payload)
+            dispatch({ type: 'MESSAGES_LOADED', dialogId: routeDialogId, messages: [saved] })
+        } catch (error) {
+            dispatch({ type: 'MESSAGE_FAILED', dialogId: routeDialogId, clientMessageId })
+            toast({
+                title: 'Сообщение не отправлено',
+                description: error.message || 'Попробуйте повторить отправку.',
+                variant: 'destructive',
+            })
+        }
+    }, [connectionStatus, currentUser?.id, publishMessage, replyToMessage, routeDialogId, scheduleReconciliation, scrollToBottom, state.activeDialog?.counterpart?.displayName, toast])
 
     const sendAttachmentMessage = useCallback(async (
         file,
@@ -598,6 +675,7 @@ function ChatsPage() {
         }
 
         const normalizedBody = body.trim()
+        const replyMessage = replyToMessage
         const localPreviewUrl = existingPreviewUrl || (file.type.startsWith('image/') ? URL.createObjectURL(file) : '')
         dispatch({
             type: 'MESSAGE_OPTIMISTIC',
@@ -609,6 +687,14 @@ function ChatsPage() {
                 senderUserId: currentUser?.id,
                 createdAt: new Date().toISOString(),
                 messageType: normalizedBody ? 'MIXED' : 'ATTACHMENT',
+                replyTo: replyMessage ? {
+                    id: replyMessage.id,
+                    senderUserId: replyMessage.senderUserId,
+                    senderDisplayName: replyMessage.senderUserId === currentUser?.id ? 'Вы' : state.activeDialog?.counterpart?.displayName || 'Участник',
+                    bodyPreview: replyMessage.deletedAt ? 'Сообщение удалено' : replyMessage.body || replyMessage.attachments?.[0]?.originalFileName || 'Вложение',
+                    attachmentKind: replyMessage.attachments?.[0]?.attachmentKind || null,
+                    deleted: Boolean(replyMessage.deletedAt),
+                } : null,
                 attachments: [{
                     originalFileName: file.name,
                     mediaType: file.type,
@@ -622,6 +708,7 @@ function ChatsPage() {
             },
         })
         setDraft('')
+        setReplyToMessage(null)
         setSelectedFile(null)
         setIsUploading(true)
         requestAnimationFrame(() => scrollToBottom())
@@ -631,6 +718,7 @@ function ChatsPage() {
                 clientMessageId,
                 body: normalizedBody,
                 file,
+                replyToMessageId: replyMessage?.id,
             })
             dispatch({ type: 'MESSAGES_LOADED', dialogId: routeDialogId, messages: [saved] })
             if (localPreviewUrl) setTimeout(() => URL.revokeObjectURL(localPreviewUrl), 0)
@@ -640,7 +728,7 @@ function ChatsPage() {
         } finally {
             setIsUploading(false)
         }
-    }, [currentUser?.id, isUploading, routeDialogId, scrollToBottom, state.activeDialog?.canSend, toast])
+    }, [currentUser?.id, isUploading, replyToMessage, routeDialogId, scrollToBottom, state.activeDialog?.canSend, state.activeDialog?.counterpart?.displayName, toast])
 
     const loadOlderMessages = useCallback(async () => {
         if (
@@ -676,7 +764,13 @@ function ChatsPage() {
     useEffect(() => {
         void loadDialogs()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filter])
+    }, [filter, selectedOpportunityId])
+
+    useEffect(() => {
+        getChatOpportunityFilters()
+            .then((items) => dispatch({ type: 'OPPORTUNITY_FILTERS_LOADED', items }))
+            .catch(() => dispatch({ type: 'OPPORTUNITY_FILTERS_LOADED', items: [] }))
+    }, [])
 
     useEffect(() => {
         void loadActiveDialog(routeDialogId)
@@ -710,6 +804,24 @@ function ChatsPage() {
                 return
             }
 
+            if (['MESSAGE_UPDATED', 'MESSAGE_DELETED', 'MESSAGE_REACTIONS_UPDATED'].includes(event.type)) {
+                dispatch({ type: 'MESSAGE_UPSERT', dialogId: event.dialogId, message: event.payload })
+                return
+            }
+
+            if (event.type === 'MESSAGE_HIDDEN') {
+                dispatch({ type: 'MESSAGE_HIDDEN', dialogId: event.dialogId, messageId: event.payload.messageId })
+                return
+            }
+
+            if (event.type === 'TYPING_UPDATED') {
+                setTypingByDialogId((current) => ({
+                    ...current,
+                    [event.dialogId]: event.payload.typing ? event.payload.expiresAt : null,
+                }))
+                return
+            }
+
             if (event.type === 'DIALOG_UPDATED') {
                 dispatch({ type: 'DIALOG_UPSERT', dialog: event.payload })
                 if (event.dialogId === routeDialogId) {
@@ -725,6 +837,33 @@ function ChatsPage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [connectionStatus])
+
+    useEffect(() => {
+        if (!routeDialogId || !state.activeDialog?.canSend || connectionStatus !== 'connected') return undefined
+        if (!draft.trim()) {
+            publishTyping(routeDialogId, false)
+            return undefined
+        }
+
+        if (!typingTimerRef.current) {
+            publishTyping(routeDialogId, true)
+            typingTimerRef.current = setTimeout(() => {
+                typingTimerRef.current = null
+            }, 1200)
+        }
+        clearTimeout(typingStopTimerRef.current)
+        typingStopTimerRef.current = setTimeout(() => {
+            publishTyping(routeDialogId, false)
+        }, 2500)
+
+        return undefined
+    }, [connectionStatus, draft, publishTyping, routeDialogId, state.activeDialog?.canSend])
+
+    useEffect(() => () => {
+        if (routeDialogId) publishTyping(routeDialogId, false)
+        clearTimeout(typingTimerRef.current)
+        clearTimeout(typingStopTimerRef.current)
+    }, [publishTyping, routeDialogId])
 
     useEffect(() => {
         if (!routeDialogId) return undefined
@@ -743,6 +882,21 @@ function ChatsPage() {
             window.removeEventListener('focus', reconcileVisibleDialog)
         }
     }, [reconcileDialog, routeDialogId])
+
+    useEffect(() => {
+        if (!isSearchOpen || !routeDialogId || searchQuery.trim().length < 2) {
+            setSearchResults([])
+            return undefined
+        }
+
+        const timer = setTimeout(() => {
+            searchChatMessages(routeDialogId, { query: searchQuery.trim(), limit: 20 })
+                .then((page) => setSearchResults(page.items || []))
+                .catch(() => setSearchResults([]))
+        }, 300)
+
+        return () => clearTimeout(timer)
+    }, [isSearchOpen, routeDialogId, searchQuery])
 
     useLayoutEffect(() => {
         const list = messageListRef.current
@@ -773,6 +927,109 @@ function ChatsPage() {
         }
     }
 
+    const handleMarkUnread = async () => {
+        if (!routeDialogId) return
+        try {
+            suppressAutoReadUntilByDialogRef.current.set(routeDialogId, Date.now() + 3000)
+            const dialog = await markChatUnread(routeDialogId)
+            dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
+            dispatch({ type: 'DIALOG_UPSERT', dialog })
+        } catch (error) {
+            toast({ title: 'Не удалось пометить непрочитанным', description: error.message, variant: 'destructive' })
+        }
+    }
+
+    const handleSaveEdit = async (message) => {
+        const body = editingBody.trim()
+        if (!routeDialogId || !message.id || !body) return
+        try {
+            const saved = await editChatMessage(routeDialogId, message.id, body)
+            dispatch({ type: 'MESSAGE_UPSERT', dialogId: routeDialogId, message: saved })
+            setEditingMessageId(null)
+            setEditingBody('')
+        } catch (error) {
+            toast({ title: 'Не удалось изменить сообщение', description: error.message, variant: 'destructive' })
+        }
+    }
+
+    const handleDeleteForMe = async (message) => {
+        if (!routeDialogId || !message.id) return
+        try {
+            await deleteChatMessageForMe(routeDialogId, message.id)
+            dispatch({ type: 'MESSAGE_HIDDEN', dialogId: routeDialogId, messageId: message.id })
+        } catch (error) {
+            toast({ title: 'Не удалось удалить сообщение', description: error.message, variant: 'destructive' })
+        }
+    }
+
+    const handleDeleteForEveryone = async (message) => {
+        if (!routeDialogId || !message.id) return
+        try {
+            const saved = await deleteChatMessageForEveryone(routeDialogId, message.id)
+            dispatch({ type: 'MESSAGE_UPSERT', dialogId: routeDialogId, message: saved })
+        } catch (error) {
+            toast({ title: 'Не удалось удалить сообщение', description: error.message, variant: 'destructive' })
+        }
+    }
+
+    const handleReaction = async (message, reaction) => {
+        if (!routeDialogId || !message.id || message.deletedAt) return
+        try {
+            const currentReaction = message.reactions?.find((item) => item.reactedByMe)
+            const saved = currentReaction?.reaction === reaction
+                ? await deleteChatMessageReaction(routeDialogId, message.id)
+                : await setChatMessageReaction(routeDialogId, message.id, reaction)
+            dispatch({ type: 'MESSAGE_UPSERT', dialogId: routeDialogId, message: saved })
+        } catch (error) {
+            toast({ title: 'Не удалось обновить реакцию', description: error.message, variant: 'destructive' })
+        }
+    }
+
+    const handlePinToggle = async (message) => {
+        if (!routeDialogId || !message.id) return
+        try {
+            const isPinned = state.activeDialog?.pinnedMessage?.messageId === message.id
+            const dialog = isPinned
+                ? await unpinChatMessage(routeDialogId).then(() => getChatDialog(routeDialogId))
+                : await pinChatMessage(routeDialogId, message.id)
+            if (dialog) {
+                dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
+                dispatch({ type: 'DIALOG_UPSERT', dialog })
+            }
+        } catch (error) {
+            toast({ title: 'Не удалось обновить закреп', description: error.message, variant: 'destructive' })
+        }
+    }
+
+    const handleForward = async (message, targetDialogId) => {
+        if (!routeDialogId || !message.id || !targetDialogId) return
+        try {
+            await forwardChatMessage(routeDialogId, message.id, {
+                targetDialogId,
+                clientMessageId: createClientMessageId(),
+            })
+            toast({ title: 'Сообщение переслано' })
+        } catch (error) {
+            toast({ title: 'Не удалось переслать сообщение', description: error.message, variant: 'destructive' })
+        }
+    }
+
+    const openMessageContext = async (messageId) => {
+        if (!routeDialogId) return
+        try {
+            const context = await getChatMessageContext(routeDialogId, { messageId })
+            dispatch({ type: 'MESSAGES_LOADED', dialogId: routeDialogId, messages: context })
+            requestAnimationFrame(() => {
+                const node = messageListRef.current?.querySelector(`[data-message-id="${messageId}"]`)
+                node?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+                node?.classList.add('is-highlighted')
+                setTimeout(() => node?.classList.remove('is-highlighted'), 2000)
+            })
+        } catch (error) {
+            toast({ title: 'Сообщение выше в истории', description: error.message })
+        }
+    }
+
     const removeFailedMessage = (message) => {
         const previewUrl = message.attachments?.[0]?.localPreviewUrl
         if (previewUrl) URL.revokeObjectURL(previewUrl)
@@ -788,13 +1045,27 @@ function ChatsPage() {
     const canEdit = Boolean(state.activeDialog?.canSend)
     const canSubmit = canEdit &&
         !isUploading &&
-        Boolean(draft.trim() || selectedFile) &&
-        Boolean(selectedFile || connectionStatus === 'connected')
+        Boolean(draft.trim() || selectedFile)
     const composerPlaceholder = !canEdit
         ? 'Отправка недоступна для этого диалога'
         : connectionStatus !== 'connected'
-            ? 'Текст отправится после подключения. Файл можно отправить сейчас.'
+            ? 'Нет realtime-соединения. Сообщение отправится через REST.'
             : 'Введите сообщение'
+    const isCounterpartTyping = (() => {
+        const expiresAt = typingByDialogId[routeDialogId]
+        return Boolean(expiresAt && new Date(expiresAt).getTime() > Date.now())
+    })()
+    const forwardDialogOptions = state.dialogs
+        .filter((dialog) => dialog.dialogId !== routeDialogId)
+        .filter((dialog) => {
+            const query = forwardSearch.trim().toLowerCase()
+            if (!query) return true
+            return [
+                dialog.counterpart?.displayName,
+                dialog.opportunityTitle,
+                dialog.companyName,
+            ].filter(Boolean).some((value) => value.toLowerCase().includes(query))
+        })
 
     return (
         <DashboardLayout title="Сообщения" subtitle="Общайтесь по вашим откликам">
@@ -816,9 +1087,27 @@ function ChatsPage() {
                         ))}
                     </div>
 
+                    <select
+                        className="chats__opportunity-filter"
+                        value={selectedOpportunityId}
+                        onChange={(event) => setSelectedOpportunityId(event.target.value)}
+                        aria-label="Фильтр по вакансии"
+                    >
+                        <option value="">Все вакансии</option>
+                        {state.opportunityFilters.map((option) => (
+                            <option key={option.opportunityId} value={option.opportunityId}>
+                                {option.unreadCount > 0
+                                    ? `${option.opportunityTitle} · ${option.unreadCount} новых`
+                                    : option.opportunityTitle}
+                            </option>
+                        ))}
+                    </select>
+
                     {state.dialogsError && <p className="chats__state chats__state--error">{state.dialogsError}</p>}
                     {!state.dialogsLoading && state.dialogs.length === 0 && (
-                        <p className="chats__state">Здесь пока нет диалогов</p>
+                        <p className="chats__state">
+                            {selectedOpportunityId ? 'По этой вакансии пока нет диалогов' : 'Здесь пока нет диалогов'}
+                        </p>
                     )}
 
                     <div className="chats__dialog-list">
@@ -853,12 +1142,73 @@ function ChatsPage() {
                                 <button className="chats__back" onClick={() => navigate('/chats')}>Назад</button>
                                 <div>
                                     <h2>{state.activeDialog?.counterpart?.displayName || 'Диалог'}</h2>
-                                    <p>{state.activeDialog?.opportunityTitle || ''}</p>
+                                    <p>{isCounterpartTyping ? 'Печатает...' : state.activeDialog?.opportunityTitle || ''}</p>
                                 </div>
-                                <button className="chats__archive" onClick={handleArchive}>
-                                    {state.activeDialog?.archived ? 'Восстановить' : 'В архив'}
-                                </button>
+                                <div className="chats__header-actions">
+                                    <button
+                                        className="chats__icon-action"
+                                        type="button"
+                                        aria-label="Поиск по сообщениям"
+                                        title="Поиск"
+                                        onClick={() => setIsSearchOpen((isOpen) => !isOpen)}
+                                    >
+                                        <Search size={18} aria-hidden="true" />
+                                    </button>
+                                    <button className="chats__archive" type="button" onClick={handleMarkUnread}>
+                                        Непрочитано
+                                    </button>
+                                    <button className="chats__archive" type="button" onClick={handleArchive}>
+                                        {state.activeDialog?.archived ? 'Восстановить' : 'В архив'}
+                                    </button>
+                                </div>
                             </header>
+
+                            {state.activeDialog?.pinnedMessage && (
+                                <button
+                                    type="button"
+                                    className="chats__pinned-bar"
+                                    onClick={() => void openMessageContext(state.activeDialog.pinnedMessage.messageId)}
+                                >
+                                    <Pin size={16} aria-hidden="true" />
+                                    <span>{state.activeDialog.pinnedMessage.preview}</span>
+                                    <X
+                                        size={16}
+                                        aria-hidden="true"
+                                        onClick={(event) => {
+                                            event.stopPropagation()
+                                            void unpinChatMessage(routeDialogId).then(() => getChatDialog(routeDialogId)).then((dialog) => {
+                                                dispatch({ type: 'ACTIVE_DIALOG_LOADED', dialog })
+                                                dispatch({ type: 'DIALOG_UPSERT', dialog })
+                                            })
+                                        }}
+                                    />
+                                </button>
+                            )}
+
+                            {isSearchOpen && (
+                                <div className="chats__search-panel">
+                                    <input
+                                        value={searchQuery}
+                                        onChange={(event) => setSearchQuery(event.target.value)}
+                                        placeholder="Поиск"
+                                        maxLength={100}
+                                    />
+                                    {searchQuery.trim().length >= 2 && searchResults.length === 0 && (
+                                        <span>Ничего не найдено</span>
+                                    )}
+                                    {searchResults.map((result) => (
+                                        <button
+                                            key={result.messageId}
+                                            type="button"
+                                            onClick={() => void openMessageContext(result.messageId)}
+                                        >
+                                            <strong>{result.senderDisplayName}</strong>
+                                            <span>{result.snippet}</span>
+                                            <small>{formatTime(result.createdAt)}</small>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
 
                             {connectionLabel && <p className="chats__connection">{connectionLabel}</p>}
                             {state.messagesError && <p className="chats__state chats__state--error">{state.messagesError}</p>}
@@ -889,27 +1239,125 @@ function ChatsPage() {
                                         <div
                                             key={message.id || message.clientMessageId}
                                             className={`chats__message ${isOwn ? 'chats__message--own' : ''}`}
+                                            data-message-id={message.id || ''}
                                         >
-                                            {message.body && <p>{message.body}</p>}
-                                            {(message.attachments || []).map((attachment) => (
-                                                <ChatAttachment
-                                                    key={attachment.id || `${message.clientMessageId}-${attachment.originalFileName}`}
-                                                    dialogId={message.dialogId}
-                                                    attachment={attachment}
-                                                    failed={message.failed}
-                                                    pending={message.pending}
-                                                />
-                                            ))}
+                                            {message.deletedAt ? (
+                                                <p className="chats__deleted">Сообщение удалено</p>
+                                            ) : (
+                                                <>
+                                                    {message.forwardedFrom && (
+                                                        <small className="chats__forwarded">
+                                                            Переслано от {message.forwardedFrom.senderName || 'участника'}
+                                                        </small>
+                                                    )}
+                                                    {message.replyTo && (
+                                                        <button
+                                                            type="button"
+                                                            className="chats__reply-quote"
+                                                            onClick={() => void openMessageContext(message.replyTo.id)}
+                                                        >
+                                                            <strong>{message.replyTo.senderDisplayName}</strong>
+                                                            <span>{message.replyTo.bodyPreview || 'Вложение'}</span>
+                                                        </button>
+                                                    )}
+                                                    {editingMessageId === message.id ? (
+                                                        <div className="chats__inline-edit">
+                                                            <textarea
+                                                                value={editingBody}
+                                                                onChange={(event) => setEditingBody(event.target.value.slice(0, 4000))}
+                                                                onKeyDown={(event) => {
+                                                                    if (event.key === 'Enter' && !event.shiftKey) {
+                                                                        event.preventDefault()
+                                                                        void handleSaveEdit(message)
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <div>
+                                                                <button type="button" onClick={() => void handleSaveEdit(message)}>Сохранить</button>
+                                                                <button type="button" onClick={() => setEditingMessageId(null)}>Отмена</button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {message.body && <p>{message.body}</p>}
+                                                            {(message.attachments || []).map((attachment) => (
+                                                                <ChatAttachment
+                                                                    key={attachment.id || `${message.clientMessageId}-${attachment.originalFileName}`}
+                                                                    dialogId={message.dialogId}
+                                                                    attachment={attachment}
+                                                                    failed={message.failed}
+                                                                    pending={message.pending}
+                                                                />
+                                                            ))}
+                                                        </>
+                                                    )}
+                                                </>
+                                            )}
                                             <span>
                                                 {formatTime(message.createdAt)}
                                                 {message.pending && ' · отправляется'}
                                                 {message.failed && ' · не отправлено'}
+                                                {message.editedAt && !message.deletedAt && ' · изменено'}
                                             </span>
+                                            {!message.failed && !message.pending && !message.deletedAt && message.id && (
+                                                <button
+                                                    type="button"
+                                                    className="chats__message-menu-button"
+                                                    aria-label="Действия с сообщением"
+                                                    aria-haspopup="menu"
+                                                    aria-expanded={openMenuMessageId === message.id}
+                                                    onClick={() => setOpenMenuMessageId((current) => current === message.id ? null : message.id)}
+                                                >
+                                                    <MoreHorizontal size={16} aria-hidden="true" />
+                                                </button>
+                                            )}
+                                            {openMenuMessageId === message.id && (
+                                                <div className="chats__message-menu" role="menu">
+                                                    <div className="chats__reaction-row">
+                                                        {QUICK_REACTIONS.map((reaction) => (
+                                                            <button key={reaction} type="button" onClick={() => {
+                                                                setOpenMenuMessageId(null)
+                                                                void handleReaction(message, reaction)
+                                                            }}>
+                                                                {reaction}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button type="button" onClick={() => { setReplyToMessage(message); setOpenMenuMessageId(null); textareaRef.current?.focus() }}>Ответить</button>
+                                                    {isOwn && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(message.messageType) && (
+                                                        <button type="button" onClick={() => { setEditingMessageId(message.id); setEditingBody(message.body || ''); setOpenMenuMessageId(null) }}>Редактировать</button>
+                                                    )}
+                                                    <button type="button" onClick={() => { setOpenMenuMessageId(null); setConfirmAction({ type: 'deleteMe', message }) }}>Удалить у себя</button>
+                                                    {isOwn && <button type="button" onClick={() => { setOpenMenuMessageId(null); setConfirmAction({ type: 'deleteAll', message }) }}>Удалить у всех</button>}
+                                                    <button type="button" onClick={() => { setOpenMenuMessageId(null); void handlePinToggle(message) }}>
+                                                        {state.activeDialog?.pinnedMessage?.messageId === message.id ? 'Открепить' : 'Закрепить'}
+                                                    </button>
+                                                    <button type="button" onClick={() => {
+                                                        setOpenMenuMessageId(null)
+                                                        setForwardingMessage(message)
+                                                        setForwardSearch('')
+                                                    }}>Переслать</button>
+                                                </div>
+                                            )}
+                                            {message.reactions?.length > 0 && (
+                                                <div className="chats__reactions">
+                                                    {message.reactions.map((reaction) => (
+                                                        <button
+                                                            key={reaction.reaction}
+                                                            type="button"
+                                                            className={reaction.reactedByMe ? 'is-active' : ''}
+                                                            onClick={() => void handleReaction(message, reaction.reaction)}
+                                                        >
+                                                            {reaction.reaction} {reaction.count}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                             {message.failed && (
                                                 <div className="chats__message-actions">
                                                 <button
                                                     className="chats__message-action"
-                                                    disabled={message.retryFile ? isUploading : connectionStatus !== 'connected'}
+                                                    disabled={message.retryFile ? isUploading : false}
                                                     onClick={() => {
                                                         if (message.retryFile) {
                                                             void sendAttachmentMessage(
@@ -967,6 +1415,19 @@ function ChatsPage() {
                                     }
                                 }}
                             >
+                                {replyToMessage && (
+                                    <div className="chats__reply-preview">
+                                        <span>
+                                            <strong>Ответ</strong>
+                                            {replyToMessage.deletedAt
+                                                ? 'Сообщение удалено'
+                                                : replyToMessage.body || replyToMessage.attachments?.[0]?.originalFileName || 'Вложение'}
+                                        </span>
+                                        <button type="button" aria-label="Отменить ответ" onClick={() => setReplyToMessage(null)}>
+                                            <X size={16} aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="chats__composer-row">
                                     <div className="chats__composer-tools">
                                         <button
@@ -1071,6 +1532,65 @@ function ChatsPage() {
                                     <span>{draft.length}/4000</span>
                                 </div>
                             </form>
+                            {confirmAction && (
+                                <div className="chats__modal-backdrop" role="presentation" onClick={() => setConfirmAction(null)}>
+                                    <div className="chats__confirm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+                                        <h3>{confirmAction.type === 'deleteAll' ? 'Удалить сообщение у всех?' : 'Удалить сообщение у себя?'}</h3>
+                                        <div>
+                                            <button type="button" onClick={() => setConfirmAction(null)}>Отмена</button>
+                                            <button
+                                                type="button"
+                                                className="is-danger"
+                                                onClick={() => {
+                                                    const action = confirmAction
+                                                    setConfirmAction(null)
+                                                    if (action.type === 'deleteAll') {
+                                                        void handleDeleteForEveryone(action.message)
+                                                    } else {
+                                                        void handleDeleteForMe(action.message)
+                                                    }
+                                                }}
+                                            >
+                                                Удалить
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {forwardingMessage && (
+                                <div className="chats__modal-backdrop" role="presentation" onClick={() => setForwardingMessage(null)}>
+                                    <div className="chats__forward-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+                                        <h3>Переслать сообщение</h3>
+                                        <input
+                                            value={forwardSearch}
+                                            onChange={(event) => setForwardSearch(event.target.value)}
+                                            placeholder="Поиск диалога"
+                                            autoFocus
+                                        />
+                                        <div className="chats__forward-list">
+                                            {forwardDialogOptions.length === 0 && <span>Нет подходящих диалогов</span>}
+                                            {forwardDialogOptions.map((dialog) => (
+                                                <button
+                                                    key={dialog.dialogId}
+                                                    type="button"
+                                                    disabled={!dialog.canSend}
+                                                    onClick={() => {
+                                                        const message = forwardingMessage
+                                                        setForwardingMessage(null)
+                                                        void handleForward(message, dialog.dialogId)
+                                                    }}
+                                                >
+                                                    <strong>{dialog.counterpart.displayName}</strong>
+                                                    <span>{dialog.opportunityTitle}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <button type="button" className="chats__forward-close" onClick={() => setForwardingMessage(null)}>
+                                            Отмена
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
                 </section>
