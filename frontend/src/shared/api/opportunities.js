@@ -74,6 +74,32 @@ export async function listPersonalizedOpportunityRecommendations(params = {}) {
     }
 }
 
+export async function analyzeResumeForRecommendations(payload = {}) {
+    const request = typeof payload === 'string'
+        ? { resumeText: payload, source: 'TEXT' }
+        : {
+            resumeText: payload.resumeText || '',
+            source: payload.source || 'TEXT',
+        }
+
+    const data = await httpJson(`${API_BASE}/opportunities/recommendations/resume-analysis`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+    })
+
+    return {
+        ...data,
+        detectedSkills: Array.isArray(data?.detectedSkills) ? data.detectedSkills : [],
+        suggestedSkillTags: Array.isArray(data?.suggestedSkillTags) ? data.suggestedSkillTags : [],
+        suggestedInterestTags: Array.isArray(data?.suggestedInterestTags) ? data.suggestedInterestTags : [],
+        strengths: Array.isArray(data?.strengths) ? data.strengths : [],
+        improvementTips: Array.isArray(data?.improvementTips) ? data.improvementTips : [],
+        opportunityPreview: Array.isArray(data?.opportunityPreview) ? data.opportunityPreview : [],
+        source: data?.source || 'RULES',
+        inputSource: data?.inputSource || request.source || 'TEXT',
+    }
+}
+
 export async function listOpportunityMap(params = {}) {
     const query = toQuery(params)
     return httpJson(`${API_BASE}/opportunities/map${query ? `?${query}` : ''}`, {

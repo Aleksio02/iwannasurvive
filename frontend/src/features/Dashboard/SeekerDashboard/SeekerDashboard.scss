@@ -317,6 +317,463 @@ $transition: all 0.2s ease;
   }
 }
 
+.resume-analysis-card {
+  gap: 18px;
+
+  .textarea {
+    width: 100%;
+    resize: vertical;
+  }
+
+  button:disabled {
+    cursor: default;
+  }
+}
+
+.resume-analysis-card__header {
+  align-items: center;
+
+  h3 {
+    font-size: 17px;
+  }
+
+  p {
+    margin-top: 4px;
+    max-width: 420px;
+  }
+}
+
+.resume-analysis-card__source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid $gray-100;
+
+  > div:first-child {
+    min-width: 0;
+  }
+
+  span,
+  strong {
+    color: $gray-700;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 3px 0 0;
+    color: $gray-500;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    white-space: nowrap;
+  }
+}
+
+.resume-analysis-card__source-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid $gray-200;
+  border-radius: 10px;
+  background: $gray-50;
+  flex-shrink: 0;
+
+  button {
+    min-height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: $gray-600;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    transition: $transition;
+
+    &:hover {
+      color: $primary-dark;
+    }
+
+    &.is-active {
+      background: #fff;
+      color: $primary-dark;
+      box-shadow: $shadow-sm;
+    }
+  }
+}
+
+.resume-analysis-card__loading,
+.resume-analysis-card__error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid $gray-100;
+  color: $gray-600;
+  font-size: 13px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.resume-analysis-card__missing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid $gray-100;
+
+  p {
+    margin: 0;
+    color: $gray-600;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  button {
+    flex-shrink: 0;
+  }
+}
+
+.resume-analysis-card__loading {
+  justify-content: flex-start;
+
+  .loading-spinner {
+    width: 17px;
+    height: 17px;
+    margin-top: 1px;
+  }
+
+  span {
+    display: block;
+    margin-bottom: 9px;
+    color: $gray-700;
+    font-weight: 700;
+  }
+}
+
+.resume-analysis-card__skeleton {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+
+  i {
+    width: 72px;
+    height: 22px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, $gray-100 0%, #f8fbfb 50%, $gray-100 100%);
+    background-size: 200% 100%;
+    animation: resumeAnalysisPulse 1.2s ease-in-out infinite;
+
+    &:nth-child(2) {
+      width: 96px;
+      animation-delay: 0.12s;
+    }
+
+    &:nth-child(3) {
+      width: 58px;
+      animation-delay: 0.24s;
+    }
+  }
+}
+
+.resume-analysis-card__result {
+  display: grid;
+  gap: 18px;
+  padding-top: 2px;
+
+  &.is-collapsed {
+    gap: 0;
+
+    .resume-analysis-card__result-head {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+  }
+}
+
+.resume-analysis-card__result-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid $gray-100;
+  border-bottom: 1px solid $gray-100;
+
+  button {
+    flex-shrink: 0;
+  }
+}
+
+.resume-analysis-card__result-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.resume-analysis-card__result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  span {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: $gray-100;
+    color: $gray-600;
+    font-size: 11px;
+    font-weight: 700;
+  }
+}
+
+.resume-analysis-card__result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.resume-analysis-card__summary {
+  margin: 0;
+  color: $gray-700;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.resume-analysis-card__section {
+  display: grid;
+  gap: 12px;
+}
+
+.resume-analysis-card__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  h4 {
+    margin: 0;
+    color: $gray-800;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  span {
+    color: $gray-500;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.resume-analysis-card__suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.resume-analysis-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.resume-analysis-card__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid #cae6e3;
+  background: #f8fffe;
+  color: $primary-dark;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+
+  small {
+    color: $gray-500;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  &.is-existing {
+    border-color: $gray-200;
+    background: #fff;
+    color: $gray-600;
+  }
+}
+
+.resume-analysis-card__empty {
+  color: $gray-500;
+  font-size: 13px;
+}
+
+.resume-analysis-card__tips ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  color: $gray-600;
+  font-size: 13px;
+  line-height: 1.45;
+  list-style: none;
+
+  li {
+    position: relative;
+    padding-left: 16px;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0.64em;
+      left: 0;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: $primary;
+    }
+  }
+}
+
+.resume-analysis-card__opportunity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.resume-analysis-card__opportunity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 0;
+  border: none;
+  border-top: 1px solid $gray-100;
+  border-radius: 0;
+  background: transparent;
+  min-width: 0;
+
+  &:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+
+  > div {
+    min-width: 0;
+  }
+
+  button {
+    flex-shrink: 0;
+  }
+
+  h5,
+  p {
+    margin: 0;
+  }
+
+  h5 {
+    color: $gray-800;
+    font-size: 14px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin-top: 3px;
+    color: $gray-600;
+    font-size: 12px;
+  }
+}
+
+.resume-analysis-card__opportunity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+
+  span {
+    padding: 3px 7px;
+    border: 1px solid $gray-200;
+    border-radius: 999px;
+    background: #fff;
+    color: $gray-600;
+    font-size: 11px;
+    font-weight: 700;
+  }
+}
+
+@keyframes resumeAnalysisPulse {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .resume-analysis-card__header,
+  .resume-analysis-card__source,
+  .resume-analysis-card__result-head {
+    display: grid;
+  }
+
+  .resume-analysis-card__result-actions {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .resume-analysis-card__section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .resume-analysis-card__suggestions {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-analysis-card__loading,
+  .resume-analysis-card__error,
+  .resume-analysis-card__missing,
+  .resume-analysis-card__opportunity {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .resume-analysis-card__result-actions button,
+  .resume-analysis-card__error button,
+  .resume-analysis-card__missing button,
+  .resume-analysis-card__opportunity button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .resume-analysis-card__chip {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 // ===== ФОРМА РЕДАКТИРОВАНИЯ =====
 .profile-edit-form {
   background: white;

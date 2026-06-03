@@ -44,6 +44,15 @@ class S3ObjectStorage(
         s3Client.deleteObject(request)
     }
 
+    override fun getObjectBytes(key: String): ByteArray {
+        val request = GetObjectRequest.builder()
+            .bucket(properties.bucket)
+            .key(normalizeKey(key))
+            .build()
+
+        return s3Client.getObjectAsBytes(request).asByteArray()
+    }
+
     override fun generateDownloadUrl(key: String): ObjectStorage.PresignedUrl {
         val normalizedKey = normalizeKey(key)
         val expiresAt = OffsetDateTime.now(ZoneOffset.UTC).plus(properties.presignedUrlTtl)

@@ -13,6 +13,8 @@ interface ObjectStorage {
 
     fun deleteObject(key: String)
 
+    fun getObjectBytes(key: String): ByteArray
+
     fun generateDownloadUrl(key: String): PresignedUrl
 
     data class PresignedUrl(

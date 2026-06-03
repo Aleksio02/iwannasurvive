@@ -1,7 +1,9 @@
 package ru.itplanet.trampline.media.controller
 
 import jakarta.validation.constraints.Positive
+import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -57,5 +59,17 @@ class InternalFileController(
     ): InternalFileDownloadUrlResponse {
         return fileAssetService.getDownloadUrl(fileId)
             .toInternalFileDownloadUrlResponse()
+    }
+
+    @GetMapping("/{fileId}/content", produces = [MediaType.APPLICATION_OCTET_STREAM_VALUE])
+    fun getContent(
+        @PathVariable @Positive(message = "Идентификатор файла должен быть положительным") fileId: Long,
+    ): ResponseEntity<ByteArray> {
+        val content = fileAssetService.getContent(fileId)
+
+        return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(content.mediaType))
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
+            .body(content.bytes)
     }
 }
