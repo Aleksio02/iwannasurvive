@@ -3,16 +3,8 @@ import Input from '@/shared/ui/Input';
 import Label from '@/shared/ui/Label';
 import Button from '@/shared/ui/Button';
 import CustomSelect from '@/shared/ui/CustomSelect';
+import { TAG_CATEGORY_OPTIONS } from '@/shared/lib/utils/tagCategories';
 import styles from './CreateTagForm.module.scss';
-
-const CATEGORIES = [
-  { value: 'TECH', label: 'Технология' },
-  { value: 'GRADE', label: 'Грейд' },
-  { value: 'EMPLOYMENT_TYPE', label: 'Тип занятости' },
-  { value: 'DIRECTION', label: 'Направление' },
-  { value: 'BENEFIT', label: 'Бонус' },
-  { value: 'OTHER', label: 'Другое' },
-];
 
 const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
   const [name, setName] = useState('');
@@ -94,7 +86,7 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
                   label="Категория"
                   value={category}
                   onChange={setCategory}
-                  options={CATEGORIES}
+                  options={TAG_CATEGORY_OPTIONS}
                   inModal={true}
                   disabled={isBusy}
               />

@@ -1,4 +1,5 @@
 import { getStatusLabelRu } from '@/shared/lib/utils/statusLabels'
+import { getTagCategoryLabel } from '@/shared/lib/utils/tagCategories'
 
 export function formatDate(dateString) {
     if (!dateString) return '—'
@@ -313,7 +314,7 @@ export function getPreviewFieldsByEntityType(entityType, snapshot = {}) {
         case 'TAG':
             return buildPreviewFields(snapshot, [
                 { key: 'name', label: 'Название' },
-                { key: 'category', label: 'Категория' },
+                { key: 'category', label: 'Категория', getValue: (data) => getTagCategoryLabel(data?.category) },
                 { key: 'isActive', label: 'Активен' },
                 { key: 'manualComment', label: 'Комментарий' },
             ])
