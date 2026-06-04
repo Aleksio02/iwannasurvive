@@ -330,6 +330,21 @@ function isImageType(mediaType = '') {
     return normalizeContentType(mediaType).startsWith('image/')
 }
 
+function ensureTypedBlob(blob, contentType) {
+    const normalizedType = normalizeContentType(contentType, blob?.type)
+    if (!normalizedType || blob?.type === normalizedType) {
+        return blob
+    }
+    return new Blob([blob], { type: normalizedType })
+}
+
+async function readBlobMagic(blob) {
+    const buffer = await blob.slice(0, 16).arrayBuffer()
+    return Array.from(new Uint8Array(buffer))
+        .map((item) => item.toString(16).padStart(2, '0'))
+        .join(' ')
+}
+
 async function fetchAttachmentBlob(dialogId, attachment) {
     const response = await getChatAttachmentContent(dialogId, attachment.id)
     const blob = response.blob
@@ -404,43 +419,76 @@ async function saveBlobAs({ blob, filename, contentType }) {
     }
 }
 
-async function convertImageBlobToPng(blob) {
-    if (!window.createImageBitmap) {
-        return convertImageBlobToPngWithImageElement(blob)
-    }
-
-    let bitmap
-    try {
-        bitmap = await window.createImageBitmap(blob)
-    } catch {
-        return convertImageBlobToPngWithImageElement(blob)
-    }
-
+async function bitmapToPngBlob(bitmap) {
     const canvas = document.createElement('canvas')
     canvas.width = bitmap.width
     canvas.height = bitmap.height
     const context = canvas.getContext('2d')
     if (!context) {
-        bitmap.close?.()
-        throw new Error('Не удалось подготовить изображение')
+        throw new MediaCopyError('CANVAS_CONTEXT_FAILED')
     }
     context.drawImage(bitmap, 0, 0)
-    bitmap.close?.()
     return canvasToPngBlob(canvas)
 }
 
-function convertImageBlobToPngWithImageElement(blob) {
+async function imageBlobToPngBlob(blob, contentType) {
+    const typedBlob = ensureTypedBlob(blob, contentType)
+
+    if (!typedBlob?.size) {
+        throw new MediaCopyError('EMPTY_BLOB')
+    }
+
+    if (typeof window.createImageBitmap === 'function') {
+        let bitmap
+        try {
+            bitmap = await window.createImageBitmap(typedBlob)
+            return await bitmapToPngBlob(bitmap)
+        } catch (error) {
+            debugMediaCapabilities({
+                action: 'copy-image',
+                step: 'createImageBitmap-failed',
+                errorName: error?.name,
+                errorMessage: error?.message,
+                blobType: typedBlob.type,
+                blobSize: typedBlob.size,
+            })
+        } finally {
+            bitmap?.close?.()
+        }
+    }
+
+    try {
+        return await imageElementBlobToPngBlob(typedBlob)
+    } catch (error) {
+        debugMediaCapabilities({
+            action: 'copy-image',
+            step: 'imageElement-failed',
+            errorName: error?.name,
+            errorMessage: error?.message,
+            blobType: typedBlob.type,
+            blobSize: typedBlob.size,
+        })
+        throw error
+    }
+}
+
+function imageElementBlobToPngBlob(blob) {
     return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(blob)
         const image = new Image()
         image.onload = async () => {
             try {
+                if (!image.naturalWidth || !image.naturalHeight) {
+                    reject(new MediaCopyError('IMAGE_DECODE_FAILED'))
+                    return
+                }
+
                 const canvas = document.createElement('canvas')
                 canvas.width = image.naturalWidth
                 canvas.height = image.naturalHeight
                 const context = canvas.getContext('2d')
                 if (!context) {
-                    reject(new Error('Не удалось подготовить изображение'))
+                    reject(new MediaCopyError('CANVAS_CONTEXT_FAILED'))
                     return
                 }
                 context.drawImage(image, 0, 0)
@@ -453,7 +501,7 @@ function convertImageBlobToPngWithImageElement(blob) {
         }
         image.onerror = () => {
             URL.revokeObjectURL(url)
-            reject(new Error('Не удалось подготовить изображение'))
+            reject(new MediaCopyError('IMAGE_DECODE_FAILED'))
         }
         image.src = url
     })
@@ -462,8 +510,8 @@ function convertImageBlobToPngWithImageElement(blob) {
 function canvasToPngBlob(canvas) {
     return new Promise((resolve, reject) => {
         canvas.toBlob((pngBlob) => {
-            if (pngBlob) resolve(pngBlob)
-            else reject(new Error('Не удалось подготовить изображение'))
+            if (pngBlob?.size) resolve(pngBlob)
+            else reject(new MediaCopyError('PNG_BLOB_FAILED'))
         }, 'image/png')
     })
 }
@@ -478,22 +526,57 @@ class MediaCopyError extends Error {
 }
 
 async function copyImageBlobToClipboard(blob, contentType) {
-    const imageType = normalizeContentType(contentType, blob.type) || 'image/png'
+    const typedBlob = ensureTypedBlob(blob, contentType)
+    const imageType = normalizeContentType(typedBlob?.type, contentType, blob?.type) || 'image/png'
+    if (!typedBlob?.size) {
+        throw new MediaCopyError('EMPTY_BLOB')
+    }
+
     try {
-        const pngBlob = await convertImageBlobToPng(blob)
+        const pngBlob = await imageBlobToPngBlob(typedBlob, imageType)
         await navigator.clipboard.write([
             new ClipboardItem({ 'image/png': pngBlob }),
         ])
+        return
     } catch (error) {
         debugMediaCapabilities({
-            action: 'copy-media',
+            action: 'copy-image',
+            step: 'png-copy-failed',
             contentType: imageType,
-            fallbackContentType: 'image/png',
             errorName: error?.name,
             errorMessage: error?.message,
+            blobType: typedBlob.type,
+            blobSize: typedBlob.size,
+        })
+    }
+
+    try {
+        await writeBlobToClipboard(typedBlob, imageType)
+    } catch (error) {
+        debugMediaCapabilities({
+            action: 'copy-image',
+            step: 'direct-copy-failed',
+            contentType: imageType,
+            errorName: error?.name,
+            errorMessage: error?.message,
+            blobType: typedBlob.type,
+            blobSize: typedBlob.size,
         })
         throw new MediaCopyError('CLIPBOARD_IMAGE_FAILED', error)
     }
+}
+
+async function writeBlobToClipboard(blob, contentType) {
+    const typedBlob = ensureTypedBlob(blob, contentType)
+    if (!typedBlob?.size) {
+        throw new MediaCopyError('EMPTY_BLOB')
+    }
+    if (!canUseClipboardWrite()) {
+        throw new MediaCopyError('CLIPBOARD_UNSUPPORTED')
+    }
+    await navigator.clipboard.write([
+        new ClipboardItem({ [typedBlob.type]: typedBlob }),
+    ])
 }
 
 async function copyImageAttachmentToClipboard(dialogId, attachment) {
@@ -503,19 +586,30 @@ async function copyImageAttachmentToClipboard(dialogId, attachment) {
 
     const { blob, filename, mediaType } = await fetchAttachmentBlob(dialogId, attachment)
     const contentType = normalizeContentType(mediaType, attachment.mediaType, blob.type)
+    const typedBlob = ensureTypedBlob(blob, contentType)
+    const blobMagic = isDevelopment() && typedBlob?.size ? await readBlobMagic(typedBlob) : undefined
     debugMediaCapabilities({
-        action: 'copy-media',
+        action: 'copy-image',
         contentType,
         mediaType: attachment.mediaType,
         attachmentKind: attachment.attachmentKind,
         filename,
+        blobType: blob.type,
+        blobSize: blob.size,
+        typedBlobType: typedBlob?.type,
+        typedBlobSize: typedBlob?.size,
+        blobMagic,
     })
 
-    if (!isImageType(contentType) && attachment.attachmentKind !== 'IMAGE') {
+    if (!typedBlob?.size) {
+        throw new MediaCopyError('EMPTY_BLOB')
+    }
+
+    if (!isImageType(contentType) && !isImageType(typedBlob.type) && attachment.attachmentKind !== 'IMAGE') {
         throw new MediaCopyError('CLIPBOARD_IMAGE_FAILED')
     }
 
-    await copyImageBlobToClipboard(blob, contentType)
+    await copyImageBlobToClipboard(typedBlob, contentType)
     return { copied: true, type: 'image' }
 }
 
@@ -1552,9 +1646,8 @@ function ChatsPage() {
             if (failedCount === 0 && savedCount > 0) {
                 toast({
                     title: fallbackUsed
-                        ? attachments.length === 1 ? 'Сохранено в загрузки' : 'Вложения сохранены'
+                        ? 'Скачивание началось'
                         : attachments.length === 1 ? 'Файл сохранён' : 'Вложения сохранены',
-                    description: fallbackUsed ? 'В папку загрузок' : undefined,
                 })
             } else if (failedCount > 0 && savedCount > 0) {
                 toast({
@@ -1605,7 +1698,7 @@ function ChatsPage() {
             const isImageFailure = error.code === 'CLIPBOARD_IMAGE_FAILED'
             toast({
                 title: isUnsupported
-                    ? 'Копирование изображения недоступно'
+                    ? 'Копирование недоступно'
                     : isUnavailable
                         ? 'Файл недоступен'
                         : isImageFailure
@@ -1614,10 +1707,10 @@ function ChatsPage() {
                 description: isUnavailable
                     ? undefined
                     : isImageFailure
-                        ? 'Попробуйте сохранить файл через “Сохранить как...”.'
+                        ? 'Попробуйте сохранить файл'
                         : isUnsupported
-                            ? 'Ваш браузер не поддерживает копирование изображений. Используйте “Сохранить как...”.'
-                            : 'Используйте “Сохранить как...”.',
+                            ? 'Сохраните файл через «Сохранить как...»'
+                            : 'Попробуйте сохранить файл',
                 variant: 'destructive',
             })
         } finally {
