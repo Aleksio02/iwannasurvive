@@ -1571,10 +1571,29 @@ $section-title-size: 19px;
   }
 }
 
+@media (max-width: 640px) {
+  .employer-applicants__actions {
+    align-items: stretch;
+
+    .employer-applicants__buttons {
+      justify-content: stretch;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .employer-applicants__actions {
+    .employer-applicants__buttons {
+      margin-bottom: 12px;
+    }
+  }
+}
+
 .employer-applicants__buttons {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-start;
 
   button {
     padding: 6px 14px;
@@ -1601,6 +1620,33 @@ $section-title-size: 19px;
     background: #e3f2fd;
     border-color: #bbdef5;
     color: #1976d2;
+  }
+}
+
+@media (max-width: 640px) {
+  .employer-applicants__buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+
+    .btn-approve {
+      grid-column: span 2;
+    }
+
+    .btn-reject,
+    .btn-reserve {
+      grid-column: span 1;
+    }
+  }
+
+  .employer-applicants__actions {
+    align-items: stretch;
+  }
+
+  .employer-applicants__buttons button {
+    width: 100%;
+    justify-content: center;
   }
 }
 
