@@ -18,6 +18,7 @@ import {
     addToSaved,
     removeFromSaved,
     applyToOpportunity,
+    getSeekerApplications,
 } from '@/shared/api/profile'
 import {
     addEmployerToSaved,
@@ -302,6 +303,7 @@ const OpportunityCompactCard = memo(function OpportunityCompactCard({
 const OpportunityListCard = memo(function OpportunityListCard({
     item,
     isApplicant,
+    isApplied,
     isOpportunityFavorite,
     isCompanyFavorite,
     onToggleOpportunityFavorite,
@@ -366,8 +368,12 @@ const OpportunityListCard = memo(function OpportunityListCard({
 
                 <div className="opportunities-page__card-actions">
                     {isApplicant && (
-                        <Button className="button--primary" onClick={() => onApply(item)}>
-                            Откликнуться
+                        <Button
+                            className={isApplied ? 'button--outline' : 'button--primary'}
+                            onClick={() => onApply(item)}
+                            disabled={isApplied}
+                        >
+                            {isApplied ? 'Отклик отправлен' : 'Откликнуться'}
                         </Button>
                     )}
                     <Link href={`/opportunities/${item.id}`}>
@@ -433,6 +439,7 @@ function OpportunitiesPage() {
     const [favoriteOpportunities, setFavoriteOpportunities] = useState(() =>
         getStorageSet('favorite_opportunities', getSessionUser())
     )
+    const [appliedOpportunityIds, setAppliedOpportunityIds] = useState(() => new Set())
 
     const isApplicant = currentUser?.role === 'APPLICANT'
 
@@ -468,6 +475,7 @@ function OpportunitiesPage() {
         const unsubscribe = subscribeSessionChange((nextUser) => {
             resetPersonalizedRecommendations()
             setCurrentUser(nextUser)
+            setAppliedOpportunityIds(new Set())
 
             if (!nextUser?.id) {
                 setFavoriteCompanies(getStorageSet('favorite_companies', null))
@@ -483,6 +491,37 @@ function OpportunitiesPage() {
 
         return unsubscribe
     }, [resetPersonalizedRecommendations])
+
+    useEffect(() => {
+        if (!isApplicant) {
+            setAppliedOpportunityIds(new Set())
+            return
+        }
+
+        let mounted = true
+
+        async function loadAppliedOpportunities() {
+            try {
+                const applications = await getSeekerApplications()
+                if (!mounted) return
+
+                const nextIds = new Set(
+                    (Array.isArray(applications) ? applications : [])
+                        .map((application) => Number(application.opportunityId))
+                        .filter((id) => Number.isFinite(id) && id > 0)
+                )
+                setAppliedOpportunityIds(nextIds)
+            } catch {
+                if (mounted) setAppliedOpportunityIds(new Set())
+            }
+        }
+
+        void loadAppliedOpportunities()
+
+        return () => {
+            mounted = false
+        }
+    }, [isApplicant, currentUser?.id])
 
     const syncFavoriteOpportunities = useCallback(async () => {
         if (!currentUser?.id) {
@@ -890,6 +929,8 @@ function OpportunitiesPage() {
     }, [])
 
     const handleApply = useCallback(async (opportunity) => {
+        if (appliedOpportunityIds.has(Number(opportunity.id))) return
+
         if (!currentUser) {
             toast({
                 title: 'Требуется авторизация',
@@ -911,6 +952,11 @@ function OpportunitiesPage() {
 
         try {
             await applyToOpportunity(opportunity.id)
+            setAppliedOpportunityIds((prev) => {
+                const next = new Set(prev)
+                next.add(Number(opportunity.id))
+                return next
+            })
             toast({
                 title: 'Отклик отправлен',
                 description: `Ваш отклик на "${opportunity.title}" успешно отправлен`,
@@ -919,15 +965,19 @@ function OpportunitiesPage() {
             console.error('Apply error:', applyError)
 
             if (applyError.message?.includes('already') || applyError.message?.includes('уже')) {
+                setAppliedOpportunityIds((prev) => {
+                    const next = new Set(prev)
+                    next.add(Number(opportunity.id))
+                    return next
+                })
                 toast({
-                    title: 'Уже откликались',
-                    description: 'Вы уже откликались на эту возможность',
-                    variant: 'destructive'
+                    title: 'Отклик уже отправлен',
+                    description: 'Вы можете отслеживать его статус в личном кабинете',
                 })
                 return
             }
 
-            if ([401, 403, 500, 503].includes(applyError.status)) {
+            if (applyError.status === 401) {
                 toast({
                     title: 'Сессия недоступна',
                     description: 'Пожалуйста, войдите снова',
@@ -937,13 +987,22 @@ function OpportunitiesPage() {
                 return
             }
 
+            if (applyError.status === 403) {
+                toast({
+                    title: 'Профиль ожидает модерацию',
+                    description: 'Чтобы откликнуться, отправьте профиль на модерацию и дождитесь одобрения.',
+                    variant: 'destructive',
+                })
+                return
+            }
+
             toast({
                 title: 'Ошибка',
                 description: applyError.message || 'Не удалось отправить отклик',
                 variant: 'destructive'
             })
         }
-    }, [currentUser, isApplicant, navigate, toast])
+    }, [appliedOpportunityIds, currentUser, isApplicant, navigate, toast])
 
     const goToPage = useCallback((newPage) => {
         setPage(newPage)
@@ -1330,6 +1389,7 @@ function OpportunitiesPage() {
                                     key={item.id}
                                     item={item}
                                     isApplicant={isApplicant}
+                                    isApplied={appliedOpportunityIds.has(Number(item.id))}
                                     isOpportunityFavorite={favoriteOpportunities.has(item.id)}
                                     isCompanyFavorite={isCompanyFavoriteForItem(item)}
                                     onToggleOpportunityFavorite={toggleOpportunityFavorite}

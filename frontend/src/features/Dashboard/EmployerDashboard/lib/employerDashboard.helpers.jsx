@@ -1,3 +1,9 @@
+import {
+    detectContactMethodType,
+    getTelegramUsername,
+    normalizeTelegramUrl,
+} from '@/shared/lib/utils/contactLinks'
+
 export function createLinkRow(title = '', url = '') {
     return {
         id: Date.now() + Math.random(),
@@ -109,19 +115,31 @@ export function extractModerationFeedback(historyItems = [], taskDetail = null) 
 export function renderContactMethod(contact) {
     if (!contact?.value) return null
 
+    const formatContactText = (value = contact.value) => {
+        const label = String(contact.label || '').trim()
+        const hasGenericLabel = /^Контакт\s+\d+$/i.test(label)
+        return label && !hasGenericLabel ? label : value
+    }
+
     if (contact.type === 'EMAIL') {
-        return <a href={`mailto:${contact.value}`}>{contact.value}</a>
+        return <a href={`mailto:${contact.value}`}>{formatContactText()}</a>
     }
 
     if (contact.type === 'PHONE') {
-        return <a href={`tel:${contact.value}`}>{contact.value}</a>
+        return <a href={`tel:${contact.value}`}>{formatContactText()}</a>
     }
 
     if (contact.type === 'TELEGRAM') {
-        const value = contact.value.replace(/^@/, '')
+        const url = normalizeTelegramUrl(contact.value)
+        const username = getTelegramUsername(contact.value)
+
+        if (!/^https?:\/\//i.test(url)) {
+            return <span>{formatContactText()}</span>
+        }
+
         return (
-            <a href={`https://t.me/${value}`} target="_blank" rel="noopener noreferrer">
-                @{value}
+            <a href={url} target="_blank" rel="noopener noreferrer">
+                {formatContactText(username ? `@${username}` : contact.value)}
             </a>
         )
     }
@@ -130,7 +148,7 @@ export function renderContactMethod(contact) {
         const value = contact.value.replace(/[^\d+]/g, '')
         return (
             <a href={`https://wa.me/${value.replace(/^\+/, '')}`} target="_blank" rel="noopener noreferrer">
-                {contact.value}
+                {formatContactText()}
             </a>
         )
     }
@@ -139,62 +157,17 @@ export function renderContactMethod(contact) {
         if (/^https?:\/\//i.test(contact.value)) {
             return (
                 <a href={contact.value} target="_blank" rel="noopener noreferrer">
-                    {contact.value}
+                    {formatContactText()}
                 </a>
             )
         }
     }
 
-    return <span>{contact.value}</span>
+    return <span>{formatContactText()}</span>
 }
 
 export function detectEmployerContactType(value = '', label = '') {
-    const normalizedValue = String(value).trim().toLowerCase()
-    const normalizedLabel = String(label).trim().toLowerCase()
-
-    if (
-        normalizedLabel.includes('email') ||
-        normalizedLabel.includes('mail') ||
-        normalizedLabel.includes('почт') ||
-        normalizedValue.includes('@')
-    ) {
-        return 'EMAIL'
-    }
-
-    if (
-        normalizedLabel.includes('telegram') ||
-        normalizedLabel.includes('tg') ||
-        normalizedLabel.includes('телеграм') ||
-        normalizedValue.startsWith('https://t.me/') ||
-        normalizedValue.startsWith('http://t.me/') ||
-        normalizedValue.startsWith('@')
-    ) {
-        return 'TELEGRAM'
-    }
-
-    if (normalizedLabel.includes('whatsapp') || normalizedLabel.includes('wa')) {
-        return 'WHATSAPP'
-    }
-
-    if (normalizedLabel.includes('vk') || normalizedValue.includes('vk.com')) {
-        return 'VK'
-    }
-
-    if (normalizedLabel.includes('linkedin') || normalizedValue.includes('linkedin.com')) {
-        return 'LINKEDIN'
-    }
-
-    if (
-        normalizedLabel.includes('phone') ||
-        normalizedLabel.includes('tel') ||
-        normalizedLabel.includes('тел') ||
-        normalizedValue.startsWith('+') ||
-        /^\d[\d\s\-()]+$/.test(normalizedValue)
-    ) {
-        return 'PHONE'
-    }
-
-    return 'OTHER'
+    return detectContactMethodType(value, label)
 }
 
 export function normalizeEmployerProfileState(profileData = {}, fallbackUser = null) {

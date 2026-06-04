@@ -2203,7 +2203,7 @@ function ChatsPage() {
                                     />
                                     <button
                                         type="submit"
-                                        className="button chats__send"
+                                        className="chats__send"
                                         disabled={!canSubmit}
                                         aria-label="Отправить сообщение"
                                         title={editingMessage ? 'Сохранить изменения' : 'Отправить сообщение'}

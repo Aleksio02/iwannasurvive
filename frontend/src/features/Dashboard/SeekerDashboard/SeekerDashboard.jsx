@@ -93,6 +93,17 @@ const DASHBOARD_TAB_ITEMS = [
     { key: 'recommendations', label: 'Рекомендации' },
 ]
 
+const DASHBOARD_TAB_KEYS = new Set(DASHBOARD_TAB_ITEMS.map((item) => item.key))
+
+function getDashboardTabFromUrl() {
+    if (typeof window === 'undefined') return ''
+
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab') || window.location.hash.replace(/^#/, '')
+
+    return DASHBOARD_TAB_KEYS.has(tab) ? tab : ''
+}
+
 const CONTACT_LINK_PRESETS = [
     {
         id: 'telegram',
@@ -416,7 +427,7 @@ const ContactCard = memo(function ContactCard({
 })
 
 function SeekerDashboard() {
-    const [activeTab, setActiveTab] = useState('profile')
+    const [activeTab, setActiveTab] = useState(() => getDashboardTabFromUrl() || 'profile')
     const [contactsTab, setContactsTab] = useState('confirmed')
     const [recommendationsTab, setRecommendationsTab] = useState('incoming')
     const [user, setUser] = useState(null)
@@ -519,7 +530,7 @@ function SeekerDashboard() {
     const [citySuggestions, setCitySuggestions] = useState([])
     const [cityActiveIndex, setCityActiveIndex] = useState(-1)
     const citySearchRef = useRef(null)
-    const [, navigate] = useLocation()
+    const [location, navigate] = useLocation()
     const [visibleApplicationsCount, setVisibleApplicationsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
     const [visibleContactsCount, setVisibleContactsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
 
@@ -528,6 +539,13 @@ function SeekerDashboard() {
         moderationState === 'DRAFT' ||
         (moderationState === 'NEEDS_REVISION' && !hasApprovedPublicVersion)
     const displayedProfile = profile
+
+    useEffect(() => {
+        const tabFromUrl = getDashboardTabFromUrl()
+        if (tabFromUrl && tabFromUrl !== activeTab) {
+            setActiveTab(tabFromUrl)
+        }
+    }, [activeTab, location])
     const profileSkills = useMemo(
         () => Array.isArray(profile.skills) ? profile.skills : [],
         [profile.skills]
@@ -1318,29 +1336,71 @@ function SeekerDashboard() {
         ensureDashboardTabVisible(activeTab, 'smooth')
     }, [activeTab, ensureDashboardTabVisible])
 
-    const validateProfile = () => {
-        const newErrors = {}
+    const handleDashboardTabChange = useCallback((tabKey) => {
+        setActiveTab(tabKey)
+        ensureDashboardTabVisible(tabKey)
+        navigate(tabKey === 'profile' ? '/seeker' : `/seeker?tab=${tabKey}`)
+    }, [ensureDashboardTabVisible, navigate])
 
-        if (!profile.firstName?.trim()) newErrors.firstName = 'Укажите имя'
-        if (!profile.lastName?.trim()) newErrors.lastName = 'Укажите фамилию'
-        if (!profile.universityName?.trim()) newErrors.universityName = 'Укажите вуз'
-        if (!profile.course && !profile.graduationYear) {
+    const hasProfessionalSignal = (profileData = profile) => (
+        Boolean(profileData.resumeText?.trim()) ||
+        Boolean(profileData.resumeFile) ||
+        (Array.isArray(profileData.portfolioLinks) && profileData.portfolioLinks.length > 0) ||
+        (Array.isArray(profileData.portfolioFiles) && profileData.portfolioFiles.length > 0) ||
+        (Array.isArray(profileData.skills) && profileData.skills.length > 0)
+    )
+
+    const buildProfileValidationErrors = (profileData = profile, { forModeration = false } = {}) => {
+        const newErrors = {}
+        const course = String(profileData.course || '').trim()
+        const graduationYear = String(profileData.graduationYear || '').trim()
+        const currentYear = new Date().getFullYear()
+
+        if (!profileData.firstName?.trim()) newErrors.firstName = 'Укажите имя'
+        if (!profileData.lastName?.trim()) newErrors.lastName = 'Укажите фамилию'
+
+        if (course) {
+            const numericCourse = Number(course)
+            if (!Number.isInteger(numericCourse) || numericCourse < 1 || numericCourse > 6) {
+                newErrors.course = 'Курс от 1 до 6'
+            }
+        }
+
+        if (graduationYear) {
+            const numericGraduationYear = Number(graduationYear)
+            if (
+                !Number.isInteger(numericGraduationYear) ||
+                numericGraduationYear < 1900 ||
+                numericGraduationYear > currentYear + 5
+            ) {
+                newErrors.graduationYear = `Год выпуска 1900–${currentYear + 5}`
+            }
+        }
+
+        if (!forModeration) return newErrors
+
+        if (!profileData.universityName?.trim()) newErrors.universityName = 'Укажите вуз'
+        if (!course && !graduationYear) {
             newErrors.course = 'Укажите курс или год выпуска'
             newErrors.graduationYear = 'Укажите курс или год выпуска'
         }
 
-        const hasProfessionalSignal =
-            Boolean(profile.resumeText?.trim()) ||
-            Boolean(profile.resumeFile) ||
-            (Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0) ||
-            (Array.isArray(profile.portfolioFiles) && profile.portfolioFiles.length > 0) ||
-            (Array.isArray(profile.skills) && profile.skills.length > 0)
-
-        if (!hasProfessionalSignal) {
+        if (!hasProfessionalSignal(profileData)) {
             newErrors.professionalSignal = 'Добавьте резюме, файл, портфолио или навыки'
         }
 
+        return newErrors
+    }
+
+    const validateProfileForSave = () => {
+        const newErrors = buildProfileValidationErrors(profile)
         setErrors(newErrors)
+        return Object.keys(newErrors).length === 0
+    }
+
+    const validateProfileForModeration = (profileData = profile, { updateErrors = true } = {}) => {
+        const newErrors = buildProfileValidationErrors(profileData, { forModeration: true })
+        if (updateErrors) setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
 
@@ -1359,6 +1419,15 @@ function SeekerDashboard() {
             updatedModerationStatus !== 'PENDING_MODERATION'
 
         if (shouldSubmitManually) {
+            const mergedProfile = { ...profile, ...updatedProfile }
+            if (!validateProfileForModeration(mergedProfile, { updateErrors: false })) {
+                toast({
+                    title: 'Обновлено',
+                    description: `${baseDescription}. Для отправки на модерацию добавьте резюме, файл, портфолио или навыки.`,
+                })
+                return
+            }
+
             await submitApplicantProfileToModerationAction()
             toast({
                 title: 'Обновлено',
@@ -1383,7 +1452,7 @@ function SeekerDashboard() {
     }
 
     const handleSubmitApplicantProfileForModeration = async () => {
-        if (!validateProfile()) {
+        if (!validateProfileForModeration()) {
             toast({
                 title: 'Проверьте форму',
                 description: 'Заполните обязательные поля перед отправкой на модерацию',
@@ -1423,7 +1492,7 @@ function SeekerDashboard() {
     }
 
     const handleSaveProfile = async () => {
-        if (!validateProfile()) {
+        if (!validateProfileForSave()) {
             toast({
                 title: 'Проверьте форму',
                 description: 'Заполните обязательные поля',
@@ -1443,6 +1512,17 @@ function SeekerDashboard() {
                 !hasApprovedPublicVersion &&
                 updatedProfile?.moderationStatus !== 'PENDING_MODERATION'
             ) {
+                const mergedProfile = { ...profile, ...updatedProfile }
+                if (!validateProfileForModeration(mergedProfile, { updateErrors: false })) {
+                    toast({
+                        title: 'Профиль сохранён',
+                        description: 'Изменения сохранены. Для отправки на модерацию добавьте резюме, файл, портфолио или навыки.',
+                    })
+                    setIsEditing(false)
+                    setErrors({})
+                    return
+                }
+
                 await submitApplicantProfileToModerationAction()
                 toast({
                     title: 'Профиль обновлён',
@@ -2519,10 +2599,7 @@ function SeekerDashboard() {
                                 }
                             }}
                             className={`dashboard-tabs__btn ${activeTab === tab.key ? 'is-active' : ''}`}
-                            onClick={() => {
-                                setActiveTab(tab.key)
-                                ensureDashboardTabVisible(tab.key)
-                            }}
+                            onClick={() => handleDashboardTabChange(tab.key)}
                         >
                             {tab.label}
                         </button>
