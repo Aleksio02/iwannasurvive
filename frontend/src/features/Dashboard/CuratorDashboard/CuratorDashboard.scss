@@ -3390,3 +3390,50 @@
     }
   }
 }
+
+.moderation-filter-input input[type="datetime-local"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .moderation-filter-input input[type="datetime-local"] {
+    font-size: 14px;
+    padding: 0 8px;
+    height: 44px;
+    line-height: normal;
+  }
+}
+
+@media (max-width: 480px) {
+  .moderation-filter-input input[type="datetime-local"] {
+    font-size: 13px;
+    padding: 0 6px;
+  }
+}
+
+.moderation-filters,
+.moderation-filters__section,
+.moderation-filter-input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .moderation-filters .moderation-filter-input {
+    width: 100%;
+    max-width: 100%;
+  }
+  .moderation-filter-input input,
+  .moderation-filter-input .custom-select,
+  .moderation-filter-input .custom-select__button {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
