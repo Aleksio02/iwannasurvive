@@ -692,11 +692,22 @@
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
+    min-width: 0;
 
     .icon {
       width: 14px;
       height: 14px;
+      flex-shrink: 0;
     }
+
+    span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  &__verified-company-badge {
+    flex-shrink: 0;
   }
 
   &__company-fav {
@@ -707,6 +718,7 @@
     font-size: 12px;
     transition: opacity 0.2s;
     color: #cbd5e1;
+    flex-shrink: 0;
 
     &.is-favorite {
       color: #fbbf24;

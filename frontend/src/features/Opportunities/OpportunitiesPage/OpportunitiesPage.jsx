@@ -34,6 +34,8 @@ import {
     getSessionUser,
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
+import { isEmployerVerified } from '@/shared/lib/utils/employerVerification'
+import VerifiedCompanyBadge from '@/shared/ui/VerifiedCompanyBadge/VerifiedCompanyBadge'
 import './OpportunitiesPage.scss'
 import OpportunityCatalogSkeleton from './components/OpportunityCatalogSkeleton'
 import OpportunityEmptyState from './components/OpportunityEmptyState'
@@ -246,6 +248,9 @@ const OpportunityCompactCard = memo(function OpportunityCompactCard({
             <p className="opportunities-page__company">
                 <img src={companyIcon} alt="" className="icon"/>
                 <span>{item.companyName}</span>
+                {isEmployerVerified(item) && (
+                    <VerifiedCompanyBadge compact className="opportunities-page__verified-company-badge" />
+                )}
                 <button
                     type="button"
                     className={`opportunities-page__company-fav ${isCompanyFavorite ? 'is-favorite' : ''}`}
@@ -330,6 +335,9 @@ const OpportunityListCard = memo(function OpportunityListCard({
             <p className="opportunities-page__company">
                 <img src={companyIcon} alt="" className="icon"/>
                 <span>{item.companyName}</span>
+                {isEmployerVerified(item) && (
+                    <VerifiedCompanyBadge compact className="opportunities-page__verified-company-badge" />
+                )}
                 <button
                     type="button"
                     className={`opportunities-page__company-fav ${isCompanyFavorite ? 'is-favorite' : ''}`}

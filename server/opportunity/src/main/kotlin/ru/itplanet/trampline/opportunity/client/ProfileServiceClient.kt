@@ -3,8 +3,12 @@ package ru.itplanet.trampline.opportunity.client
 import org.springframework.cloud.openfeign.FeignClient
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
-import ru.itplanet.trampline.commons.model.profile.InternalEmployerOpportunityAccessResponse
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
 import ru.itplanet.trampline.commons.model.profile.InternalApplicantRecommendationContextResponse
+import ru.itplanet.trampline.commons.model.profile.InternalEmployerOpportunityAccessResponse
+import ru.itplanet.trampline.commons.model.profile.InternalEmployerVerificationStatusBatchRequest
+import ru.itplanet.trampline.commons.model.profile.InternalEmployerVerificationStatusBatchResponse
 
 @FeignClient(
     name = "opportunity-profile-service-client",
@@ -21,4 +25,9 @@ interface ProfileServiceClient {
     fun getEmployerOpportunityAccess(
         @PathVariable employerUserId: Long,
     ): InternalEmployerOpportunityAccessResponse
+
+    @PostMapping("/internal/employer-profiles/verification-statuses")
+    fun getEmployerVerificationStatuses(
+        @RequestBody request: InternalEmployerVerificationStatusBatchRequest,
+    ): InternalEmployerVerificationStatusBatchResponse
 }

@@ -12,6 +12,8 @@ data class OpportunityCard(
     val fullDescription: String?,
     val requirements: String?,
     val companyName: String,
+    val employerVerified: Boolean = false,
+    val employerVerificationStatus: String? = null,
     val type: OpportunityType,
     val workFormat: WorkFormat,
     val employmentType: EmploymentType?,
