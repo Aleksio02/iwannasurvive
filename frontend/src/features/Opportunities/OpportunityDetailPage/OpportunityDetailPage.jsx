@@ -76,34 +76,6 @@ function normalizeResourceLinks(links) {
         .filter(Boolean)
 }
 
-const employerFavoriteButtonBaseStyle = {
-    width: 'auto',
-    minHeight: '34px',
-    padding: '8px 12px',
-    borderRadius: '999px',
-    fontSize: '13px',
-    fontWeight: 700,
-    lineHeight: 1,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 6px 14px rgba(31, 182, 170, 0.10)',
-}
-
-function getEmployerFavoriteButtonStyle(isFavorite, isLoading) {
-    return {
-        ...employerFavoriteButtonBaseStyle,
-        border: `1px solid ${isFavorite ? '#fcd34d' : '#99f6e4'}`,
-        background: isFavorite ? '#fffbeb' : '#ecfeff',
-        color: isFavorite ? '#b45309' : '#0f766e',
-        opacity: isLoading ? 0.72 : 1,
-        pointerEvents: isLoading ? 'none' : 'auto',
-    }
-}
-
 export default function OpportunityDetailPage() {
     const [, navigate] = useLocation()
     const [, params] = useRoute('/opportunities/:id')
@@ -199,7 +171,7 @@ export default function OpportunityDetailPage() {
         return () => {
             isMounted = false
         }
-    }, [params?.id])
+    }, [currentUser, params?.id])
 
     useEffect(() => {
         if (!params?.id) return
@@ -490,7 +462,7 @@ export default function OpportunityDetailPage() {
                                         type="button"
                                         onClick={handleToggleEmployerFavorite}
                                         disabled={isEmployerFavoriteLoading}
-                                        style={getEmployerFavoriteButtonStyle(isEmployerFavorite, isEmployerFavoriteLoading)}
+                                        className={`opportunity-detail-page__employer-favorite ${isEmployerFavorite ? 'is-favorite' : ''}`}
                                         aria-label={isEmployerFavorite ? 'Удалить работодателя из избранного' : 'Добавить работодателя в избранное'}
                                         title={isEmployerFavorite ? 'Удалить работодателя из избранного' : 'Добавить работодателя в избранное'}
                                     >

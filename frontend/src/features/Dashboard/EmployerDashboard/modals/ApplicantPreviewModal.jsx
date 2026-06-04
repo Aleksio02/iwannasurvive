@@ -1,52 +1,13 @@
-import { useRef, useEffect } from 'react'
 import Label from '@/shared/ui/Label'
+import Button from '@/shared/ui/Button'
+import Modal from '@/shared/ui/Modal'
 
 function ApplicantPreviewModal({
                                    isOpen,
                                    selectedApplicant,
                                    onClose,
                                }) {
-    const overlayMouseDownStartedOutsideRef = useRef(false)
-
-    useEffect(() => {
-        if (isOpen) {
-            document.body.style.overflow = 'hidden'
-            document.documentElement.style.overflow = 'hidden'
-        } else {
-            document.body.style.overflow = ''
-            document.documentElement.style.overflow = ''
-        }
-
-        return () => {
-            document.body.style.overflow = ''
-            document.documentElement.style.overflow = ''
-        }
-    }, [isOpen])
-
-    useEffect(() => {
-        const handleKeyDown = (event) => {
-            if (event.key === 'Escape' && isOpen) {
-                onClose()
-            }
-        }
-
-        window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [isOpen, onClose])
-
     if (!isOpen || !selectedApplicant) return null
-
-    const handleOverlayMouseDown = (event) => {
-        overlayMouseDownStartedOutsideRef.current = event.target === event.currentTarget
-    }
-
-    const handleOverlayMouseUp = (event) => {
-        const endedOutside = event.target === event.currentTarget
-        if (overlayMouseDownStartedOutsideRef.current && endedOutside) {
-            onClose()
-        }
-        overlayMouseDownStartedOutsideRef.current = false
-    }
 
     const getSkills = () => {
         if (Array.isArray(selectedApplicant.skills)) {
@@ -68,27 +29,12 @@ function ApplicantPreviewModal({
     }
 
     return (
-        <div
-            className="modal-overlay"
-            onMouseDown={handleOverlayMouseDown}
-            onMouseUp={handleOverlayMouseUp}
+        <Modal
+            isOpen={isOpen}
+            title="Профиль кандидата"
+            onClose={onClose}
+            footer={<Button className="button--ghost" onClick={onClose}>Закрыть</Button>}
         >
-            <div
-                className="modal"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="modal__header">
-                    <h3>Профиль кандидата</h3>
-                    <button
-                        className="modal__close-btn"
-                        onClick={onClose}
-                        aria-label="Закрыть"
-                        type="button"
-                    >
-                        ×
-                    </button>
-                </div>
-
                 <div className="employer-profile__grid">
                     <div className="employer-profile__field">
                         <Label>Имя</Label>
@@ -125,8 +71,7 @@ function ApplicantPreviewModal({
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+        </Modal>
     )
 }
 

@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useId, useState } from 'react';
 import Input from '@/shared/ui/Input';
 import Label from '@/shared/ui/Label';
 import Button from '@/shared/ui/Button';
 import CustomSelect from '@/shared/ui/CustomSelect';
+import Modal from '@/shared/ui/Modal';
 import { TAG_CATEGORY_OPTIONS } from '@/shared/lib/utils/tagCategories';
 import styles from './CreateTagForm.module.scss';
 
@@ -11,22 +12,8 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
   const [category, setCategory] = useState('TECH');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const overlayMouseDownStartedOutsideRef = useRef(false);
+  const formId = useId();
   const isBusy = isLoading || submitting;
-
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') onCancel?.();
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onCancel]);
-
-  useEffect(() => {
-    document.documentElement.classList.add('is-lock');
-    return () => document.documentElement.classList.remove('is-lock');
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -51,27 +38,25 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
     }
   };
 
-  const handleOverlayMouseDown = (event) => {
-    overlayMouseDownStartedOutsideRef.current = event.target === event.currentTarget;
-  };
-
-  const handleOverlayMouseUp = (event) => {
-    const endedOutside = event.target === event.currentTarget;
-    if (overlayMouseDownStartedOutsideRef.current && endedOutside) {
-      onCancel?.();
-    }
-    overlayMouseDownStartedOutsideRef.current = false;
-  };
-
   return (
-      <div
-        className={styles.overlay}
-        onMouseDown={handleOverlayMouseDown}
-        onMouseUp={handleOverlayMouseUp}
+      <Modal
+        isOpen={true}
+        title="Предложить новый тег"
+        onClose={onCancel}
+        closeDisabled={isBusy}
+        closeOnBackdrop={!isBusy}
+        closeOnEscape={!isBusy}
+        size="sm"
+        footer={(
+          <>
+            <Button type="button" className="button--outline" onClick={onCancel} disabled={isBusy}>Отмена</Button>
+            <Button type="submit" className="button--primary" disabled={isBusy} form={formId}>
+              {submitting ? 'Создание...' : 'Создать'}
+            </Button>
+          </>
+        )}
       >
-        <div className={styles.formContainer} onMouseDown={(e) => e.stopPropagation()}>
-          <h3>Предложить новый тег</h3>
-          <form onSubmit={handleSubmit}>
+          <form id={formId} className={styles.form} onSubmit={handleSubmit}>
             <div className={styles.field}>
               <Label>Название тега <span className="required-star">*</span></Label>
               <Input
@@ -92,15 +77,8 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
               />
             </div>
             {error && <div className={styles.error}>{error}</div>}
-            <div className={styles.actions}>
-              <Button type="button" className="button--outline" onClick={onCancel} disabled={isBusy}>Отмена</Button>
-              <Button type="submit" className="button--primary" disabled={isBusy}>
-                {submitting ? 'Создание...' : 'Создать'}
-              </Button>
-            </div>
           </form>
-        </div>
-      </div>
+      </Modal>
   );
 };
 

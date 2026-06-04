@@ -30,10 +30,14 @@
   color: var(--color-text);
 }
 
+.form {
+  display: grid;
+  gap: 14px;
+}
+
 .field {
   display: grid;
   gap: 8px;
-  margin-bottom: 14px;
   position: relative;
 }
 
@@ -43,7 +47,6 @@
 
 .error {
   color: var(--color-danger);
-  margin-bottom: 10px;
   font-size: 13px;
   line-height: 1.4;
 }

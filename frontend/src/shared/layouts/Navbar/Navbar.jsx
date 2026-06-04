@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'wouter'
 import { useState, useEffect, useRef } from 'react'
+import { Menu, X } from 'lucide-react'
 import brandMark from '@/assets/icons/brand-mark.png'
 import { getCurrentUserInfo, logoutUser } from '@/shared/api/auth'
 import { getApplicantProfile, getEmployerProfile } from '@/shared/api/profile'
@@ -19,6 +20,7 @@ function Navbar() {
     const [displayName, setDisplayName] = useState('')
     const [isCheckingSession, setIsCheckingSession] = useState(!!getSessionUser())
     const [unreadChatCount, setUnreadChatCount] = useState(0)
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
     const { eventVersion } = useChatRealtime()
     const lastUnreadRefreshAtRef = useRef(0)
 
@@ -175,9 +177,27 @@ function Navbar() {
         }
     }, [eventVersion, user?.id, user?.role])
 
+    useEffect(() => {
+        setIsMenuOpen(false)
+    }, [location])
+
+    useEffect(() => {
+        if (!isMenuOpen) return undefined
+
+        const handleEscape = (event) => {
+            if (event.key === 'Escape') {
+                setIsMenuOpen(false)
+            }
+        }
+
+        document.addEventListener('keydown', handleEscape)
+        return () => document.removeEventListener('keydown', handleEscape)
+    }, [isMenuOpen])
+
     const handleLogout = async () => {
         setUser(null)
         setDisplayName('')
+        setIsMenuOpen(false)
         clearSessionUser()
 
         try {
@@ -215,6 +235,10 @@ function Navbar() {
         return user?.displayName || user?.email?.split('@')[0] || 'Пользователь'
     }
 
+    const handleNavAction = () => {
+        setIsMenuOpen(false)
+    }
+
     return (
         <nav className="navbar">
             <div className="navbar__container container">
@@ -223,8 +247,19 @@ function Navbar() {
                     <span className="navbar__logo-text">Трамплин</span>
                 </Link>
 
-                <div className="navbar__links">
-                    <Link href="/" className={`navbar__link ${isActive('/') ? 'is-active' : ''}`}>
+                <button
+                    type="button"
+                    className="navbar__menu-toggle"
+                    aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+                    aria-expanded={isMenuOpen}
+                    aria-controls="navbar-menu"
+                    onClick={() => setIsMenuOpen((value) => !value)}
+                >
+                    {isMenuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+                </button>
+
+                <div id="navbar-menu" className={`navbar__links ${isMenuOpen ? 'is-open' : ''}`}>
+                    <Link href="/" onClick={handleNavAction} className={`navbar__link ${isActive('/') ? 'is-active' : ''}`}>
                         Главная
                     </Link>
 
@@ -232,6 +267,7 @@ function Navbar() {
                         <>
                             <Link
                                 href={getDashboardLink()}
+                                onClick={handleNavAction}
                                 className={`navbar__link ${isActive(getDashboardLink()) ? 'is-active' : ''}`}
                             >
                                 Личный кабинет
@@ -240,6 +276,7 @@ function Navbar() {
                             {['APPLICANT', 'EMPLOYER'].includes(user.role) && (
                                 <Link
                                     href="/chats"
+                                    onClick={handleNavAction}
                                     className={`navbar__link navbar__chat-link ${isChatsActive ? 'is-active' : ''}`}
                                 >
                                     Сообщения
@@ -265,11 +302,12 @@ function Navbar() {
                         <>
                             {!isCheckingSession && (
                                 <>
-                                    <Link href="/login" className={`navbar__link ${isActive('/login') ? 'is-active' : ''}`}>
+                                    <Link href="/login" onClick={handleNavAction} className={`navbar__link ${isActive('/login') ? 'is-active' : ''}`}>
                                         Войти
                                     </Link>
                                     <Link
                                         href="/register"
+                                        onClick={handleNavAction}
                                         className={`navbar__link navbar__link--register ${isActive('/register') ? 'is-active' : ''}`}
                                     >
                                         Регистрация

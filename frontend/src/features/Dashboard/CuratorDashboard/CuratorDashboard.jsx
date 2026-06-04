@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { X } from 'lucide-react'
 import { useToast } from '@/shared/hooks/use-toast'
 import DashboardLayout from '../DashboardLayout'
 import Button from '@/shared/ui/Button'
@@ -72,23 +73,6 @@ const REJECT_REASON_OPTIONS = [
     { value: 'NOT_RELEVANT', label: 'Неактуально' },
 ]
 
-function getManualEntityIdHint(entityType) {
-    switch (entityType) {
-        case 'APPLICANT_PROFILE':
-            return 'Укажите идентификатор профиля соискателя.'
-        case 'EMPLOYER_PROFILE':
-            return 'Укажите идентификатор профиля компании.'
-        case 'EMPLOYER_VERIFICATION':
-            return 'Укажите идентификатор заявки на верификацию.'
-        case 'OPPORTUNITY':
-            return 'Укажите идентификатор вакансии.'
-        case 'TAG':
-            return 'Укажите идентификатор тега.'
-        default:
-            return 'Укажите идентификатор записи, которую нужно проверить.'
-    }
-}
-
 const MANUAL_TASK_DEFAULT = {
     entityType: 'APPLICANT_PROFILE',
     entityId: '',
@@ -97,14 +81,6 @@ const MANUAL_TASK_DEFAULT = {
     comment: '',
 }
 const DETAIL_HISTORY_PAGE_SIZE = 20
-
-function toLocalDateTimeValue(value) {
-    if (!value) return ''
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ''
-    const pad = (part) => String(part).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
 
 function toApiDateTime(value) {
     if (!value) return undefined
@@ -1228,12 +1204,6 @@ function CuratorDashboard() {
         },
     }), [])
 
-    const openDetailModal = useCallback((task) => {
-        dismissActiveOverlayUi()
-        setSelectedTask(task)
-        setIsDetailOpen(true)
-    }, [dismissActiveOverlayUi])
-
     const closeDetailModal = useCallback(() => {
         setIsDetailOpen(false)
     }, [])
@@ -1590,10 +1560,12 @@ function CuratorDashboard() {
 
             {isDetailOpen && (
                 <div className="modal-overlay" {...getOverlayHandlers(closeDetailModal)}>
-                    <div className="modal-content moderation-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content moderation-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Детали задачи #{selectedTask.id}</h3>
-                            <button className="modal-close" onClick={closeDetailModal}>×</button>
+                            <button type="button" className="modal-close" onClick={closeDetailModal} aria-label="Закрыть">
+                                <X size={20} aria-hidden="true" />
+                            </button>
                         </div>
 
                         <div className="modal-body" ref={detailModalBodyRef}>
@@ -1846,10 +1818,12 @@ function CuratorDashboard() {
 
             {imagePreview && (
                 <div className="modal-overlay" {...getOverlayHandlers(() => setImagePreview(null))}>
-                    <div className="modal-content moderation-image-preview-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content moderation-image-preview-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Предпросмотр файла</h3>
-                            <button className="modal-close" onClick={() => setImagePreview(null)}>×</button>
+                            <button type="button" className="modal-close" onClick={() => setImagePreview(null)} aria-label="Закрыть">
+                                <X size={20} aria-hidden="true" />
+                            </button>
                         </div>
                         <div className="modal-body">
                             <div className="moderation-image-preview">
@@ -1866,10 +1840,12 @@ function CuratorDashboard() {
 
             {isApproveModalOpen && (
                 <div className="modal-overlay" {...getOverlayHandlers(() => setIsApproveModalOpen(false))}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Одобрение задачи</h3>
-                            <button className="modal-close" onClick={() => setIsApproveModalOpen(false)}>×</button>
+                            <button type="button" className="modal-close" onClick={() => setIsApproveModalOpen(false)} aria-label="Закрыть">
+                                <X size={20} aria-hidden="true" />
+                            </button>
                         </div>
                         <div className="modal-body modal-body--form">
                             <div className="modal-field modal-field--full">
@@ -1895,10 +1871,12 @@ function CuratorDashboard() {
 
             {isRejectModalOpen && (
                 <div className="modal-overlay" {...getOverlayHandlers(() => setIsRejectModalOpen(false))}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Отклонение задачи</h3>
-                            <button className="modal-close" onClick={() => setIsRejectModalOpen(false)}>×</button>
+                            <button type="button" className="modal-close" onClick={() => setIsRejectModalOpen(false)} aria-label="Закрыть">
+                                <X size={20} aria-hidden="true" />
+                            </button>
                         </div>
                         <div className="modal-body modal-body--form">
                             <div className="manual-task-form-grid">
@@ -1928,10 +1906,12 @@ function CuratorDashboard() {
 
             {isRequestChangesModalOpen && (
                 <div className="modal-overlay" {...getOverlayHandlers(() => setIsRequestChangesModalOpen(false))}>
-                    <div className="modal-content moderation-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content moderation-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Запросить правки</h3>
-                            <button className="modal-close" onClick={() => setIsRequestChangesModalOpen(false)}>×</button>
+                            <button type="button" className="modal-close" onClick={() => setIsRequestChangesModalOpen(false)} aria-label="Закрыть">
+                                <X size={20} aria-hidden="true" />
+                            </button>
                         </div>
                         <div className="modal-body modal-body--form">
                             <div className="manual-task-form-grid">
@@ -1998,10 +1978,12 @@ function CuratorDashboard() {
 
             {isManualTaskModalOpen && (
                 <div className="modal-overlay" {...getOverlayHandlers(() => setIsManualTaskModalOpen(false))}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h3>Создать ручную задачу</h3>
-                            <button className="modal-close" onClick={() => setIsManualTaskModalOpen(false)}>×</button>
+                            <button type="button" className="modal-close" onClick={() => setIsManualTaskModalOpen(false)} aria-label="Закрыть">
+                                <X size={20} aria-hidden="true" />
+                            </button>
                         </div>
                         <div className="modal-body modal-body--form">
                             <div className="manual-task-form-grid">
