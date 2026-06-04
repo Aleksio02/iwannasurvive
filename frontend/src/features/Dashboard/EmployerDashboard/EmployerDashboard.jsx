@@ -74,6 +74,8 @@ const MODERATION_HISTORY_ROLES = new Set(['ADMIN', 'CURATOR'])
 
 const getVerificationPendingFileClientId = (file) => `${file.name}_${file.size}_${file.lastModified}`
 
+const getVerificationPendingFileClientId = (file) => `${file.name}_${file.size}_${file.lastModified}`
+
 const normalizeGeoSearchQuery = (value) => String(value || '').replace(/\s+/g, ' ').trim()
 
 const formatGeoCityLabel = (city) => {
