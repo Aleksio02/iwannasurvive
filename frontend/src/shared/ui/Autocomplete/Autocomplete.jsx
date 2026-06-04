@@ -35,6 +35,22 @@ function Autocomplete({
         })
     }, [])
 
+    const uniqueSuggestions = useMemo(() => {
+        const seen = new Set()
+        return suggestions.filter(item => {
+            const name = getSuggestionValue(item)
+            if (seen.has(name)) return false
+            seen.add(name)
+            return true
+        })
+    }, [suggestions, getSuggestionValue])
+
+    const selectSuggestion = useCallback((item) => {
+        onSelect(item)
+        onOpenChange(false)
+        onActiveIndexChange(-1)
+    }, [onSelect, onOpenChange, onActiveIndexChange])
+
     // Закрытие при клике вне
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -80,12 +96,12 @@ function Autocomplete({
     const handleKeyDown = (event) => {
         if (event.key === 'ArrowDown') {
             event.preventDefault()
-            if (!isOpen && suggestions.length > 0) {
+            if (!isOpen && uniqueSuggestions.length > 0) {
                 onOpenChange(true)
             }
-            if (suggestions.length > 0) {
+            if (uniqueSuggestions.length > 0) {
                 const newIndex = activeIndex + 1
-                if (newIndex < suggestions.length) {
+                if (newIndex < uniqueSuggestions.length) {
                     onActiveIndexChange(newIndex)
                 } else {
                     onActiveIndexChange(0)
@@ -93,37 +109,25 @@ function Autocomplete({
             }
         } else if (event.key === 'ArrowUp') {
             event.preventDefault()
-            if (!isOpen && suggestions.length > 0) {
+            if (!isOpen && uniqueSuggestions.length > 0) {
                 onOpenChange(true)
             }
-            if (suggestions.length > 0) {
+            if (uniqueSuggestions.length > 0) {
                 const newIndex = activeIndex - 1
                 if (newIndex >= 0) {
                     onActiveIndexChange(newIndex)
                 } else {
-                    onActiveIndexChange(suggestions.length - 1)
+                    onActiveIndexChange(uniqueSuggestions.length - 1)
                 }
             }
-        } else if (event.key === 'Enter' && isOpen && activeIndex >= 0 && suggestions[activeIndex]) {
+        } else if (event.key === 'Enter' && isOpen && activeIndex >= 0 && uniqueSuggestions[activeIndex]) {
             event.preventDefault()
-            onSelect(suggestions[activeIndex])
-            onOpenChange(false)
-            onActiveIndexChange(-1)
+            selectSuggestion(uniqueSuggestions[activeIndex])
         } else if (event.key === 'Escape') {
             onOpenChange(false)
             onActiveIndexChange(-1)
         }
     }
-
-    const uniqueSuggestions = useMemo(() => {
-        const seen = new Set()
-        return suggestions.filter(item => {
-            const name = getSuggestionValue(item)
-            if (seen.has(name)) return false
-            seen.add(name)
-            return true
-        })
-    }, [suggestions, getSuggestionValue])
 
     const menu = isOpen && uniqueSuggestions.length > 0 && createPortal(
         <div
@@ -146,11 +150,13 @@ function Autocomplete({
                         type="button"
                         className={`autocomplete__item ${activeIndex === index ? 'is-active' : ''}`}
                         onMouseEnter={() => onActiveIndexChange(index)}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                            onSelect(item)
-                            onOpenChange(false)
-                            onActiveIndexChange(-1)
+                        onMouseDown={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            selectSuggestion(item)
+                        }}
+                        onClick={(event) => {
+                            event.preventDefault()
                         }}
                         title={displayName}
                     >

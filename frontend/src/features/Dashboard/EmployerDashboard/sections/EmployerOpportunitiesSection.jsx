@@ -87,8 +87,9 @@ function EmployerOpportunitiesSection({
                     {filteredOpportunities.map((opp) => {
                         const detailedOpportunity = opportunityDetailsById?.[opp.id] || opp
                         const normalizedStatus = String(opp.status || '').toUpperCase()
+                        const canEdit = ['DRAFT', 'REJECTED'].includes(normalizedStatus)
                         const canClose = ['PUBLISHED', 'PLANNED'].includes(normalizedStatus)
-                        const canReturnToDraft = ['PUBLISHED', 'REJECTED', 'CLOSED', 'PLANNED'].includes(normalizedStatus)
+                        const canReturnToDraft = ['REJECTED', 'CLOSED', 'PLANNED'].includes(normalizedStatus)
                         const canRestoreFromArchive = normalizedStatus === 'ARCHIVED'
                         const canArchiveDirectly = ['CLOSED', 'REJECTED'].includes(normalizedStatus)
                         const canArchiveViaClose = normalizedStatus === 'PUBLISHED'
@@ -139,12 +140,14 @@ function EmployerOpportunitiesSection({
                                         {expandedOpportunityId === opp.id ? 'Скрыть' : 'Подробнее'}
                                     </button>
 
-                                    <button
-                                        className="employer-opportunities__view"
-                                        onClick={() => onStartEditOpportunity(opp.id)}
-                                    >
-                                        Редактировать
-                                    </button>
+                                    {canEdit && (
+                                        <button
+                                            className="employer-opportunities__view"
+                                            onClick={() => onStartEditOpportunity(opp.id)}
+                                        >
+                                            Редактировать
+                                        </button>
+                                    )}
 
                                     {canClose && (
                                         <button
@@ -218,6 +221,11 @@ function EmployerOpportunitiesSection({
                                     )}
                                     {detailedOpportunity.type !== 'EVENT' && detailedOpportunity.expiresAt && (
                                         <p><strong>Срок действия:</strong> {formatDate(detailedOpportunity.expiresAt)}</p>
+                                    )}
+                                    {normalizedStatus === 'PUBLISHED' && (
+                                        <p className="employer-opportunities__status-hint">
+                                            Чтобы изменить опубликованную публикацию, сначала закройте её. Прямое редактирование опубликованных материалов недоступно, потому что они уже прошли модерацию.
+                                        </p>
                                     )}
 
                                     {detailedOpportunity.media && detailedOpportunity.media.length > 0 && (

@@ -1403,11 +1403,24 @@
 }
 
 .moderation-field-issue-pill {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
   padding: 8px 10px;
   border-radius: 10px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   font-size: 14px;
+}
+
+.moderation-field-issue-pill__code {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .history-item--compact,
