@@ -1,11 +1,10 @@
 import { memo, useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Link, useLocation } from 'wouter'
 import Button from '@/shared/ui/Button'
-import Input from '@/shared/ui/Input'
-import CustomSelect from '@/shared/ui/CustomSelect'
 import Navbar from '@/shared/layouts/Navbar'
 import LazyYandexOpportunityMap from '@/shared/ui/Map/LazyYandexOpportunityMap'
 import { useToast } from '@/shared/hooks/use-toast'
+import { searchGeoCities } from '@/shared/api/geo'
 import {
     listOpportunityMap,
     listOpportunities,
@@ -36,6 +35,9 @@ import {
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
 import './OpportunitiesPage.scss'
+import OpportunityCatalogSkeleton from './components/OpportunityCatalogSkeleton'
+import OpportunityEmptyState from './components/OpportunityEmptyState'
+import OpportunityFiltersPanel from './components/OpportunityFiltersPanel'
 import PersonalizedRecommendationsSection from './components/PersonalizedRecommendationsSection'
 
 import locationIcon from '@/assets/icons/location.svg'
@@ -120,6 +122,12 @@ function useDebounce(value, delay) {
     }, [value, delay])
 
     return debouncedValue
+}
+
+function formatCitySuggestionLabel(city) {
+    const cityName = String(city?.name || '').trim()
+    const regionName = String(city?.regionName || '').trim()
+    return regionName ? `${cityName}, ${regionName}` : cityName
 }
 
 function normalizeNearbyItem(item) {
@@ -377,6 +385,11 @@ function OpportunitiesPage() {
     })
     const [salaryRange, setSalaryRange] = useState({ from: '', to: '' })
     const [selectedTags, setSelectedTags] = useState([])
+    const [cityQuery, setCityQuery] = useState('')
+    const [selectedCity, setSelectedCity] = useState(null)
+    const [citySuggestions, setCitySuggestions] = useState([])
+    const [isCitySuggestionsOpen, setIsCitySuggestionsOpen] = useState(false)
+    const [cityActiveIndex, setCityActiveIndex] = useState(-1)
     const [page, setPage] = useState(0)
 
     const [total, setTotal] = useState(0)
@@ -425,11 +438,23 @@ function OpportunitiesPage() {
 
     const debouncedSearch = useDebounce(filters.search, 500)
     const debouncedSkills = useDebounce(filters.skillsQuery, 500)
+    const debouncedCityQuery = useDebounce(cityQuery, 350)
 
     const visibleMapPoints = isMapSearchActive ? mapSearchResults : baseMapPoints
     const visibleMapSideSource = isMapSearchActive ? mapSearchResults : opportunities
     const visibleTotal = viewMode === 'map' && isMapSearchActive ? mapTotal : total
     const totalPages = Math.max(1, Math.ceil(visibleTotal / PAGE_LIMIT))
+    const hasActiveFilters = Boolean(
+        filters.search.trim() ||
+        filters.skillsQuery.trim() ||
+        filters.type ||
+        filters.format ||
+        selectedCity?.id ||
+        cityQuery.trim() ||
+        salaryRange.from ||
+        salaryRange.to ||
+        selectedTags.length > 0
+    )
 
     useEffect(() => {
         const unsubscribe = subscribeSessionChange((nextUser) => {
@@ -508,9 +533,10 @@ function OpportunitiesPage() {
         if (salaryRange.from) params.salaryFrom = Number(salaryRange.from)
         if (salaryRange.to) params.salaryTo = Number(salaryRange.to)
         if (selectedTags.length > 0) params.tagIds = selectedTags
+        if (selectedCity?.id) params.cityId = Number(selectedCity.id)
 
         return params
-    }, [debouncedSearch, debouncedSkills, filters.type, filters.format, page, salaryRange, selectedTags])
+    }, [debouncedSearch, debouncedSkills, filters.type, filters.format, page, salaryRange, selectedCity, selectedTags])
 
     useEffect(() => {
         listTags('TECH')
@@ -524,6 +550,32 @@ function OpportunitiesPage() {
     useEffect(() => {
         syncFavoriteOpportunities()
     }, [syncFavoriteOpportunities])
+
+    useEffect(() => {
+        let mounted = true
+        const normalizedQuery = debouncedCityQuery.trim()
+
+        if (normalizedQuery.length < 2) {
+            setCitySuggestions([])
+            return () => {
+                mounted = false
+            }
+        }
+
+        searchGeoCities(normalizedQuery, 10)
+            .then((data) => {
+                if (!mounted) return
+                setCitySuggestions(Array.isArray(data) ? data : [])
+            })
+            .catch(() => {
+                if (!mounted) return
+                setCitySuggestions([])
+            })
+
+        return () => {
+            mounted = false
+        }
+    }, [debouncedCityQuery])
 
     const loadPersonalizedRecommendations = useCallback(async () => {
         if (!isApplicant || isRecommendationsLoading || hasRequestedRecommendations) return
@@ -903,6 +955,23 @@ function OpportunitiesPage() {
         setPage(0)
     }
 
+    const resetAllFilters = useCallback(() => {
+        setFilters({
+            search: '',
+            skillsQuery: '',
+            type: '',
+            format: '',
+        })
+        setSalaryRange({ from: '', to: '' })
+        setSelectedTags([])
+        setCityQuery('')
+        setSelectedCity(null)
+        setCitySuggestions([])
+        setIsCitySuggestionsOpen(false)
+        setCityActiveIndex(-1)
+        resetMapSearchState()
+    }, [])
+
     const applyMapSearch = async () => {
         if (!pendingMapCenter) return
 
@@ -965,6 +1034,28 @@ function OpportunitiesPage() {
         setFilters((prev) => ({ ...prev, format: value }))
     }
 
+    const handleCityQueryChange = (value) => {
+        setPage(0)
+        clearMapSearchOnFiltersChange()
+        setCityQuery(value)
+        if (!selectedCity) return
+
+        const selectedLabel = formatCitySuggestionLabel(selectedCity)
+        if (value !== selectedLabel) {
+            setSelectedCity(null)
+        }
+    }
+
+    const handleCitySelect = (city) => {
+        const label = formatCitySuggestionLabel(city)
+        setPage(0)
+        clearMapSearchOnFiltersChange()
+        setSelectedCity(city)
+        setCityQuery(label)
+        setIsCitySuggestionsOpen(false)
+        setCityActiveIndex(-1)
+    }
+
     const handleSalaryFromChange = (e) => {
         setPage(0)
         clearMapSearchOnFiltersChange()
@@ -1004,6 +1095,10 @@ function OpportunitiesPage() {
         setFocusedOpportunityId(id)
     }, [])
 
+    const handleOpenDetails = useCallback((id) => {
+        navigate(`/opportunities/${id}`)
+    }, [navigate])
+
     const showGlobalEmpty =
         !isLoading &&
         !error &&
@@ -1015,7 +1110,6 @@ function OpportunitiesPage() {
         !isMapSearchLoading &&
         !error &&
         viewMode === 'map' &&
-        isMapSearchActive &&
         mapSideOpportunities.length === 0
 
     const shouldShowMapControls =
@@ -1069,65 +1163,32 @@ function OpportunitiesPage() {
                     <h1>Твой карьерный трамплин в IT</h1>
                     <p>Находи стажировки, вакансии и карьерные события. Смотри на карте и в ленте карточек.</p>
 
-                    <div className="opportunities-page__search-bar">
-                        <Input
-                            value={filters.search}
-                            onChange={handleSearchChange}
-                            placeholder="Поиск по компании, названию, описанию"
-                        />
-                        <Input
-                            value={filters.skillsQuery}
-                            onChange={handleSkillsChange}
-                            placeholder="Навыки"
-                        />
-                        <CustomSelect
-                            value={filters.type}
-                            onChange={handleTypeChange}
-                            options={TYPE_OPTIONS}
-                        />
-                        <CustomSelect
-                            value={filters.format}
-                            onChange={handleFormatChange}
-                            options={FORMAT_OPTIONS}
-                        />
-                    </div>
-
-                    <div className="opportunities-page__salary-filter">
-                        <div className="salary-filter__title">Зарплата</div>
-                        <div className="salary-filter__inputs">
-                            <Input
-                                type="number"
-                                value={salaryRange.from}
-                                onChange={handleSalaryFromChange}
-                                placeholder="от"
-                                className="salary-input"
-                            />
-                            <span className="salary-separator">—</span>
-                            <Input
-                                type="number"
-                                value={salaryRange.to}
-                                onChange={handleSalaryToChange}
-                                placeholder="до"
-                                className="salary-input"
-                            />
-                            <span className="salary-currency">₽</span>
-                        </div>
-                    </div>
-
-                    {tags.length > 0 && (
-                        <div className="opportunities-page__tag-list">
-                            {tags.map((tag) => (
-                                <button
-                                    key={tag.id}
-                                    type="button"
-                                    className={`opportunities-page__tag ${selectedTags.includes(tag.id) ? 'is-active' : ''}`}
-                                    onClick={() => handleTagClick(tag.id)}
-                                >
-                                    #{tag.name}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+                    <OpportunityFiltersPanel
+                        filters={filters}
+                        salaryRange={salaryRange}
+                        tags={tags}
+                        selectedTags={selectedTags}
+                        typeOptions={TYPE_OPTIONS}
+                        formatOptions={FORMAT_OPTIONS}
+                        cityQuery={cityQuery}
+                        citySuggestions={citySuggestions}
+                        isCitySuggestionsOpen={isCitySuggestionsOpen}
+                        cityActiveIndex={cityActiveIndex}
+                        onSearchChange={handleSearchChange}
+                        onSkillsChange={handleSkillsChange}
+                        onTypeChange={handleTypeChange}
+                        onFormatChange={handleFormatChange}
+                        onCityQueryChange={handleCityQueryChange}
+                        onCitySelect={handleCitySelect}
+                        onCityOpenChange={setIsCitySuggestionsOpen}
+                        onCityActiveIndexChange={setCityActiveIndex}
+                        onSalaryFromChange={handleSalaryFromChange}
+                        onSalaryToChange={handleSalaryToChange}
+                        onTagClick={handleTagClick}
+                        onReset={resetAllFilters}
+                        isResetDisabled={!hasActiveFilters}
+                        formatCitySuggestionLabel={formatCitySuggestionLabel}
+                    />
                 </div>
             </header>
 
@@ -1151,14 +1212,6 @@ function OpportunitiesPage() {
                     <h2>Найдено возможностей: {visibleTotal}</h2>
 
                     <div className="opportunities-page__view-switcher">
-                        <button className={viewMode === 'map' ? 'is-active' : ''} onClick={() => setViewMode('map')}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                                <circle cx="12" cy="10" r="3" />
-                            </svg>
-                            <span>На карте</span>
-                        </button>
-
                         <button className={viewMode === 'list' ? 'is-active' : ''} onClick={() => setViewMode('list')}>
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <line x1="8" y1="6" x2="21" y2="6" />
@@ -1168,19 +1221,29 @@ function OpportunitiesPage() {
                                 <line x1="3" y1="12" x2="3.01" y2="12" />
                                 <line x1="3" y1="18" x2="3.01" y2="18" />
                             </svg>
-                            <span>Списком</span>
+                            <span>Лента</span>
+                        </button>
+
+                        <button className={viewMode === 'map' ? 'is-active' : ''} onClick={() => setViewMode('map')}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                <circle cx="12" cy="10" r="3" />
+                            </svg>
+                            <span>Карта</span>
                         </button>
                     </div>
                 </section>
 
                 {error && <p className="opportunities-page__error">{error}</p>}
-                {isLoading && <p className="opportunities-page__state">Загрузка...</p>}
+                {isLoading && <OpportunityCatalogSkeleton viewMode={viewMode} />}
 
                 {showGlobalEmpty && (
-                    <div className="opportunities-page__empty">
-                        <h3>Ничего не найдено</h3>
-                        <p>Попробуй изменить фильтры и параметры поиска.</p>
-                    </div>
+                    <OpportunityEmptyState
+                        title={hasActiveFilters ? 'Ничего не найдено' : 'В каталоге пока пусто'}
+                        description={hasActiveFilters ? 'Попробуйте убрать часть фильтров или изменить запрос.' : 'Когда появятся опубликованные возможности, они будут показаны здесь.'}
+                        actionLabel={hasActiveFilters ? 'Сбросить фильтры' : ''}
+                        onAction={hasActiveFilters ? resetAllFilters : null}
+                    />
                 )}
 
                 {!isLoading && !error && viewMode === 'map' && (
@@ -1188,10 +1251,13 @@ function OpportunitiesPage() {
                         <div className="opportunities-page__map-layout">
                             <div className="opportunities-page__map-side-list">
                                 {showMapEmpty ? (
-                                    <div className="opportunities-page__empty">
-                                        <h3>В выбранной области пока нет результатов</h3>
-                                        <p>Передвинь карту ближе к нужному району или нажми «Показать все», чтобы вернуться к общему списку.</p>
-                                    </div>
+                                    <OpportunityEmptyState
+                                        title={isMapSearchActive ? 'В выбранной области ничего нет' : (hasActiveFilters ? 'Ничего не найдено' : 'В каталоге пока пусто')}
+                                        description={isMapSearchActive ? 'Передвиньте карту или вернитесь к общему списку.' : (hasActiveFilters ? 'Попробуйте убрать часть фильтров или изменить запрос.' : 'Когда появятся опубликованные возможности, они будут показаны здесь.')}
+                                        actionLabel={isMapSearchActive ? 'Показать все' : (hasActiveFilters ? 'Сбросить фильтры' : '')}
+                                        onAction={isMapSearchActive ? resetMapSearch : (hasActiveFilters ? resetAllFilters : null)}
+                                        compact
+                                    />
                                 ) : (
                                     mapSideOpportunities.map((item) => (
                                         <OpportunityCompactCard
@@ -1236,8 +1302,11 @@ function OpportunitiesPage() {
                                 <LazyYandexOpportunityMap
                                     points={visibleMapPoints}
                                     favoriteCompanies={favoriteCompanies}
+                                    favoriteOpportunities={favoriteOpportunities}
                                     focusedOpportunityId={focusedOpportunityId}
                                     onOpenCard={handleOpenCard}
+                                    onOpenDetails={handleOpenDetails}
+                                    onToggleOpportunityFavorite={toggleOpportunityFavorite}
                                     onCenterChange={handleMapCenterChange}
                                 />
                             </div>

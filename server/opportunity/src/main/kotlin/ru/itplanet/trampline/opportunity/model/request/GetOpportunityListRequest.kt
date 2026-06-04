@@ -3,6 +3,8 @@ package ru.itplanet.trampline.opportunity.model.request
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Positive
+import jakarta.validation.constraints.AssertTrue
+import jakarta.validation.constraints.Size
 import ru.itplanet.trampline.commons.model.enums.OpportunityType
 import ru.itplanet.trampline.commons.model.enums.WorkFormat
 import ru.itplanet.trampline.opportunity.model.enums.OpportunitySortBy
@@ -33,5 +35,11 @@ data class GetOpportunityListRequest(
     @field:Min(value = 0, message = "Максимальная зарплата не может быть отрицательной")
     val salaryTo: Int? = null,
 
+    @field:Size(max = 120, message = "Поисковый запрос должен быть не длиннее 120 символов")
     val search: String? = null,
-)
+) {
+    @AssertTrue(message = "Минимальная зарплата не может быть больше максимальной")
+    fun isSalaryRangeValid(): Boolean {
+        return salaryFrom == null || salaryTo == null || salaryFrom <= salaryTo
+    }
+}
