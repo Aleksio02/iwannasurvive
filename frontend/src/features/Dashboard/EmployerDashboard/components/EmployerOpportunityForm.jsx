@@ -281,6 +281,7 @@ function EmployerOpportunityForm({
                         <Label>Дата мероприятия <span className="required-star">*</span></Label>
                         <Input
                             type="date"
+                            className="employer-create-form__date-input"
                             value={opportunityForm.eventDate}
                             min={new Date().toISOString().slice(0, 10)}
                             onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, eventDate: e.target.value }))}
@@ -292,6 +293,7 @@ function EmployerOpportunityForm({
                         <Label>Срок действия <span className="required-star">*</span></Label>
                         <Input
                             type="date"
+                            className="employer-create-form__date-input"
                             value={opportunityForm.expiresAt}
                             min={new Date().toISOString().slice(0, 10)}
                             onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, expiresAt: e.target.value }))}
