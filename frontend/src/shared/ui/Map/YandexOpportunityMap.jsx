@@ -66,7 +66,7 @@ function markerSvg(color) {
     `)}`
 }
 
-function buildBalloon(point) {
+function buildBalloon(point, isOpportunityFavorite = false) {
     const preview = point.preview || {}
     const tags = (preview.tags || [])
         .slice(0, 4)
@@ -130,6 +130,25 @@ function buildBalloon(point) {
             </p>
 
             ${tags ? `<div class="yandex-opportunity-map__tags">${tags}</div>` : ''}
+
+            <div class="yandex-opportunity-map__actions">
+                <button
+                    type="button"
+                    class="yandex-opportunity-map__action yandex-opportunity-map__action--primary"
+                    data-map-action="details"
+                    data-opportunity-id="${escapeHtml(point.id)}"
+                >
+                    Подробнее
+                </button>
+                <button
+                    type="button"
+                    class="yandex-opportunity-map__action yandex-opportunity-map__action--favorite ${isOpportunityFavorite ? 'is-favorite' : ''}"
+                    data-map-action="favorite"
+                    data-opportunity-id="${escapeHtml(point.id)}"
+                >
+                    ${isOpportunityFavorite ? 'В избранном' : 'В избранное'}
+                </button>
+            </div>
         </div>
     `
 }
@@ -197,8 +216,11 @@ function buildHint(point) {
 export default function YandexOpportunityMap({
                                                  points,
                                                  favoriteCompanies,
+                                                 favoriteOpportunities = new Set(),
                                                  focusedOpportunityId,
                                                  onOpenCard,
+                                                 onOpenDetails,
+                                                 onToggleOpportunityFavorite,
                                                  onCenterChange,
                                              }) {
     const rootRef = useRef(null)
@@ -208,9 +230,13 @@ export default function YandexOpportunityMap({
     const focusRetryRef = useRef(null)
     const resizeObserverRef = useRef(null)
     const suppressCenterEventRef = useRef(false)
+    const lastMarkerClickAtRef = useRef(0)
     const lastPointsSignatureRef = useRef('')
     const onOpenCardRef = useRef(onOpenCard)
+    const onOpenDetailsRef = useRef(onOpenDetails)
+    const onToggleOpportunityFavoriteRef = useRef(onToggleOpportunityFavorite)
     const onCenterChangeRef = useRef(onCenterChange)
+    const pointsByIdRef = useRef(new Map())
     const didInitialCenterRef = useRef(false)
     const [isTouchMode, setIsTouchMode] = useState(false)
     const [isMapReady, setIsMapReady] = useState(false)
@@ -232,10 +258,16 @@ export default function YandexOpportunityMap({
         return Array.from(favoriteCompanies).sort().join('|')
     }, [favoriteCompanies])
 
+    const favoriteOpportunitiesSignature = useMemo(() => {
+        return Array.from(favoriteOpportunities).sort().join('|')
+    }, [favoriteOpportunities])
+
     useEffect(() => {
         onOpenCardRef.current = onOpenCard
+        onOpenDetailsRef.current = onOpenDetails
+        onToggleOpportunityFavoriteRef.current = onToggleOpportunityFavorite
         onCenterChangeRef.current = onCenterChange
-    }, [onOpenCard, onCenterChange])
+    }, [onOpenCard, onOpenDetails, onToggleOpportunityFavorite, onCenterChange])
 
     useEffect(() => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
@@ -278,6 +310,17 @@ export default function YandexOpportunityMap({
             })
 
             if (!map.__centerChangeBound) {
+                map.events.add('actionbegin', () => {
+                    const isRecentMarkerClick = Date.now() - lastMarkerClickAtRef.current < 700
+                    if (suppressCenterEventRef.current || isRecentMarkerClick) return
+
+                    map.balloon?.close?.()
+                    map.hint?.close?.()
+                    placemarksRef.current.forEach((placemark) => {
+                        placemark.balloon?.close?.()
+                    })
+                })
+
                 map.events.add('actionend', () => {
                     if (suppressCenterEventRef.current) return
                     if (!onCenterChangeRef.current) return
@@ -330,6 +373,38 @@ export default function YandexOpportunityMap({
     }, [isMapReady])
 
     useEffect(() => {
+        const root = rootRef.current
+        if (!root) return undefined
+
+        const handleBalloonAction = (event) => {
+            const button = event.target.closest('[data-map-action]')
+            if (!button || !root.contains(button)) return
+
+            const action = button.dataset.mapAction
+            const id = button.dataset.opportunityId
+            if (!id) return
+
+            event.preventDefault()
+            event.stopPropagation()
+
+            if (action === 'details') {
+                onOpenDetailsRef.current?.(id)
+                return
+            }
+
+            if (action === 'favorite') {
+                const point = pointsByIdRef.current.get(normalizeOpportunityId(id))
+                if (point) {
+                    onToggleOpportunityFavoriteRef.current?.(point)
+                }
+            }
+        }
+
+        root.addEventListener('click', handleBalloonAction)
+        return () => root.removeEventListener('click', handleBalloonAction)
+    }, [])
+
+    useEffect(() => {
         const map = mapRef.current
         if (!isMapReady || !map?.behaviors) return
 
@@ -352,15 +427,18 @@ export default function YandexOpportunityMap({
 
         map.geoObjects.removeAll()
         placemarksRef.current.clear()
+        pointsByIdRef.current.clear()
 
         points
             .filter((point) => point.latitude && point.longitude)
             .forEach((point) => {
                 const isFavorite = favoriteCompanies.has(point.companyName)
+                const isOpportunityFavorite = favoriteOpportunities.has(point.id)
+                pointsByIdRef.current.set(normalizeOpportunityId(point.id), point)
                 const placemarkState = isTouchMode
                     ? {}
                     : {
-                        balloonContentBody: buildBalloon(point),
+                        balloonContentBody: buildBalloon(point, isOpportunityFavorite),
                         hintContent: buildHint(point),
                     }
 
@@ -390,6 +468,7 @@ export default function YandexOpportunityMap({
                 )
 
                 placemark.events.add('click', () => {
+                    lastMarkerClickAtRef.current = Date.now()
                     onOpenCardRef.current?.(point.id)
                 })
 
@@ -425,7 +504,7 @@ export default function YandexOpportunityMap({
         }
 
         map.container.fitToViewport()
-    }, [center, favoriteCompanies, favoriteCompaniesSignature, focusedOpportunityId, isMapReady, isTouchMode, points, pointsSignature])
+    }, [center, favoriteCompanies, favoriteCompaniesSignature, favoriteOpportunities, favoriteOpportunitiesSignature, focusedOpportunityId, isMapReady, isTouchMode, points, pointsSignature])
 
     useEffect(() => {
         if (!focusedOpportunityId || !mapRef.current) return
@@ -475,7 +554,9 @@ export default function YandexOpportunityMap({
                 if (!isTouchMode) {
                     placemark.balloon.open()
                 }
-            } catch {}
+            } catch {
+                suppressCenterEventRef.current = false
+            }
         }
 
         if (focusRetryRef.current) clearTimeout(focusRetryRef.current)
