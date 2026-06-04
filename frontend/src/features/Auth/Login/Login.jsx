@@ -18,6 +18,7 @@ import {
     resendLoginTwoFactorCode,
     verifyLoginTwoFactor,
 } from '@/shared/api/auth'
+import { getProfileOnboardingStatus } from '@/shared/api/profile'
 import './Login.scss'
 
 const STEP_CREDENTIALS = 'credentials'
@@ -34,6 +35,25 @@ function getRedirectPathByRole(role) {
     }
 
     return '/seeker'
+}
+
+async function getPostLoginRedirectPath(role) {
+    const fallbackPath = getRedirectPathByRole(role)
+
+    if (role !== 'APPLICANT' && role !== 'EMPLOYER') {
+        return fallbackPath
+    }
+
+    try {
+        const status = await getProfileOnboardingStatus({ force: true })
+        if (status?.completed === false) {
+            return `${status.requiredPath || '/profile/edit'}?returnTo=${encodeURIComponent(fallbackPath)}`
+        }
+    } catch {
+        return fallbackPath
+    }
+
+    return fallbackPath
 }
 
 function formatExpiresAt(value) {
@@ -133,7 +153,7 @@ function Login() {
                 description: 'Вы успешно вошли в систему',
             })
 
-            setLocation(getRedirectPathByRole(role))
+            setLocation(await getPostLoginRedirectPath(role))
         } catch (error) {
             console.error('[Login] Login error:', error)
             toast({
@@ -189,7 +209,7 @@ function Login() {
                 description: 'Вы успешно вошли в систему',
             })
 
-            setLocation(getRedirectPathByRole(role))
+            setLocation(await getPostLoginRedirectPath(role))
         } catch (error) {
             console.error('[Login] 2FA verify error:', error)
             toast({

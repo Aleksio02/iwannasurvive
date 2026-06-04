@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
-    getProfileOnboardingIncompleteHint,
+    getProfileOnboardingCachedStatus,
     getProfileOnboardingStatus,
     invalidateProfileOnboardingStatusCache,
 } from '@/shared/api/profile'
@@ -9,26 +9,16 @@ import {
     getSessionUser,
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
-
-const ONBOARDING_ROLES = new Set(['APPLICANT', 'EMPLOYER'])
-
-const ONBOARDING_ALLOWED_PATHS = [
-    '/login',
-    '/register',
-    '/forgot-password',
-    '/profile/edit',
-    '/settings/security',
-]
+import {
+    isOnboardingAllowedPath,
+    isOnboardingRole,
+    shouldEnforceOnboardingPath,
+} from '@/shared/lib/utils/onboardingRoutes'
 
 function getCurrentPathWithSearch(location) {
     const pathname = String(location || window.location.pathname || '/')
     const search = window.location.search || ''
     return pathname.includes('?') ? pathname : `${pathname}${search}`
-}
-
-function isOnboardingAllowedPath(path) {
-    const pathname = String(path || '').split('?')[0]
-    return ONBOARDING_ALLOWED_PATHS.some((allowed) => pathname === allowed)
 }
 
 function normalizeReturnTo(path, role) {
@@ -53,9 +43,10 @@ function ProfileOnboardingGuard({ children }) {
     const [redirectPath, setRedirectPath] = useState('')
     const lastUserKeyRef = useRef(user ? `${user.id || user.userId || ''}:${user.role || ''}` : 'guest')
 
-    const shouldCheck = useMemo(() => ONBOARDING_ROLES.has(user?.role), [user?.role])
+    const shouldCheck = useMemo(() => isOnboardingRole(user?.role), [user?.role])
     const currentPath = getCurrentPathWithSearch(location)
     const isAllowedCurrentPath = isOnboardingAllowedPath(currentPath)
+    const shouldEnforceCurrentPath = shouldEnforceOnboardingPath(currentPath)
 
     useEffect(() => {
         const unsubscribe = subscribeSessionChange((nextUser) => {
@@ -73,29 +64,44 @@ function ProfileOnboardingGuard({ children }) {
     useEffect(() => {
         let isCancelled = false
 
-        if (!shouldCheck || isAllowedCurrentPath) {
+        if (!shouldCheck || !shouldEnforceCurrentPath) {
+            setIsChecking(false)
+            setRedirectPath('')
             return () => {
                 isCancelled = true
             }
         }
 
-        const incompleteHint = getProfileOnboardingIncompleteHint(user)
-        if (incompleteHint) {
+        const cachedStatus = getProfileOnboardingCachedStatus(user)
+        if (cachedStatus?.completed === false) {
             const returnTo = normalizeReturnTo(currentPath, user?.role)
-            const target = `${incompleteHint.requiredPath || '/profile/edit'}?returnTo=${encodeURIComponent(returnTo)}`
+            const target = `${cachedStatus.requiredPath || '/profile/edit'}?returnTo=${encodeURIComponent(returnTo)}`
             navigate(target)
             return () => {
                 isCancelled = true
             }
         }
 
-        const checkingTimer = window.setTimeout(() => {
-            if (!isCancelled) {
-                setIsChecking(true)
-            }
-        }, 0)
+        const shouldBlockWhileChecking = !cachedStatus?.completed
+        const checkingTimer = shouldBlockWhileChecking
+            ? window.setTimeout(() => {
+                if (!isCancelled) {
+                    setIsChecking(true)
+                }
+            }, 180)
+            : null
 
-        getProfileOnboardingStatus()
+        const finishChecking = () => {
+            if (checkingTimer) {
+                window.clearTimeout(checkingTimer)
+            }
+
+            if (!isCancelled && shouldBlockWhileChecking) {
+                setIsChecking(false)
+            }
+        }
+
+        getProfileOnboardingStatus({ force: Boolean(cachedStatus?.completed) })
             .then((status) => {
                 if (isCancelled) return
 
@@ -116,17 +122,15 @@ function ProfileOnboardingGuard({ children }) {
                     setRedirectPath('')
                 }
             })
-            .finally(() => {
-                if (!isCancelled) {
-                    setIsChecking(false)
-                }
-            })
+            .finally(finishChecking)
 
         return () => {
             isCancelled = true
-            window.clearTimeout(checkingTimer)
+            if (checkingTimer) {
+                window.clearTimeout(checkingTimer)
+            }
         }
-    }, [currentPath, isAllowedCurrentPath, navigate, shouldCheck, user])
+    }, [currentPath, navigate, shouldCheck, shouldEnforceCurrentPath, user])
 
     if (isChecking || (redirectPath && !isAllowedCurrentPath)) {
         return (
