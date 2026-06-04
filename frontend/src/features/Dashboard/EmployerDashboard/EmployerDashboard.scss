@@ -3231,22 +3231,74 @@ $section-title-size: 19px;
   }
 }
 
-@media (max-width: 768px) {
-  .employer-create-form__field {
-    input[type="date"],
-    input[type="datetime-local"] {
-      font-size: 14px;
-      padding: 0 8px;
-      height: var(--control-height);
-      min-height: var(--control-height);
-    }
-  }
+/* Базовые стили для всех платформ */
+.employer-create-form__field input[type="date"],
+.employer-create-form__field input[type="datetime-local"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--control-radius);
+  padding: 0 12px;
+  height: var(--control-height);
+  font-size: 14px;
 }
 
-input[type="date"] {
-  &::-webkit-datetime-edit {
+/* Только для iOS Safari (WebKit) */
+@supports (-webkit-touch-callout: none) {
+  .employer-create-form__field input[type="date"],
+  .employer-create-form__field input[type="datetime-local"] {
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 0 10px !important;
+    line-height: normal !important;
+  }
+
+  .employer-create-form__field input[type="date"]::-webkit-datetime-edit,
+  .employer-create-form__field input[type="datetime-local"]::-webkit-datetime-edit {
+    padding: 0;
+    margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .employer-create-form__field input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+  .employer-create-form__field input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+    margin: 0;
+    display: flex;
+    width: 100%;
+  }
+
+  .employer-create-form__field input[type="date"]::-webkit-datetime-edit-text,
+  .employer-create-form__field input[type="datetime-local"]::-webkit-datetime-edit-text {
+    padding: 0 2px;
+    margin: 0;
+  }
+
+  .employer-create-form__field input[type="date"]::-webkit-clear-button,
+  .employer-create-form__field input[type="date"]::-webkit-inner-spin-button,
+  .employer-create-form__field input[type="datetime-local"]::-webkit-clear-button,
+  .employer-create-form__field input[type="datetime-local"]::-webkit-inner-spin-button {
+    display: none;
+  }
+
+  .employer-create-form__field input[type="date"]::-webkit-calendar-picker-indicator,
+  .employer-create-form__field input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    padding: 0;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 768px) {
+    .employer-create-form__field input[type="date"],
+    .employer-create-form__field input[type="datetime-local"] {
+      font-size: 16px !important;
+      height: 44px !important;
+    }
   }
 }
