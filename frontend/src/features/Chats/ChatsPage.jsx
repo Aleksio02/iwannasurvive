@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { ChevronDown, Clipboard, Copy, Download, Edit3, FileText, Forward, LoaderCircle, MoreHorizontal, Paperclip, Pin, RefreshCw, Reply, Search, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
+import { ChevronDown, Copy, Download, Edit3, FileText, Forward, LoaderCircle, MoreHorizontal, Paperclip, Pin, RefreshCw, Reply, Search, Send, SmilePlus, Trash2, X, ZoomIn } from 'lucide-react'
 import { useLocation, useRoute } from 'wouter'
 import DashboardLayout from '@/features/Dashboard/DashboardLayout'
 import Textarea from '@/shared/ui/Textarea'
@@ -236,26 +236,8 @@ function canUseSaveFilePicker() {
         && typeof window.showSaveFilePicker === 'function'
 }
 
-function canUseClipboardWrite() {
-    return typeof navigator !== 'undefined'
-        && typeof window !== 'undefined'
-        && window.isSecureContext
-        && navigator.clipboard
-        && typeof navigator.clipboard.write === 'function'
-        && typeof ClipboardItem !== 'undefined'
-}
-
 function isDevelopment() {
     return import.meta.env?.DEV === true
-}
-
-function debugMediaCapabilities(context = {}) {
-    if (!isDevelopment()) return
-    console.debug('[chat-attachment-media]', {
-        savePickerSupported: canUseSaveFilePicker(),
-        clipboardWriteSupported: canUseClipboardWrite(),
-        ...context,
-    })
 }
 
 function downloadBlobFallback(blob, filename = 'attachment') {
@@ -324,25 +306,6 @@ function debugAttachmentUpload(files) {
             limit: uploadKind?.limit || null,
         }
     }))
-}
-
-function isImageType(mediaType = '') {
-    return normalizeContentType(mediaType).startsWith('image/')
-}
-
-function ensureTypedBlob(blob, contentType) {
-    const normalizedType = normalizeContentType(contentType, blob?.type)
-    if (!normalizedType || blob?.type === normalizedType) {
-        return blob
-    }
-    return new Blob([blob], { type: normalizedType })
-}
-
-async function readBlobMagic(blob) {
-    const buffer = await blob.slice(0, 16).arrayBuffer()
-    return Array.from(new Uint8Array(buffer))
-        .map((item) => item.toString(16).padStart(2, '0'))
-        .join(' ')
 }
 
 async function fetchAttachmentBlob(dialogId, attachment) {
@@ -417,200 +380,6 @@ async function saveBlobAs({ blob, filename, contentType }) {
 
         throw error
     }
-}
-
-async function bitmapToPngBlob(bitmap) {
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-    const context = canvas.getContext('2d')
-    if (!context) {
-        throw new MediaCopyError('CANVAS_CONTEXT_FAILED')
-    }
-    context.drawImage(bitmap, 0, 0)
-    return canvasToPngBlob(canvas)
-}
-
-async function imageBlobToPngBlob(blob, contentType) {
-    const typedBlob = ensureTypedBlob(blob, contentType)
-
-    if (!typedBlob?.size) {
-        throw new MediaCopyError('EMPTY_BLOB')
-    }
-
-    if (typeof window.createImageBitmap === 'function') {
-        let bitmap
-        try {
-            bitmap = await window.createImageBitmap(typedBlob)
-            return await bitmapToPngBlob(bitmap)
-        } catch (error) {
-            debugMediaCapabilities({
-                action: 'copy-image',
-                step: 'createImageBitmap-failed',
-                errorName: error?.name,
-                errorMessage: error?.message,
-                blobType: typedBlob.type,
-                blobSize: typedBlob.size,
-            })
-        } finally {
-            bitmap?.close?.()
-        }
-    }
-
-    try {
-        return await imageElementBlobToPngBlob(typedBlob)
-    } catch (error) {
-        debugMediaCapabilities({
-            action: 'copy-image',
-            step: 'imageElement-failed',
-            errorName: error?.name,
-            errorMessage: error?.message,
-            blobType: typedBlob.type,
-            blobSize: typedBlob.size,
-        })
-        throw error
-    }
-}
-
-function imageElementBlobToPngBlob(blob) {
-    return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(blob)
-        const image = new Image()
-        image.onload = async () => {
-            try {
-                if (!image.naturalWidth || !image.naturalHeight) {
-                    reject(new MediaCopyError('IMAGE_DECODE_FAILED'))
-                    return
-                }
-
-                const canvas = document.createElement('canvas')
-                canvas.width = image.naturalWidth
-                canvas.height = image.naturalHeight
-                const context = canvas.getContext('2d')
-                if (!context) {
-                    reject(new MediaCopyError('CANVAS_CONTEXT_FAILED'))
-                    return
-                }
-                context.drawImage(image, 0, 0)
-                resolve(await canvasToPngBlob(canvas))
-            } catch (error) {
-                reject(error)
-            } finally {
-                URL.revokeObjectURL(url)
-            }
-        }
-        image.onerror = () => {
-            URL.revokeObjectURL(url)
-            reject(new MediaCopyError('IMAGE_DECODE_FAILED'))
-        }
-        image.src = url
-    })
-}
-
-function canvasToPngBlob(canvas) {
-    return new Promise((resolve, reject) => {
-        canvas.toBlob((pngBlob) => {
-            if (pngBlob?.size) resolve(pngBlob)
-            else reject(new MediaCopyError('PNG_BLOB_FAILED'))
-        }, 'image/png')
-    })
-}
-
-class MediaCopyError extends Error {
-    constructor(code, cause) {
-        super(code)
-        this.name = 'MediaCopyError'
-        this.code = code
-        this.cause = cause
-    }
-}
-
-async function copyImageBlobToClipboard(blob, contentType) {
-    const typedBlob = ensureTypedBlob(blob, contentType)
-    const imageType = normalizeContentType(typedBlob?.type, contentType, blob?.type) || 'image/png'
-    if (!typedBlob?.size) {
-        throw new MediaCopyError('EMPTY_BLOB')
-    }
-
-    try {
-        const pngBlob = await imageBlobToPngBlob(typedBlob, imageType)
-        await navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': pngBlob }),
-        ])
-        return
-    } catch (error) {
-        debugMediaCapabilities({
-            action: 'copy-image',
-            step: 'png-copy-failed',
-            contentType: imageType,
-            errorName: error?.name,
-            errorMessage: error?.message,
-            blobType: typedBlob.type,
-            blobSize: typedBlob.size,
-        })
-    }
-
-    try {
-        await writeBlobToClipboard(typedBlob, imageType)
-    } catch (error) {
-        debugMediaCapabilities({
-            action: 'copy-image',
-            step: 'direct-copy-failed',
-            contentType: imageType,
-            errorName: error?.name,
-            errorMessage: error?.message,
-            blobType: typedBlob.type,
-            blobSize: typedBlob.size,
-        })
-        throw new MediaCopyError('CLIPBOARD_IMAGE_FAILED', error)
-    }
-}
-
-async function writeBlobToClipboard(blob, contentType) {
-    const typedBlob = ensureTypedBlob(blob, contentType)
-    if (!typedBlob?.size) {
-        throw new MediaCopyError('EMPTY_BLOB')
-    }
-    if (!canUseClipboardWrite()) {
-        throw new MediaCopyError('CLIPBOARD_UNSUPPORTED')
-    }
-    await navigator.clipboard.write([
-        new ClipboardItem({ [typedBlob.type]: typedBlob }),
-    ])
-}
-
-async function copyImageAttachmentToClipboard(dialogId, attachment) {
-    if (!canUseClipboardWrite()) {
-        throw new MediaCopyError('CLIPBOARD_UNSUPPORTED')
-    }
-
-    const { blob, filename, mediaType } = await fetchAttachmentBlob(dialogId, attachment)
-    const contentType = normalizeContentType(mediaType, attachment.mediaType, blob.type)
-    const typedBlob = ensureTypedBlob(blob, contentType)
-    const blobMagic = isDevelopment() && typedBlob?.size ? await readBlobMagic(typedBlob) : undefined
-    debugMediaCapabilities({
-        action: 'copy-image',
-        contentType,
-        mediaType: attachment.mediaType,
-        attachmentKind: attachment.attachmentKind,
-        filename,
-        blobType: blob.type,
-        blobSize: blob.size,
-        typedBlobType: typedBlob?.type,
-        typedBlobSize: typedBlob?.size,
-        blobMagic,
-    })
-
-    if (!typedBlob?.size) {
-        throw new MediaCopyError('EMPTY_BLOB')
-    }
-
-    if (!isImageType(contentType) && !isImageType(typedBlob.type) && attachment.attachmentKind !== 'IMAGE') {
-        throw new MediaCopyError('CLIPBOARD_IMAGE_FAILED')
-    }
-
-    await copyImageBlobToClipboard(typedBlob, contentType)
-    return { copied: true, type: 'image' }
 }
 
 function ChatAttachment({ dialogId, attachment, failed = false, pending = false }) {
@@ -780,7 +549,6 @@ function ChatsPage() {
     const [openMenuMessageId, setOpenMenuMessageId] = useState(null)
     const [messageMenuPosition, setMessageMenuPosition] = useState(null)
     const [savingAsAttachmentMessageId, setSavingAsAttachmentMessageId] = useState(null)
-    const [copyingAttachmentMessageId, setCopyingAttachmentMessageId] = useState(null)
     const [isReactionMoreOpen, setIsReactionMoreOpen] = useState(false)
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false)
     const [confirmAction, setConfirmAction] = useState(null)
@@ -1619,12 +1387,6 @@ function ChatsPage() {
             for (const attachment of attachments) {
                 try {
                     const file = await fetchAttachmentBlob(routeDialogId, attachment)
-                    debugMediaCapabilities({
-                        action: 'save-as',
-                        contentType: file.mediaType,
-                        mediaType: attachment.mediaType,
-                        attachmentKind: attachment.attachmentKind,
-                    })
                     const result = await saveBlobAs({
                         blob: file.blob,
                         filename: file.filename,
@@ -1666,55 +1428,6 @@ function ChatsPage() {
             }
         } finally {
             setSavingAsAttachmentMessageId(null)
-        }
-    }
-
-    const copyMessageAttachmentImage = async (message) => {
-        if (!routeDialogId || !message?.id || message.pending || message.failed) return
-        const attachments = (message.attachments || []).filter((attachment) => attachment.id)
-        if (attachments.length === 0 || copyingAttachmentMessageId === message.id) return
-
-        const imageAttachments = attachments.filter((item) =>
-            isImageType(item.mediaType) || item.attachmentKind === 'IMAGE'
-        )
-        const attachment = imageAttachments[0]
-        if (!attachment) return
-
-        setCopyingAttachmentMessageId(message.id)
-        closeMessageMenu()
-        try {
-            await copyImageAttachmentToClipboard(routeDialogId, attachment)
-            toast({
-                title: attachments.length > 1
-                    ? 'Скопировано первое изображение'
-                    : 'Изображение скопировано',
-                description: attachments.length > 1
-                    ? 'Буфер браузера обычно поддерживает одно медиа за раз.'
-                    : undefined,
-            })
-        } catch (error) {
-            const isUnavailable = error.status === 403 || error.status === 404
-            const isUnsupported = error.code === 'CLIPBOARD_UNSUPPORTED'
-            const isImageFailure = error.code === 'CLIPBOARD_IMAGE_FAILED'
-            toast({
-                title: isUnsupported
-                    ? 'Копирование недоступно'
-                    : isUnavailable
-                        ? 'Файл недоступен'
-                        : isImageFailure
-                            ? 'Не удалось скопировать изображение'
-                            : 'Не удалось загрузить файл',
-                description: isUnavailable
-                    ? undefined
-                    : isImageFailure
-                        ? 'Попробуйте сохранить файл'
-                        : isUnsupported
-                            ? 'Сохраните файл через «Сохранить как...»'
-                            : 'Попробуйте сохранить файл',
-                variant: 'destructive',
-            })
-        } finally {
-            setCopyingAttachmentMessageId(null)
         }
     }
 
@@ -2347,21 +2060,6 @@ function ChatsPage() {
                                                     : <FileText size={15} aria-hidden="true" />}
                                                 Сохранить как...
                                             </button>
-                                            {(activeMenuMessage.attachments || []).some((attachment) =>
-                                                attachment.id && (isImageType(attachment.mediaType) || attachment.attachmentKind === 'IMAGE')
-                                            ) && (
-                                                <button
-                                                    type="button"
-                                                    role="menuitem"
-                                                    disabled={copyingAttachmentMessageId === activeMenuMessage.id}
-                                                    onClick={() => void copyMessageAttachmentImage(activeMenuMessage)}
-                                                >
-                                                    {copyingAttachmentMessageId === activeMenuMessage.id
-                                                        ? <LoaderCircle className="chats__spinner" size={15} aria-hidden="true" />
-                                                        : <Clipboard size={15} aria-hidden="true" />}
-                                                    Скопировать изображение
-                                                </button>
-                                            )}
                                         </>
                                     )}
                                     {canEdit && activeMenuMessage.senderUserId === currentUser?.id && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(activeMenuMessage.messageType) && (
