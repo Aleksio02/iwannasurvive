@@ -57,6 +57,24 @@ function normalizeOpportunityId(id) {
     return String(id)
 }
 
+function isPointEmployerVerified(point) {
+    const preview = point.preview || {}
+    return Boolean(point.employerVerified || preview.employerVerified) ||
+        point.employerVerificationStatus === 'APPROVED' ||
+        preview.employerVerificationStatus === 'APPROVED'
+}
+
+function buildVerifiedCompanyBadgeHtml(point) {
+    if (!isPointEmployerVerified(point)) return ''
+
+    return `
+        <span class="yandex-opportunity-map__verified-badge" title="Компания прошла проверку на платформе">
+            <span aria-hidden="true">✓</span>
+            <span>Проверенная компания</span>
+        </span>
+    `
+}
+
 function markerSvg(color) {
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
         <svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">
@@ -110,6 +128,8 @@ function buildBalloon(point, isOpportunityFavorite = false) {
             <p class="yandex-opportunity-map__company">
                 ${escapeHtml(companyName)}
             </p>
+
+            ${buildVerifiedCompanyBadgeHtml(point)}
 
             <div class="yandex-opportunity-map__badges">
                 <span class="yandex-opportunity-map__badge">
@@ -258,6 +278,13 @@ function MobileMapOpportunityCard({
             </div>
 
             <p className="yandex-opportunity-map__mobile-card-company">{companyName}</p>
+
+            {isPointEmployerVerified(point) && (
+                <span className="yandex-opportunity-map__verified-badge">
+                    <span aria-hidden="true">✓</span>
+                    <span>Проверенная компания</span>
+                </span>
+            )}
 
             <div className="yandex-opportunity-map__mobile-card-badges">
                 <span className="yandex-opportunity-map__badge yandex-opportunity-map__badge--type">

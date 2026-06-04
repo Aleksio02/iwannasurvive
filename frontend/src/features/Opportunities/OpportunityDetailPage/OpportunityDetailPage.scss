@@ -143,12 +143,17 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
     min-width: 0;
 
     span {
       min-width: 0;
       overflow-wrap: anywhere;
     }
+  }
+
+  &__verified-company-badge {
+    flex-shrink: 0;
   }
 
   &__location-row {

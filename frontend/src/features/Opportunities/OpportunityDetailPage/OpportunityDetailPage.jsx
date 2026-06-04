@@ -21,6 +21,8 @@ import {
 } from '@/shared/api/favorites'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
 import { isOpportunityFavoriteLocally } from '@/shared/lib/utils/favoriteStorage'
+import { isEmployerVerified } from '@/shared/lib/utils/employerVerification'
+import VerifiedCompanyBadge from '@/shared/ui/VerifiedCompanyBadge/VerifiedCompanyBadge'
 import './OpportunityDetailPage.scss'
 
 import locationIcon from '@/assets/icons/location.svg'
@@ -258,6 +260,8 @@ export default function OpportunityDetailPage() {
             workFormat: item.workFormat,
             title: item.title,
             companyName: item.companyName,
+            employerVerified: item.employerVerified,
+            employerVerificationStatus: item.employerVerificationStatus,
             cityName: item.city?.name,
             addressLine: item.location?.addressLine,
             latitude: lat,
@@ -265,6 +269,8 @@ export default function OpportunityDetailPage() {
             preview: {
                 title: item.title,
                 companyName: item.companyName,
+                employerVerified: item.employerVerified,
+                employerVerificationStatus: item.employerVerificationStatus,
                 shortDescription: item.shortDescription,
                 salaryFrom: item.salaryFrom,
                 salaryTo: item.salaryTo,
@@ -483,6 +489,9 @@ export default function OpportunityDetailPage() {
                                 <div className="opportunity-detail-page__company-row-main">
                                     <img src={companyIcon} alt="" className="icon" />
                                     <span>{item.companyName}</span>
+                                    {isEmployerVerified(item) && (
+                                        <VerifiedCompanyBadge className="opportunity-detail-page__verified-company-badge" />
+                                    )}
                                 </div>
 
                                 {isApplicant && item.employerUserId && (

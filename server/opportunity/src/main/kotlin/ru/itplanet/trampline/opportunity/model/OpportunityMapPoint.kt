@@ -7,6 +7,8 @@ data class OpportunityMapPoint(
     val type: OpportunityType,
     val title: String,
     val companyName: String,
+    val employerVerified: Boolean = false,
+    val employerVerificationStatus: String? = null,
     val salaryFrom: Int?,
     val salaryTo: Int?,
     val salaryCurrency: String,

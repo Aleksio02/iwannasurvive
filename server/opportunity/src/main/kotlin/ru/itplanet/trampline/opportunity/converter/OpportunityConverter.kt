@@ -21,13 +21,18 @@ class OpportunityConverter(
     private val tagConverter: TagConverter,
 ) {
 
-    fun toListItem(source: OpportunityDto): OpportunityListItem {
+    fun toListItem(
+        source: OpportunityDto,
+        employerVerificationStatus: String? = null,
+    ): OpportunityListItem {
         return OpportunityListItem(
             id = requireNotNull(source.id),
             employerUserId = source.employerUserId,
             title = source.title,
             shortDescription = source.shortDescription,
             companyName = source.companyName,
+            employerVerified = isEmployerVerified(employerVerificationStatus),
+            employerVerificationStatus = employerVerificationStatus,
             type = source.type,
             workFormat = source.workFormat,
             employmentType = source.employmentType,
@@ -46,7 +51,10 @@ class OpportunityConverter(
         )
     }
 
-    fun toCard(source: OpportunityDto): OpportunityCard {
+    fun toCard(
+        source: OpportunityDto,
+        employerVerificationStatus: String? = null,
+    ): OpportunityCard {
         return OpportunityCard(
             id = requireNotNull(source.id),
             employerUserId = source.employerUserId,
@@ -55,6 +63,8 @@ class OpportunityConverter(
             fullDescription = source.fullDescription,
             requirements = source.requirements,
             companyName = source.companyName,
+            employerVerified = isEmployerVerified(employerVerificationStatus),
+            employerVerificationStatus = employerVerificationStatus,
             type = source.type,
             workFormat = source.workFormat,
             employmentType = source.employmentType,
@@ -79,7 +89,10 @@ class OpportunityConverter(
         )
     }
 
-    fun toMapPoint(source: OpportunityDto): OpportunityMapPoint {
+    fun toMapPoint(
+        source: OpportunityDto,
+        employerVerificationStatus: String? = null,
+    ): OpportunityMapPoint {
         val city = resolveCity(source)
         val location = source.location
         val previewTags = source.tags
@@ -94,6 +107,8 @@ class OpportunityConverter(
             type = source.type,
             title = source.title,
             companyName = source.companyName,
+            employerVerified = isEmployerVerified(employerVerificationStatus),
+            employerVerificationStatus = employerVerificationStatus,
             salaryFrom = source.salaryFrom,
             salaryTo = source.salaryTo,
             salaryCurrency = source.salaryCurrency,
@@ -108,6 +123,8 @@ class OpportunityConverter(
             preview = OpportunityMarkerPreview(
                 title = source.title,
                 companyName = source.companyName,
+                employerVerified = isEmployerVerified(employerVerificationStatus),
+                employerVerificationStatus = employerVerificationStatus,
                 shortDescription = source.shortDescription,
                 workFormat = source.workFormat,
                 salaryFrom = source.salaryFrom,
@@ -183,5 +200,13 @@ class OpportunityConverter(
         return this
             .filter { it.isActive && it.moderationStatus == TagModerationStatus.APPROVED }
             .sortedWith(compareBy<TagDto>({ it.category.name }, { it.name.lowercase() }))
+    }
+
+    private fun isEmployerVerified(status: String?): Boolean {
+        return status == VERIFIED_STATUS_APPROVED
+    }
+
+    private companion object {
+        const val VERIFIED_STATUS_APPROVED = "APPROVED"
     }
 }
