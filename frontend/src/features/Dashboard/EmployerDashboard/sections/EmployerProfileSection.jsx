@@ -81,7 +81,7 @@ const SOCIAL_LINK_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
     ['telegram', 'linkedin', 'github', 'website'].includes(preset.id)
 )
 const CONTACT_METHOD_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
-    ['telegram', 'email', 'phone', 'whatsapp', 'website'].includes(preset.id)
+    ['telegram', 'email', 'phone', 'whatsapp'].includes(preset.id)
 )
 
 function detectContactPreset(link = {}) {
@@ -564,7 +564,6 @@ function EmployerProfileSection({
                                         {displayedProfile.publicContacts.map((item, index) => (
                                             <div key={`${item.value}-${index}`} className="link-item">
                                                 <img src={linkIcon} alt="" className="icon-small"/>
-                                                <span>{item.label ? `${item.label}: ` : ''}</span>
                                                 {renderContactMethod(item)}
                                             </div>
                                         ))}

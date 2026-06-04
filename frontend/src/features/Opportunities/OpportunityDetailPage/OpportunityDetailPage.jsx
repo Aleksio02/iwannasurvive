@@ -722,16 +722,17 @@ export default function OpportunityDetailPage() {
                             <div className="opportunity-detail-page__actions">
                                 {isApplicant && (
                                     hasApplied ? (
-                                        <>
-                                            <Button className="button--outline button--full" disabled>
+                                        <div className="opportunity-detail-page__application-state" role="status">
+                                            <span className="opportunity-detail-page__application-status">
                                                 Отклик отправлен
-                                            </Button>
-                                            <Link href="/seeker">
-                                                <Button className="button--outline button--full">
-                                                    Смотреть в личном кабинете
-                                                </Button>
+                                            </span>
+                                            <Link
+                                                href="/seeker?tab=applications"
+                                                className="opportunity-detail-page__applications-link"
+                                            >
+                                                Мои отклики
                                             </Link>
-                                        </>
+                                        </div>
                                     ) : (
                                         <Button
                                             className="button--primary button--full"

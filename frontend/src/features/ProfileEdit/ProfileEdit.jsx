@@ -43,7 +43,11 @@ import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
-import { normalizeSocialLinkUrl } from '@/shared/lib/utils/contactLinks'
+import {
+    detectContactMethodType,
+    isEmployerPublicContactType,
+    normalizeSocialLinkUrl,
+} from '@/shared/lib/utils/contactLinks'
 import ApplicantTagsEditor from './components/ApplicantTagsEditor'
 import ApplicantPrivacyPreview from './components/ApplicantPrivacyPreview'
 import './ProfileEdit.scss'
@@ -133,7 +137,7 @@ const SOCIAL_LINK_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
 )
 
 const CONTACT_METHOD_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
-    ['telegram', 'email', 'phone', 'whatsapp', 'website'].includes(preset.id)
+    ['telegram', 'email', 'phone', 'whatsapp'].includes(preset.id)
 )
 
 function mapLinksToRows(items = [], valueKey = 'url') {
@@ -394,7 +398,7 @@ function ProfileEdit() {
     const [companySize, setCompanySize] = useState('')
     const [foundedYear, setFoundedYear] = useState('')
     const [socialRows, setSocialRows] = useState([createLinkRow()])
-    const [publicContactRows, setPublicContactRows] = useState([createLinkRow()])
+    const [publicContactRows, setPublicContactRows] = useState([])
 
     const [locationForm, setLocationForm] = useState(createEmptyEmployerLocationForm())
     const [locationErrors, setLocationErrors] = useState({})
@@ -482,7 +486,16 @@ function ProfileEdit() {
                         setCompanySize(profile.companySize || '')
                         setFoundedYear(profile.foundedYear ? String(profile.foundedYear) : '')
                         setSocialRows(mapLinksToRows(profile.socialLinks, 'url'))
-                        setPublicContactRows(mapLinksToRows(profile.publicContacts, 'value'))
+                        setPublicContactRows(
+                            profile.publicContacts?.length
+                                ? mapLinksToRows(
+                                    profile.publicContacts.filter((item) => isEmployerPublicContactType(
+                                        item.type || detectContactMethodType(item.value || item.url || '', item.label || item.title || '')
+                                    )),
+                                    'value'
+                                )
+                                : []
+                        )
                     } else {
                         setCompanyName(user?.displayName || '')
                     }
@@ -1325,11 +1338,15 @@ function ProfileEdit() {
                         })),
                     publicContacts: publicContactRows
                         .filter((row) => row.url?.trim())
-                        .map((row, index) => ({
-                            type: 'OTHER',
-                            label: row.title?.trim() || `Контакт ${index + 1}`,
-                            value: row.url.trim(),
-                        })),
+                        .map((row, index) => {
+                            const type = detectContactMethodType(row.url, row.title)
+                            return {
+                                type,
+                                label: row.title?.trim() || `Контакт ${index + 1}`,
+                                value: row.url.trim(),
+                            }
+                        })
+                        .filter((contact) => isEmployerPublicContactType(contact.type)),
                 })
 
                 await updateEmployerCompanyData({

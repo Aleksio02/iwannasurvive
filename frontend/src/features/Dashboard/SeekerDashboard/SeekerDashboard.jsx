@@ -93,6 +93,17 @@ const DASHBOARD_TAB_ITEMS = [
     { key: 'recommendations', label: 'Рекомендации' },
 ]
 
+const DASHBOARD_TAB_KEYS = new Set(DASHBOARD_TAB_ITEMS.map((item) => item.key))
+
+function getDashboardTabFromUrl() {
+    if (typeof window === 'undefined') return ''
+
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab') || window.location.hash.replace(/^#/, '')
+
+    return DASHBOARD_TAB_KEYS.has(tab) ? tab : ''
+}
+
 const CONTACT_LINK_PRESETS = [
     {
         id: 'telegram',
@@ -416,7 +427,7 @@ const ContactCard = memo(function ContactCard({
 })
 
 function SeekerDashboard() {
-    const [activeTab, setActiveTab] = useState('profile')
+    const [activeTab, setActiveTab] = useState(() => getDashboardTabFromUrl() || 'profile')
     const [contactsTab, setContactsTab] = useState('confirmed')
     const [recommendationsTab, setRecommendationsTab] = useState('incoming')
     const [user, setUser] = useState(null)
@@ -519,7 +530,7 @@ function SeekerDashboard() {
     const [citySuggestions, setCitySuggestions] = useState([])
     const [cityActiveIndex, setCityActiveIndex] = useState(-1)
     const citySearchRef = useRef(null)
-    const [, navigate] = useLocation()
+    const [location, navigate] = useLocation()
     const [visibleApplicationsCount, setVisibleApplicationsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
     const [visibleContactsCount, setVisibleContactsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
 
@@ -528,6 +539,13 @@ function SeekerDashboard() {
         moderationState === 'DRAFT' ||
         (moderationState === 'NEEDS_REVISION' && !hasApprovedPublicVersion)
     const displayedProfile = profile
+
+    useEffect(() => {
+        const tabFromUrl = getDashboardTabFromUrl()
+        if (tabFromUrl && tabFromUrl !== activeTab) {
+            setActiveTab(tabFromUrl)
+        }
+    }, [activeTab, location])
     const profileSkills = useMemo(
         () => Array.isArray(profile.skills) ? profile.skills : [],
         [profile.skills]
@@ -1317,6 +1335,12 @@ function SeekerDashboard() {
     useEffect(() => {
         ensureDashboardTabVisible(activeTab, 'smooth')
     }, [activeTab, ensureDashboardTabVisible])
+
+    const handleDashboardTabChange = useCallback((tabKey) => {
+        setActiveTab(tabKey)
+        ensureDashboardTabVisible(tabKey)
+        navigate(tabKey === 'profile' ? '/seeker' : `/seeker?tab=${tabKey}`)
+    }, [ensureDashboardTabVisible, navigate])
 
     const hasProfessionalSignal = (profileData = profile) => (
         Boolean(profileData.resumeText?.trim()) ||
@@ -2575,10 +2599,7 @@ function SeekerDashboard() {
                                 }
                             }}
                             className={`dashboard-tabs__btn ${activeTab === tab.key ? 'is-active' : ''}`}
-                            onClick={() => {
-                                setActiveTab(tab.key)
-                                ensureDashboardTabVisible(tab.key)
-                            }}
+                            onClick={() => handleDashboardTabChange(tab.key)}
                         >
                             {tab.label}
                         </button>

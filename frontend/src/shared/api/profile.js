@@ -42,8 +42,7 @@ import {
 } from './http'
 import { translateStatusTokensInText } from '@/shared/lib/utils/statusLabels'
 import {
-    isTelegramLabel,
-    isTelegramValue,
+    detectContactMethodType,
     normalizeSocialLinkUrl,
 } from '@/shared/lib/utils/contactLinks'
 
@@ -265,69 +264,7 @@ function normalizeProfileLinks(links) {
 }
 
 function detectContactType(value = '', label = '') {
-    const normalizedValue = String(value).trim().toLowerCase()
-    const normalizedLabel = String(label).trim().toLowerCase()
-
-    if (
-        isTelegramLabel(normalizedLabel) ||
-        isTelegramValue(normalizedValue)
-    ) {
-        return 'TELEGRAM'
-    }
-
-    if (
-        normalizedLabel.includes('email') ||
-        normalizedLabel.includes('mail') ||
-        normalizedLabel.includes('почт') ||
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedValue)
-    ) {
-        return 'EMAIL'
-    }
-
-    if (
-        normalizedLabel.includes('telegram') ||
-        normalizedLabel.includes('tg') ||
-        normalizedLabel.includes('телеграм') ||
-        normalizedValue.startsWith('https://t.me/') ||
-        normalizedValue.startsWith('http://t.me/') ||
-        normalizedValue.startsWith('@')
-    ) {
-        return 'TELEGRAM'
-    }
-
-    if (
-        normalizedLabel.includes('whatsapp') ||
-        normalizedLabel.includes('wa')
-    ) {
-        return 'WHATSAPP'
-    }
-
-    if (
-        normalizedLabel.includes('vk') ||
-        normalizedValue.includes('vk.com')
-    ) {
-        return 'VK'
-    }
-
-    if (
-        normalizedLabel.includes('linkedin') ||
-        normalizedValue.includes('linkedin.com')
-    ) {
-        return 'LINKEDIN'
-    }
-
-    if (
-        normalizedLabel.includes('phone') ||
-        normalizedLabel.includes('tel') ||
-        normalizedLabel.includes('тел') ||
-        normalizedLabel.includes('звон') ||
-        normalizedValue.startsWith('+') ||
-        /^\d[\d\s\-()]+$/.test(normalizedValue)
-    ) {
-        return 'PHONE'
-    }
-
-    return 'OTHER'
+    return detectContactMethodType(value, label)
 }
 
 function normalizeContactMethods(contacts) {
@@ -359,11 +296,15 @@ function normalizeContactMethods(contacts) {
                         item.label?.trim?.() ||
                         item.title?.trim?.() ||
                         `Контакт ${index + 1}`
+                    const detectedType = detectContactType(value, label)
+                    const persistedType = ['EMAIL', 'PHONE', 'TELEGRAM', 'WHATSAPP', 'VK', 'LINKEDIN', 'OTHER'].includes(item.type)
+                        ? item.type
+                        : null
 
                     return {
-                        type: ['EMAIL', 'PHONE', 'TELEGRAM', 'WHATSAPP', 'VK', 'LINKEDIN', 'OTHER'].includes(item.type)
-                            ? item.type
-                            : detectContactType(value, label),
+                        type: detectedType === 'TELEGRAM'
+                            ? 'TELEGRAM'
+                            : persistedType || detectedType,
                         value,
                         label,
                     }

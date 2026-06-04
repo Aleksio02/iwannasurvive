@@ -61,7 +61,10 @@ import {
     normalizeLocationState,
     statusBucket,
 } from './lib/employerDashboard.helpers'
-import { normalizeSocialLinkUrl } from '@/shared/lib/utils/contactLinks'
+import {
+    isEmployerPublicContactType,
+    normalizeSocialLinkUrl,
+} from '@/shared/lib/utils/contactLinks'
 
 const DISMISSED_ALERTS_STORAGE_KEY = 'employer_dashboard_dismissed_alerts'
 const SEEN_APPROVED_PROFILE_ALERTS_STORAGE_KEY = 'employer_dashboard_seen_profile_approved_alerts'
@@ -211,7 +214,7 @@ function EmployerDashboard() {
     const [isApplicantModalOpen, setIsApplicantModalOpen] = useState(false)
 
     const [socialRows, setSocialRows] = useState([createLinkRow()])
-    const [contactRows, setContactRows] = useState([createLinkRow()])
+    const [contactRows, setContactRows] = useState([])
     const [resourceRows, setResourceRows] = useState([createLinkRow()])
 
     const [verificationLinkRows, setVerificationLinkRows] = useState([createLinkRow()])
@@ -541,10 +544,14 @@ function EmployerDashboard() {
         setSocialRows(linksToRows(nextProfile.socialLinks))
         setContactRows(
             nextProfile.publicContacts.length > 0
-                ? nextProfile.publicContacts.map((item) =>
-                    createLinkRow(item.label || item.type || 'Контакт', item.value || '')
-                )
-                : [createLinkRow()]
+                ? nextProfile.publicContacts
+                    .filter((item) => isEmployerPublicContactType(
+                        item.type || detectEmployerContactType(item.value || '', item.label || '')
+                    ))
+                    .map((item) =>
+                        createLinkRow(item.label || item.type || 'Контакт', item.value || '')
+                    )
+                : []
         )
 
         return normalizedWorkspace
@@ -756,11 +763,15 @@ function EmployerDashboard() {
             socialLinks: rowsToLinks(socialRows),
             publicContacts: contactRows
                 .filter((row) => row.url?.trim())
-                .map((row, index) => ({
-                    type: detectEmployerContactType(row.url.trim(), row.title?.trim() || ''),
-                    label: row.title?.trim() || `Контакт ${index + 1}`,
-                    value: row.url.trim(),
-                })),
+                .map((row, index) => {
+                    const type = detectEmployerContactType(row.url.trim(), row.title?.trim() || '')
+                    return {
+                        type,
+                        label: row.title?.trim() || `Контакт ${index + 1}`,
+                        value: row.url.trim(),
+                    }
+                })
+                .filter((contact) => isEmployerPublicContactType(contact.type)),
         }
 
         const chosenLocation = employerLocations.find(
@@ -1835,10 +1846,14 @@ function EmployerDashboard() {
         setSocialRows(linksToRows(profile.socialLinks || []))
         setContactRows(
             (profile.publicContacts || []).length > 0
-                ? profile.publicContacts.map((item) =>
-                    createLinkRow(item.label || item.type || 'Контакт', item.value || '')
-                )
-                : [createLinkRow()]
+                ? profile.publicContacts
+                    .filter((item) => isEmployerPublicContactType(
+                        item.type || detectEmployerContactType(item.value || '', item.label || '')
+                    ))
+                    .map((item) =>
+                        createLinkRow(item.label || item.type || 'Контакт', item.value || '')
+                    )
+                : []
         )
     }, [isEditingProfile, profile])
 
