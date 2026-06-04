@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: interaction
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 210MB
   datasource:
     url: ${PROFILE_DB_URL}
     username: ${PROFILE_DB_USERNAME}

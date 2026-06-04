@@ -86,10 +86,10 @@ class FileAssetService(
         kind: FileAssetKind,
         visibility: FileAssetVisibility = FileAssetVisibility.PRIVATE,
     ): FileAssetDto {
-        fileValidationService.validate(file, kind)
+        val validation = fileValidationService.validate(file, kind)
 
         val originalFileName = file.originalFilename?.takeIf { it.isNotBlank() } ?: "file.bin"
-        val mediaType = file.contentType?.takeIf { it.isNotBlank() } ?: MediaType.APPLICATION_OCTET_STREAM_VALUE
+        val mediaType = validation.mediaType.takeIf { it.isNotBlank() } ?: MediaType.APPLICATION_OCTET_STREAM_VALUE
         val bytes = file.bytes
         val checksumSha256 = sha256Hex(bytes)
         val storageKey = fileKeyFactory.buildKey(

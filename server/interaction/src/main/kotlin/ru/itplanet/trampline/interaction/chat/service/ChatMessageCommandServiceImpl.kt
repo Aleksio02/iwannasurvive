@@ -57,6 +57,8 @@ class ChatMessageCommandServiceImpl(
 ) : ChatMessageCommandService {
     private companion object {
         const val MAX_MESSAGE_ATTACHMENTS = 10
+        const val IMAGE_MAX_SIZE_BYTES = 10L * 1024 * 1024
+        const val PDF_MAX_SIZE_BYTES = 20L * 1024 * 1024
     }
 
     private val fileHttpClient: HttpClient = HttpClient.newBuilder()
@@ -306,6 +308,7 @@ class ChatMessageCommandServiceImpl(
 
         val normalizedBody = normalizeOptionalBody(body)
         val normalizedFiles = files.filter { !it.isEmpty }
+            .onEach(::validateChatAttachmentFile)
         if (normalizedFiles.size > MAX_MESSAGE_ATTACHMENTS) {
             throw InteractionBadRequestException(
                 message = "К сообщению можно прикрепить не больше $MAX_MESSAGE_ATTACHMENTS файлов",
@@ -404,7 +407,64 @@ class ChatMessageCommandServiceImpl(
                 code = "chat_attachment_limit_exceeded",
             )
         }
+        normalizedFiles.forEach(::validateChatAttachmentFile)
         return normalizedFiles
+    }
+
+    private fun validateChatAttachmentFile(file: MultipartFile) {
+        val type = resolveChatAttachmentType(file)
+            ?: throw InteractionBadRequestException(
+                message = "Можно отправить JPG, PNG, WEBP или PDF",
+                code = "chat_attachment_type_not_allowed",
+            )
+
+        if (file.size > type.maxSizeBytes) {
+            throw InteractionBadRequestException(
+                message = if (type.kind == ChatUploadKind.PDF) {
+                    "PDF должен быть не больше 20 МБ"
+                } else {
+                    "Изображение должно быть не больше 10 МБ"
+                },
+                code = "chat_attachment_size_exceeded",
+                details = mapOf(
+                    "maxSizeBytes" to type.maxSizeBytes.toString(),
+                    "actualSizeBytes" to file.size.toString(),
+                    "mediaType" to type.mediaType,
+                ),
+            )
+        }
+    }
+
+    private fun resolveChatAttachmentType(file: MultipartFile): ChatUploadType? {
+        val contentType = file.contentType
+            ?.substringBefore(";")
+            ?.trim()
+            ?.lowercase()
+            .orEmpty()
+        val filename = file.originalFilename
+            ?.lowercase()
+            .orEmpty()
+        val hasUnknownContentType = contentType.isBlank() || contentType == MediaType.APPLICATION_OCTET_STREAM_VALUE
+
+        return when {
+            contentType == "image/jpeg" ||
+                (hasUnknownContentType && (filename.endsWith(".jpg") || filename.endsWith(".jpeg"))) ->
+                ChatUploadType(ChatUploadKind.IMAGE, "image/jpeg", IMAGE_MAX_SIZE_BYTES)
+
+            contentType == "image/png" || (hasUnknownContentType && filename.endsWith(".png")) ->
+                ChatUploadType(ChatUploadKind.IMAGE, "image/png", IMAGE_MAX_SIZE_BYTES)
+
+            contentType == "image/webp" || (hasUnknownContentType && filename.endsWith(".webp")) ->
+                ChatUploadType(ChatUploadKind.IMAGE, "image/webp", IMAGE_MAX_SIZE_BYTES)
+
+            contentType == "application/pdf" || contentType == "application/x-pdf" ->
+                ChatUploadType(ChatUploadKind.PDF, MediaType.APPLICATION_PDF_VALUE, PDF_MAX_SIZE_BYTES)
+
+            hasUnknownContentType && filename.endsWith(".pdf") ->
+                ChatUploadType(ChatUploadKind.PDF, MediaType.APPLICATION_PDF_VALUE, PDF_MAX_SIZE_BYTES)
+
+            else -> null
+        }
     }
 
     private fun uploadChatAttachment(file: MultipartFile, ownerUserId: Long) =
@@ -418,6 +478,17 @@ class ChatMessageCommandServiceImpl(
     private fun toAttachmentKind(mediaType: String): ChatAttachmentKind {
         return if (mediaType.startsWith("image/")) ChatAttachmentKind.IMAGE else ChatAttachmentKind.FILE
     }
+
+    private enum class ChatUploadKind {
+        IMAGE,
+        PDF,
+    }
+
+    private data class ChatUploadType(
+        val kind: ChatUploadKind,
+        val mediaType: String,
+        val maxSizeBytes: Long,
+    )
 
     private fun buildAttachmentPreview(
         body: String?,
