@@ -1280,6 +1280,22 @@ $section-title-size: 19px;
   }
 }
 
+@media (max-width: 768px) {
+  .employer-opportunities__actions {
+    flex-direction: column;
+    width: 100%;
+
+    button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  .employer-opportunities__meta {
+    width: 100%;
+  }
+}
+
 .employer-opportunities__view {
   display: inline-flex;
   align-items: center;
@@ -3037,5 +3053,98 @@ $section-title-size: 19px;
     white-space: nowrap;
     padding: 10px 16px;
     font-size: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .employer-opportunities__actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+
+    button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  .employer-opportunities__meta {
+    width: 100%;
+    align-items: stretch;
+    text-align: left;
+  }
+
+  .employer-opportunities__item {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .employer-opportunities__info {
+    order: 1;
+  }
+
+  .employer-opportunities__meta {
+    order: 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .opportunity-status-manager {
+    width: 100%;
+  }
+
+  .opportunity-status-manager__task-info {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+
+    > span {
+      width: 100%;
+      word-break: break-word;
+    }
+  }
+
+  .opportunity-status-manager__button--small {
+    width: 100%;
+    justify-content: center;
+    margin-top: 4px;
+  }
+
+  .opportunity-status-manager__badge {
+    justify-content: center;
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 320px) {
+  .employer-opportunities__actions {
+    gap: 8px;
+  }
+
+  .employer-opportunities__actions button,
+  .employer-opportunities__view {
+    font-size: 12px;
+    padding: 8px 12px;
+    min-height: 40px;
+  }
+
+  .opportunity-status-manager__task-info {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .opportunity-status-manager__badge {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .status-badge {
+    font-size: 11px;
+    padding: 4px 10px;
   }
 }
