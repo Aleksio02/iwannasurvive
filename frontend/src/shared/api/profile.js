@@ -665,7 +665,33 @@ export async function deleteEmployerFile(fileId) {
     return deleteEmployerOwnedFile(fileId)
 }
 
-export async function createEmployerVerification(payload) {
+export async function createEmployerVerification(payload, files = []) {
+    const normalizedFiles = Array.isArray(files) ? files.filter(Boolean) : []
+
+    if (normalizedFiles.length > 0) {
+        const currentUser = await getRequiredCurrentUserPayload()
+        const formData = new FormData()
+
+        formData.append(
+            'request',
+            new Blob([JSON.stringify(payload)], { type: 'application/json' })
+        )
+
+        normalizedFiles.forEach((file) => {
+            formData.append('files', file)
+        })
+
+        formData.append(
+            'currentUser',
+            new Blob([JSON.stringify(currentUser)], { type: 'application/json' })
+        )
+
+        return apiRequest(`${API_BASE}/employer/verification`, {
+            method: 'POST',
+            body: formData,
+        })
+    }
+
     const userId = await getSessionUserIdFromApi()
 
     if (!userId) {
@@ -676,6 +702,18 @@ export async function createEmployerVerification(payload) {
         method: 'POST',
         body: JSON.stringify(payload),
     })
+}
+
+export async function deleteEmployerVerificationAttachment(verificationId, attachmentId) {
+    if (!verificationId) throw createApiError('Не указан verificationId', 400)
+    if (!attachmentId) throw createApiError('Не указан attachmentId', 400)
+
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    return apiRequest(
+        `${API_BASE}/employer/verifications/${verificationId}/attachments/${attachmentId}?currentUser=${currentUser}`,
+        { method: 'DELETE' }
+    )
 }
 
 export async function uploadEmployerVerificationAttachment(verificationId, file) {
@@ -1140,7 +1178,7 @@ export async function submitEmployerProfileForModeration() {
     })
 }
 
-export async function submitVerification(payload) {
+export async function submitVerification(payload, files = []) {
     const body = {
         verificationMethod: payload.verificationMethod,
         corporateEmail: payload.corporateEmail || null,
@@ -1150,7 +1188,7 @@ export async function submitVerification(payload) {
         submittedComment: payload.submittedComment || null,
     }
 
-    return createEmployerVerification(body)
+    return createEmployerVerification(body, files)
 }
 
 // ========== EMPLOYER LOCATIONS ==========

@@ -10,7 +10,6 @@ import {
     submitEmployerProfileForModeration,
     uploadEmployerLogo,
     deleteEmployerFile,
-    deleteEmployerOwnedFile,
     getEmployerOpportunities,
     getEmployerOpportunityById,
     createOpportunity,
@@ -30,6 +29,7 @@ import {
     cancelEmployerVerificationModerationTask,
     getEmployerVerificationAttachments,
     getEmployerVerificationAttachmentOpenUrl,
+    deleteEmployerVerificationAttachment,
 } from '@/shared/api/profile'
 
 import {
@@ -66,8 +66,12 @@ const DISMISSED_ALERTS_STORAGE_KEY = 'employer_dashboard_dismissed_alerts'
 const SEEN_APPROVED_PROFILE_ALERTS_STORAGE_KEY = 'employer_dashboard_seen_profile_approved_alerts'
 
 const ACTIVE_VERIFICATION_STATUSES = ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW']
+const MAX_VERIFICATION_FILES = 5
+const MAX_VERIFICATION_FILE_SIZE_BYTES = 20 * 1024 * 1024
 const GEO_CITY_DEBOUNCE_MS = 60
 const GEO_ADDRESS_DEBOUNCE_MS = 90
+
+const getVerificationPendingFileClientId = (file) => `${file.name}_${file.size}_${file.lastModified}`
 
 const normalizeGeoSearchQuery = (value) => String(value || '').replace(/\s+/g, ' ').trim()
 
@@ -217,6 +221,7 @@ function EmployerDashboard() {
     const [currentVerification, setCurrentVerification] = useState(null)
     const [verificationModerationTask, setVerificationModerationTask] = useState(null)
     const [verificationAttachments, setVerificationAttachments] = useState([])
+    const [verificationPendingFiles, setVerificationPendingFiles] = useState([])
     const [isVerificationAttachmentUploading, setIsVerificationAttachmentUploading] = useState(false)
     const [isVerificationSubmitting, setIsVerificationSubmitting] = useState(false)
 
@@ -1249,13 +1254,122 @@ function EmployerDashboard() {
         }
     }
 
+    const handleAddVerificationPendingFiles = (files = []) => {
+        const incomingFiles = Array.from(files).filter(Boolean)
+        if (!incomingFiles.length) return
+
+        setVerificationPendingFiles((prev) => {
+            const previousFiles = Array.isArray(prev) ? prev : []
+            const previousClientIds = new Set(previousFiles.map((item) => item.clientId))
+            const nextFiles = [...previousFiles]
+            const currentStatus = String(
+                currentVerification?.status ||
+                currentVerification?.verificationStatus ||
+                ''
+            ).toUpperCase()
+            const persistedAttachmentsCount = ACTIVE_VERIFICATION_STATUSES.includes(currentStatus)
+                ? verificationAttachments.length
+                : 0
+
+            for (const file of incomingFiles) {
+                const clientId = getVerificationPendingFileClientId(file)
+                if (previousClientIds.has(clientId)) {
+                    continue
+                }
+
+                if (file.size === 0) {
+                    toast({
+                        title: 'Файл не добавлен',
+                        description: 'Прикреплённый файл пустой',
+                        variant: 'destructive',
+                    })
+                    continue
+                }
+
+                if (file.type !== 'application/pdf' && !String(file.name || '').toLowerCase().endsWith('.pdf')) {
+                    toast({
+                        title: 'Файл не добавлен',
+                        description: 'Можно загружать только PDF файлы',
+                        variant: 'destructive',
+                    })
+                    continue
+                }
+
+                if (file.size > MAX_VERIFICATION_FILE_SIZE_BYTES) {
+                    toast({
+                        title: 'Файл не добавлен',
+                        description: 'Размер файла не должен превышать 20 МБ',
+                        variant: 'destructive',
+                    })
+                    continue
+                }
+
+                if (persistedAttachmentsCount + nextFiles.length + 1 > MAX_VERIFICATION_FILES) {
+                    toast({
+                        title: 'Файл не добавлен',
+                        description: 'К заявке можно приложить не более 5 файлов',
+                        variant: 'destructive',
+                    })
+                    break
+                }
+
+                previousClientIds.add(clientId)
+                nextFiles.push({
+                    clientId,
+                    file,
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                })
+            }
+
+            return nextFiles
+        })
+    }
+
+    const handleRemoveVerificationPendingFile = (clientId) => {
+        setVerificationPendingFiles((prev) => prev.filter((item) => item.clientId !== clientId))
+    }
+
     const handleUploadVerificationAttachment = async (file) => {
         const verificationId = currentVerification?.id
 
         if (!verificationId) {
+            handleAddVerificationPendingFiles([file])
+            return
+        }
+
+        if (file.size === 0) {
             toast({
-                title: 'Не удалось прикрепить файл',
-                description: 'Сначала отправьте заявку на верификацию',
+                title: 'Файл не добавлен',
+                description: 'Прикреплённый файл пустой',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        if (file.type !== 'application/pdf' && !String(file.name || '').toLowerCase().endsWith('.pdf')) {
+            toast({
+                title: 'Файл не добавлен',
+                description: 'Можно загружать только PDF файлы',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        if (file.size > MAX_VERIFICATION_FILE_SIZE_BYTES) {
+            toast({
+                title: 'Файл не добавлен',
+                description: 'Размер файла не должен превышать 20 МБ',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        if (verificationAttachments.length >= MAX_VERIFICATION_FILES) {
+            toast({
+                title: 'Файл не добавлен',
+                description: 'К заявке можно приложить не более 5 файлов',
                 variant: 'destructive',
             })
             return
@@ -1265,18 +1379,12 @@ function EmployerDashboard() {
 
         try {
             const uploaded = await uploadEmployerVerificationAttachment(verificationId, file)
-            const normalizedAttachments = Array.isArray(uploaded) ? uploaded : []
+            const normalizedAttachments = Array.isArray(uploaded)
+                ? uploaded
+                : await getEmployerVerificationAttachments(verificationId)
 
-            setVerificationAttachments((prev) => {
-                const prevList = Array.isArray(prev) ? prev : []
-                const existingFileIds = new Set(prevList.map(item => item?.fileId || item?.id))
-                const newUniqueAttachments = normalizedAttachments.filter(
-                    item => !existingFileIds.has(item?.fileId || item?.id)
-                )
-                const nextList = [...prevList, ...newUniqueAttachments]
-                persistVerification(currentVerification, nextList)
-                return nextList
-            })
+            setVerificationAttachments(normalizedAttachments)
+            persistVerification(currentVerification, normalizedAttachments)
 
             toast({
                 title: 'Файл прикреплён',
@@ -1473,7 +1581,10 @@ function EmployerDashboard() {
                 ).trim()
             }
 
-            const createdVerification = await createEmployerVerification(payload)
+            const createdVerification = await createEmployerVerification(
+                payload,
+                verificationPendingFiles.map((item) => item.file)
+            )
 
             const normalizedVerification = normalizeVerificationResponse(
                 createdVerification,
@@ -1487,13 +1598,17 @@ function EmployerDashboard() {
             }
 
             setCurrentVerification(normalizedVerification)
-            setVerificationAttachments([])
+            setVerificationPendingFiles([])
+
+            const attachments = await getEmployerVerificationAttachments(normalizedVerification.id)
+            setVerificationAttachments(attachments)
+            persistVerification(normalizedVerification, attachments)
 
             await reloadEmployerProfile()
 
             toast({
                 title: 'Заявка отправлена',
-                description: `ID заявки: ${normalizedVerification.id}. Теперь можно прикрепить файлы.`,
+                description: `ID заявки: ${normalizedVerification.id}`,
             })
         } catch (error) {
             toast({
@@ -2502,67 +2617,47 @@ function EmployerDashboard() {
         }
     }
 
-    const handleDeleteVerificationAttachment = async (fileId) => {
-        if (!fileId) return
+    const handleDeleteVerificationAttachment = async (attachment) => {
+        const verificationId = attachment?.entityId || currentVerification?.id
+        const attachmentId = attachment?.attachmentId || attachment?.id
+
+        if (!verificationId || !attachmentId) {
+            toast({
+                title: 'Ошибка',
+                description: 'Не удалось удалить файл: не найден идентификатор вложения',
+                variant: 'destructive',
+            })
+            return
+        }
 
         setIsDeletingAttachment(true)
 
         try {
-            await deleteEmployerOwnedFile(fileId)
+            const updatedAttachments = await deleteEmployerVerificationAttachment(verificationId, attachmentId)
+            const nextAttachments = Array.isArray(updatedAttachments)
+                ? updatedAttachments
+                : await getEmployerVerificationAttachments(verificationId)
 
-            if (currentVerification?.id) {
-                try {
-                    const attachments = await getEmployerVerificationAttachments(currentVerification.id)
-                    setVerificationAttachments(attachments)
-                    persistVerification(currentVerification, attachments)
-                } catch {
-                    setVerificationAttachments((prev) => {
-                        const newAttachments = prev.filter((item) => {
-                            const itemFileId = item?.fileId || item?.file?.fileId || item?.id
-                            return itemFileId !== fileId
-                        })
-
-                        persistVerification(currentVerification, newAttachments)
-
-                        return newAttachments
-                    })
-                }
-            } else {
-                setVerificationAttachments((prev) => {
-                    const newAttachments = prev.filter((item) => {
-                        const itemFileId = item?.fileId || item?.file?.fileId || item?.id
-                        return itemFileId !== fileId
-                    })
-
-                    return newAttachments
-                })
-            }
+            setVerificationAttachments(nextAttachments)
+            persistVerification(currentVerification, nextAttachments)
 
             toast({
                 title: 'Файл удалён',
                 description: 'Файл успешно удалён из заявки',
             })
         } catch (error) {
-            if (error.status === 404) {
-                toast({
-                    title: 'Файл не найден',
-                    description: 'Возможно, файл уже был удалён. Обновите страницу.',
-                    variant: 'destructive',
-                })
+            toast({
+                title: 'Ошибка',
+                description: error?.message || 'Не удалось удалить файл',
+                variant: 'destructive',
+            })
 
-                setVerificationAttachments((prev) => {
-                    const newAttachments = prev.filter((item) => {
-                        const itemFileId = item?.fileId || item?.file?.fileId || item?.id
-                        return itemFileId !== fileId
-                    })
-                    return newAttachments
-                })
-            } else {
-                toast({
-                    title: 'Ошибка',
-                    description: error?.message || 'Не удалось удалить файл',
-                    variant: 'destructive',
-                })
+            try {
+                const attachments = await getEmployerVerificationAttachments(verificationId)
+                setVerificationAttachments(attachments)
+                persistVerification(currentVerification, attachments)
+            } catch {
+                // Оставляем текущий список, чтобы не скрывать файл без подтверждения backend.
             }
         } finally {
             setIsDeletingAttachment(false)
@@ -2881,9 +2976,12 @@ function EmployerDashboard() {
                     currentVerification={currentVerification}
                     verificationModerationTask={verificationModerationTask}
                     verificationAttachments={verificationAttachments}
+                    pendingFiles={verificationPendingFiles}
                     isVerificationAttachmentUploading={isVerificationAttachmentUploading}
                     isVerificationSubmitting={isVerificationSubmitting}
                     onUploadVerificationAttachment={handleUploadVerificationAttachment}
+                    onAddPendingFiles={handleAddVerificationPendingFiles}
+                    onRemovePendingFile={handleRemoveVerificationPendingFile}
                     onCancelVerificationModerationTask={handleCancelVerificationModerationTask}
                     profileVerificationStatus={verificationStateForUi}
                     onOpenAttachment={handleOpenVerificationAttachment}

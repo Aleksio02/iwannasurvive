@@ -14,6 +14,12 @@ interface EmployerVerificationService {
         request: EmployerVerificationRequest,
     ): EmployerVerificationResponse
 
+    fun createVerificationRequestWithAttachments(
+        employerUserId: Long,
+        request: EmployerVerificationRequest,
+        files: List<MultipartFile>,
+    ): EmployerVerificationResponse
+
     fun getModerationTask(
         employerUserId: Long,
         verificationId: Long,
@@ -33,6 +39,12 @@ interface EmployerVerificationService {
         employerUserId: Long,
         verificationId: Long,
         file: MultipartFile,
+    ): List<InternalFileAttachmentResponse>
+
+    fun deleteAttachment(
+        employerUserId: Long,
+        verificationId: Long,
+        attachmentId: Long,
     ): List<InternalFileAttachmentResponse>
 
     fun getAttachmentDownloadUrl(

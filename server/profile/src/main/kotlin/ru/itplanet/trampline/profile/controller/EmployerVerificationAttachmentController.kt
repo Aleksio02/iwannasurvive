@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.validation.annotation.Validated
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -99,6 +100,30 @@ class EmployerVerificationAttachmentController(
             employerUserId = currentUser.userId,
             verificationId = verificationId,
             file = file,
+        )
+    }
+
+    @DeleteMapping("/{verificationId}/attachments/{attachmentId}")
+    fun deleteAttachment(
+        @PathVariable
+        @Positive(message = "Идентификатор запроса на верификацию должен быть положительным")
+        verificationId: Long,
+        @PathVariable
+        @Positive(message = "Идентификатор вложения должен быть положительным")
+        attachmentId: Long,
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): List<InternalFileAttachmentResponse> {
+        if (currentUser.role != Role.EMPLOYER) {
+            throw ProfileForbiddenException(
+                message = "Только работодатель может удалять вложения для верификации",
+                code = "employer_role_required",
+            )
+        }
+
+        return employerVerificationService.deleteAttachment(
+            employerUserId = currentUser.userId,
+            verificationId = verificationId,
+            attachmentId = attachmentId,
         )
     }
 }
