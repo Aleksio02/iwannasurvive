@@ -3250,3 +3250,70 @@
     min-height: 36px;
   }
 }
+
+@media (max-width: 768px) {
+  .history-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .history-filters .filter-group {
+    width: 100%;
+  }
+
+  .history-filters .filter-group label {
+    font-size: 14px;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .history-filters .filter-group input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 15px;
+    padding: 10px 12px;
+  }
+
+  .history-filters .filter-group input::placeholder {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-filters .filter-group--sort {
+    width: 100%;
+  }
+
+  .history-filters .filter-group--sort .custom-select {
+    width: 100%;
+  }
+
+  .history-filters .filter-group--sort .custom-select__button {
+    width: 100%;
+    justify-content: space-between;
+    font-size: 15px;
+    min-height: 46px;
+  }
+}
+
+@media (max-width: 480px) {
+  .history-filters .filter-group input {
+    font-size: 14px;
+    padding: 10px 12px;
+  }
+
+  .history-filters .filter-group input::placeholder {
+    font-size: 13px;
+  }
+
+  .history-filters .filter-group label {
+    font-size: 13px;
+  }
+
+  .history-filters .filter-group--sort .custom-select__button {
+    font-size: 14px;
+  }
+}
