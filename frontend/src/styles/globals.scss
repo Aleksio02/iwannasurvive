@@ -231,3 +231,23 @@ input {
     filter: none !important;
   }
 }
+
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select,
+  .custom-select__button,
+  .custom-select__text {
+    font-size: 16px !important;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select,
+  .custom-select__button,
+  .custom-select__text {
+    font-size: 16px !important;
+  }
+}
