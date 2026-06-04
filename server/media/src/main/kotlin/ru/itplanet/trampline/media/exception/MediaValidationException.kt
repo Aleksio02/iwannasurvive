@@ -5,10 +5,11 @@ import ru.itplanet.trampline.commons.exception.ApiException
 
 class MediaValidationException(
     message: String,
+    code: String = "validation_error",
     details: Map<String, String> = emptyMap(),
 ) : ApiException(
     status = HttpStatus.BAD_REQUEST,
-    code = "validation_error",
+    code = code,
     message = message,
     details = details,
 )

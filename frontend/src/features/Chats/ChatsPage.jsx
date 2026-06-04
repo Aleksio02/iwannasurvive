@@ -40,7 +40,6 @@ const CHAT_TEXTAREA_MAX_HEIGHT = 160
 const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
 const PDF_MAX_SIZE_BYTES = 20 * 1024 * 1024
 const MAX_MESSAGE_ATTACHMENTS = 10
-const ALLOWED_ATTACHMENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
 const EMOJI_GROUPS = [
     ['Эмоции', ['😊', '😂', '😍', '🥳', '😎', '🤔', '😢', '❤️']],
     ['Жесты', ['👍', '👎', '👏', '🙌', '🤝', '🙏', '💪', '👋']],
@@ -218,21 +217,6 @@ function getInitials(value = '') {
     return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase()
 }
 
-function validateAttachment(file) {
-    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
-        return 'Можно отправить JPG, PNG, WEBP или PDF'
-    }
-
-    const maxSize = file.type === 'application/pdf' ? PDF_MAX_SIZE_BYTES : IMAGE_MAX_SIZE_BYTES
-    if (file.size > maxSize) {
-        return file.type === 'application/pdf'
-            ? 'Размер PDF не должен превышать 20 МБ'
-            : 'Размер изображения не должен превышать 10 МБ'
-    }
-
-    return ''
-}
-
 function openDownloadUrl(url) {
     const link = document.createElement('a')
     link.href = url
@@ -274,16 +258,6 @@ function debugMediaCapabilities(context = {}) {
     })
 }
 
-function getMediaCapabilityWarning(action) {
-    if (action === 'save-as' && !canUseSaveFilePicker()) {
-        return 'Выбор папки поддерживается не во всех браузерах.'
-    }
-    if (action === 'copy-media' && !canUseClipboardWrite()) {
-        return 'Копирование медиа поддерживается не во всех браузерах.'
-    }
-    return ''
-}
-
 function downloadBlobFallback(blob, filename = 'attachment') {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -297,6 +271,59 @@ function downloadBlobFallback(blob, filename = 'attachment') {
 
 function normalizeContentType(...types) {
     return types.find((type) => typeof type === 'string' && type.trim())?.split(';')[0].trim().toLowerCase() || ''
+}
+
+function getAttachmentUploadKind(file) {
+    const type = normalizeContentType(file?.type)
+    const name = String(file?.name || '').toLowerCase()
+
+    if (type === 'image/jpeg' || name.endsWith('.jpg') || name.endsWith('.jpeg')) {
+        return { kind: 'image', normalizedType: 'image/jpeg', limit: IMAGE_MAX_SIZE_BYTES }
+    }
+
+    if (type === 'image/png' || name.endsWith('.png')) {
+        return { kind: 'image', normalizedType: 'image/png', limit: IMAGE_MAX_SIZE_BYTES }
+    }
+
+    if (type === 'image/webp' || name.endsWith('.webp')) {
+        return { kind: 'image', normalizedType: 'image/webp', limit: IMAGE_MAX_SIZE_BYTES }
+    }
+
+    if (type === 'application/pdf' || type === 'application/x-pdf' || name.endsWith('.pdf')) {
+        return { kind: 'pdf', normalizedType: 'application/pdf', limit: PDF_MAX_SIZE_BYTES }
+    }
+
+    return null
+}
+
+function validateAttachment(file) {
+    const uploadKind = getAttachmentUploadKind(file)
+    if (!uploadKind) {
+        return 'Можно отправить JPG, PNG, WEBP или PDF'
+    }
+
+    if (file.size > uploadKind.limit) {
+        return uploadKind.kind === 'pdf'
+            ? 'PDF должен быть не больше 20 МБ'
+            : 'Изображение должно быть не больше 10 МБ'
+    }
+
+    return ''
+}
+
+function debugAttachmentUpload(files) {
+    if (!isDevelopment()) return
+    console.debug('[chat-attachment-upload]', files.map((file) => {
+        const uploadKind = getAttachmentUploadKind(file)
+        return {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            detectedKind: uploadKind?.kind || null,
+            normalizedType: uploadKind?.normalizedType || null,
+            limit: uploadKind?.limit || null,
+        }
+    }))
 }
 
 function isImageType(mediaType = '') {
@@ -378,13 +405,61 @@ async function saveBlobAs({ blob, filename, contentType }) {
 }
 
 async function convertImageBlobToPng(blob) {
-    const bitmap = await window.createImageBitmap(blob)
+    if (!window.createImageBitmap) {
+        return convertImageBlobToPngWithImageElement(blob)
+    }
+
+    let bitmap
+    try {
+        bitmap = await window.createImageBitmap(blob)
+    } catch {
+        return convertImageBlobToPngWithImageElement(blob)
+    }
+
     const canvas = document.createElement('canvas')
     canvas.width = bitmap.width
     canvas.height = bitmap.height
     const context = canvas.getContext('2d')
+    if (!context) {
+        bitmap.close?.()
+        throw new Error('Не удалось подготовить изображение')
+    }
     context.drawImage(bitmap, 0, 0)
     bitmap.close?.()
+    return canvasToPngBlob(canvas)
+}
+
+function convertImageBlobToPngWithImageElement(blob) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(blob)
+        const image = new Image()
+        image.onload = async () => {
+            try {
+                const canvas = document.createElement('canvas')
+                canvas.width = image.naturalWidth
+                canvas.height = image.naturalHeight
+                const context = canvas.getContext('2d')
+                if (!context) {
+                    reject(new Error('Не удалось подготовить изображение'))
+                    return
+                }
+                context.drawImage(image, 0, 0)
+                resolve(await canvasToPngBlob(canvas))
+            } catch (error) {
+                reject(error)
+            } finally {
+                URL.revokeObjectURL(url)
+            }
+        }
+        image.onerror = () => {
+            URL.revokeObjectURL(url)
+            reject(new Error('Не удалось подготовить изображение'))
+        }
+        image.src = url
+    })
+}
+
+function canvasToPngBlob(canvas) {
     return new Promise((resolve, reject) => {
         canvas.toBlob((pngBlob) => {
             if (pngBlob) resolve(pngBlob)
@@ -405,21 +480,7 @@ class MediaCopyError extends Error {
 async function copyImageBlobToClipboard(blob, contentType) {
     const imageType = normalizeContentType(contentType, blob.type) || 'image/png'
     try {
-        await navigator.clipboard.write([
-            new ClipboardItem({ [imageType]: blob }),
-        ])
-        return
-    } catch (error) {
-        debugMediaCapabilities({
-            action: 'copy-media',
-            contentType: imageType,
-            errorName: error?.name,
-            errorMessage: error?.message,
-        })
-    }
-
-    try {
-        const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
+        const pngBlob = await convertImageBlobToPng(blob)
         await navigator.clipboard.write([
             new ClipboardItem({ 'image/png': pngBlob }),
         ])
@@ -435,24 +496,7 @@ async function copyImageBlobToClipboard(blob, contentType) {
     }
 }
 
-async function copyGenericBlobToClipboard(blob, contentType) {
-    const type = normalizeContentType(contentType, blob.type) || 'application/octet-stream'
-    try {
-        await navigator.clipboard.write([
-            new ClipboardItem({ [type]: blob }),
-        ])
-    } catch (error) {
-        debugMediaCapabilities({
-            action: 'copy-media',
-            contentType: type,
-            errorName: error?.name,
-            errorMessage: error?.message,
-        })
-        throw new MediaCopyError('CLIPBOARD_FILE_UNSUPPORTED', error)
-    }
-}
-
-async function copyAttachmentToClipboard(dialogId, attachment) {
+async function copyImageAttachmentToClipboard(dialogId, attachment) {
     if (!canUseClipboardWrite()) {
         throw new MediaCopyError('CLIPBOARD_UNSUPPORTED')
     }
@@ -467,13 +511,12 @@ async function copyAttachmentToClipboard(dialogId, attachment) {
         filename,
     })
 
-    if (isImageType(contentType) || attachment.attachmentKind === 'IMAGE') {
-        await copyImageBlobToClipboard(blob, contentType)
-        return { copied: true, type: 'image' }
+    if (!isImageType(contentType) && attachment.attachmentKind !== 'IMAGE') {
+        throw new MediaCopyError('CLIPBOARD_IMAGE_FAILED')
     }
 
-    await copyGenericBlobToClipboard(blob, contentType)
-    return { copied: true, type: 'file' }
+    await copyImageBlobToClipboard(blob, contentType)
+    return { copied: true, type: 'image' }
 }
 
 function ChatAttachment({ dialogId, attachment, failed = false, pending = false }) {
@@ -872,7 +915,7 @@ function ChatsPage() {
             ...files.map((file) => ({
                 id: createClientMessageId(),
                 file,
-                previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
+                previewUrl: getAttachmentUploadKind(file)?.kind === 'image' ? URL.createObjectURL(file) : '',
             })),
         ])
         setIsEmojiOpen(false)
@@ -1126,6 +1169,7 @@ function ChatsPage() {
             return
         }
 
+        debugAttachmentUpload(normalizedItems.map((item) => item.file))
         const invalidItem = normalizedItems.find((item) => validateAttachment(item.file))
         const validationError = invalidItem ? validateAttachment(invalidItem.file) : ''
         if (validationError) {
@@ -1136,12 +1180,14 @@ function ChatsPage() {
         const normalizedBody = body.trim()
         const replyMessage = replyToMessage
         const optimisticAttachments = normalizedItems.map((item) => {
-            const localPreviewUrl = item.previewUrl || (item.file.type.startsWith('image/') ? URL.createObjectURL(item.file) : '')
+            const uploadKind = getAttachmentUploadKind(item.file)
+            const isImage = uploadKind?.kind === 'image'
+            const localPreviewUrl = item.previewUrl || (isImage ? URL.createObjectURL(item.file) : '')
             return {
                 originalFileName: item.file.name,
-                mediaType: item.file.type,
+                mediaType: uploadKind?.normalizedType || item.file.type,
                 sizeBytes: item.file.size,
-                attachmentKind: item.file.type.startsWith('image/') ? 'IMAGE' : 'FILE',
+                attachmentKind: isImage ? 'IMAGE' : 'FILE',
                 localPreviewUrl,
             }
         })
@@ -1506,11 +1552,9 @@ function ChatsPage() {
             if (failedCount === 0 && savedCount > 0) {
                 toast({
                     title: fallbackUsed
-                        ? attachments.length === 1 ? 'Файл сохранён в загрузки' : 'Вложения сохранены в загрузки'
+                        ? attachments.length === 1 ? 'Сохранено в загрузки' : 'Вложения сохранены'
                         : attachments.length === 1 ? 'Файл сохранён' : 'Вложения сохранены',
-                    description: fallbackUsed
-                        ? 'Выбор папки поддерживается не во всех браузерах. Для выбора папки используйте Chrome/Edge или настройку браузера “спрашивать место сохранения”.'
-                        : undefined,
+                    description: fallbackUsed ? 'В папку загрузок' : undefined,
                 })
             } else if (failedCount > 0 && savedCount > 0) {
                 toast({
@@ -1532,7 +1576,7 @@ function ChatsPage() {
         }
     }
 
-    const copyMessageAttachmentMedia = async (message) => {
+    const copyMessageAttachmentImage = async (message) => {
         if (!routeDialogId || !message?.id || message.pending || message.failed) return
         const attachments = (message.attachments || []).filter((attachment) => attachment.id)
         if (attachments.length === 0 || copyingAttachmentMessageId === message.id) return
@@ -1540,29 +1584,28 @@ function ChatsPage() {
         const imageAttachments = attachments.filter((item) =>
             isImageType(item.mediaType) || item.attachmentKind === 'IMAGE'
         )
-        const attachment = imageAttachments[0] || attachments[0]
+        const attachment = imageAttachments[0]
+        if (!attachment) return
 
         setCopyingAttachmentMessageId(message.id)
         closeMessageMenu()
         try {
-            const result = await copyAttachmentToClipboard(routeDialogId, attachment)
+            await copyImageAttachmentToClipboard(routeDialogId, attachment)
             toast({
-                title: imageAttachments.length > 0 && attachments.length > 1
+                title: attachments.length > 1
                     ? 'Скопировано первое изображение'
-                    : result.type === 'file' ? 'Файл скопирован' : 'Медиа скопировано',
-                description: imageAttachments.length > 0 && attachments.length > 1
+                    : 'Изображение скопировано',
+                description: attachments.length > 1
                     ? 'Буфер браузера обычно поддерживает одно медиа за раз.'
                     : undefined,
             })
         } catch (error) {
             const isUnavailable = error.status === 403 || error.status === 404
-            const isUnsupported = error.code === 'CLIPBOARD_UNSUPPORTED' || error.code === 'CLIPBOARD_FILE_UNSUPPORTED'
+            const isUnsupported = error.code === 'CLIPBOARD_UNSUPPORTED'
             const isImageFailure = error.code === 'CLIPBOARD_IMAGE_FAILED'
             toast({
                 title: isUnsupported
-                    ? imageAttachments.length > 0
-                        ? 'Копирование медиа недоступно'
-                        : 'Этот тип файла нельзя скопировать в буфер в текущем браузере'
+                    ? 'Копирование изображения недоступно'
                     : isUnavailable
                         ? 'Файл недоступен'
                         : isImageFailure
@@ -1572,8 +1615,8 @@ function ChatsPage() {
                     ? undefined
                     : isImageFailure
                         ? 'Попробуйте сохранить файл через “Сохранить как...”.'
-                        : error.code === 'CLIPBOARD_UNSUPPORTED'
-                            ? `${getMediaCapabilityWarning('copy-media')} Ваш браузер не поддерживает копирование этого типа файла. Используйте “Сохранить как...”.`.trim()
+                        : isUnsupported
+                            ? 'Ваш браузер не поддерживает копирование изображений. Используйте “Сохранить как...”.'
                             : 'Используйте “Сохранить как...”.',
                 variant: 'destructive',
             })
@@ -2211,17 +2254,21 @@ function ChatsPage() {
                                                     : <FileText size={15} aria-hidden="true" />}
                                                 Сохранить как...
                                             </button>
-                                            <button
-                                                type="button"
-                                                role="menuitem"
-                                                disabled={copyingAttachmentMessageId === activeMenuMessage.id}
-                                                onClick={() => void copyMessageAttachmentMedia(activeMenuMessage)}
-                                            >
-                                                {copyingAttachmentMessageId === activeMenuMessage.id
-                                                    ? <LoaderCircle className="chats__spinner" size={15} aria-hidden="true" />
-                                                    : <Clipboard size={15} aria-hidden="true" />}
-                                                Скопировать медиа
-                                            </button>
+                                            {(activeMenuMessage.attachments || []).some((attachment) =>
+                                                attachment.id && (isImageType(attachment.mediaType) || attachment.attachmentKind === 'IMAGE')
+                                            ) && (
+                                                <button
+                                                    type="button"
+                                                    role="menuitem"
+                                                    disabled={copyingAttachmentMessageId === activeMenuMessage.id}
+                                                    onClick={() => void copyMessageAttachmentImage(activeMenuMessage)}
+                                                >
+                                                    {copyingAttachmentMessageId === activeMenuMessage.id
+                                                        ? <LoaderCircle className="chats__spinner" size={15} aria-hidden="true" />
+                                                        : <Clipboard size={15} aria-hidden="true" />}
+                                                    Скопировать изображение
+                                                </button>
+                                            )}
                                         </>
                                     )}
                                     {canEdit && activeMenuMessage.senderUserId === currentUser?.id && ['TEXT', 'MIXED', 'ATTACHMENT'].includes(activeMenuMessage.messageType) && (
@@ -2335,7 +2382,7 @@ function ChatsPage() {
                                             className="chats__file-input"
                                             type="file"
                                             multiple
-                                            accept="image/jpeg,image/png,image/webp,application/pdf"
+                                            accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf,application/x-pdf"
                                             onChange={(event) => {
                                                 handleFileSelect(event.target.files)
                                                 event.target.value = ''
