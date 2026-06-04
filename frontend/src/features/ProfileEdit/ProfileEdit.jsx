@@ -9,9 +9,8 @@ import {
     getApplicantProfile,
     getEmployerProfile,
     getCurrentSessionUser,
-    updateApplicantProfile,
-    updateEmployerCompanyData,
-    updateEmployerProfile,
+    completeApplicantOnboarding,
+    completeEmployerOnboarding,
 } from '@/shared/api/profile'
 import {
     createEmployerLocation,
@@ -25,7 +24,6 @@ import {
     setSessionUser,
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
-import { createEmployerVerification } from '@/shared/api/profile'
 import { listTags } from '@/shared/api/opportunities'
 import {
     Card,
@@ -304,7 +302,40 @@ function createEmptyEmployerLocationForm() {
 function normalizeReturnTo(value, role) {
     const fallback = role === 'EMPLOYER' ? '/employer' : '/seeker'
     if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback
+    if (
+        value === '/login' ||
+        value === '/register' ||
+        value === '/forgot-password' ||
+        value === '/profile/edit' ||
+        value.startsWith('/profile/edit?') ||
+        value === '/settings/security'
+    ) {
+        return fallback
+    }
     return value
+}
+
+function buildEmployerSocialLinks(rows = []) {
+    return rows
+        .filter((row) => row.url?.trim())
+        .map((row, index) => ({
+            label: row.title?.trim() || `Ссылка ${index + 1}`,
+            url: normalizeSocialLinkUrl(row.url, row.title),
+        }))
+}
+
+function buildEmployerPublicContacts(rows = []) {
+    return rows
+        .filter((row) => row.url?.trim())
+        .map((row, index) => {
+            const type = detectContactMethodType(row.url, row.title)
+            return {
+                type,
+                label: row.title?.trim() || `Контакт ${index + 1}`,
+                value: row.url.trim(),
+            }
+        })
+        .filter((contact) => isEmployerPublicContactType(contact.type))
 }
 
 function ProfileEdit() {
@@ -1062,6 +1093,15 @@ function ProfileEdit() {
             next.cityId = 'Укажите город'
         }
 
+        const hasProfessionalSignal =
+            Boolean(resumeText.trim()) ||
+            cleanLinksToArray(portfolioRows).length > 0 ||
+            selectedSkillTagIds.length > 0
+
+        if (!hasProfessionalSignal) {
+            next.professionalSignal = 'Добавьте резюме, портфолио или хотя бы один навык'
+        }
+
         return next
     }
 
@@ -1088,8 +1128,21 @@ function ProfileEdit() {
             next.locationId = 'Добавьте и выберите основную локацию компании'
         }
 
+        if (!description.trim()) {
+            next.description = 'Добавьте описание компании'
+        }
+
         if (websiteUrl.trim() && !/^https?:\/\//i.test(websiteUrl.trim())) {
             next.websiteUrl = 'Ссылка должна начинаться с http:// или https://'
+        }
+
+        const hasPublicChannel =
+            Boolean(websiteUrl.trim()) ||
+            socialRows.some((row) => row.url?.trim()) ||
+            publicContactRows.some((row) => row.url?.trim())
+
+        if (!hasPublicChannel) {
+            next.publicChannel = 'Добавьте сайт, социальную сеть или контакт для связи'
         }
 
         return next
@@ -1318,68 +1371,36 @@ function ProfileEdit() {
 
         try {
             if (isEmployer) {
-                // Сохраняем профиль работодателя
-                await updateEmployerProfile({
-                    companyName: companyName.trim(),
-                    description: description.trim() || null,
-                    industry: industry.trim() || null,
-                    websiteUrl: websiteUrl.trim() || null,
-                    cityId: selectedEmployerLocation?.cityId
-                        ? Number(selectedEmployerLocation.cityId)
-                        : null,
-                    locationId: selectedLocationId ? Number(selectedLocationId) : null,
-                    companySize: companySize || null,
-                    foundedYear: foundedYear ? toShort(foundedYear) : null,
-                    socialLinks: socialRows
-                        .filter((row) => row.url?.trim())
-                        .map((row, index) => ({
-                            label: row.title?.trim() || `Ссылка ${index + 1}`,
-                            url: normalizeSocialLinkUrl(row.url, row.title),
-                        })),
-                    publicContacts: publicContactRows
-                        .filter((row) => row.url?.trim())
-                        .map((row, index) => {
-                            const type = detectContactMethodType(row.url, row.title)
-                            return {
-                                type,
-                                label: row.title?.trim() || `Контакт ${index + 1}`,
-                                value: row.url.trim(),
-                            }
-                        })
-                        .filter((contact) => isEmployerPublicContactType(contact.type)),
-                })
-
-                await updateEmployerCompanyData({
-                    legalName: legalName.trim(),
-                    inn: inn.trim(),
-                })
-
-                // Отправляем на верификацию
-                try {
-                    await createEmployerVerification({
+                await completeEmployerOnboarding({
+                    companyData: {
+                        legalName: legalName.trim(),
+                        inn: inn.trim(),
+                    },
+                    publicProfile: {
+                        companyName: companyName.trim(),
+                        description: description.trim() || null,
+                        industry: industry.trim() || null,
+                        websiteUrl: websiteUrl.trim() || null,
+                        cityId: selectedEmployerLocation?.cityId
+                            ? Number(selectedEmployerLocation.cityId)
+                            : null,
+                        locationId: selectedLocationId ? Number(selectedLocationId) : null,
+                        companySize: companySize || null,
+                        foundedYear: foundedYear ? toShort(foundedYear) : null,
+                        socialLinks: buildEmployerSocialLinks(socialRows),
+                        publicContacts: buildEmployerPublicContacts(publicContactRows),
+                    },
+                    verification: {
                         verificationMethod: 'TIN',
                         inn: inn.trim(),
                         submittedComment: 'Автоматически создано при регистрации компании',
-                    })
-                    toast({
-                        title: 'Профиль сохранён',
-                        description: 'Заявка на верификацию отправлена. Вы будете перенаправлены в личный кабинет.',
-                    })
-                } catch (verifError) {
-                    const code = String(verifError?.code || '').toLowerCase()
-                    if (code === 'employer_verification_already_exists' || code === 'verification_already_exists') {
-                        toast({
-                            title: 'Профиль сохранён',
-                            description: 'Заявка на верификацию уже существует.',
-                        })
-                    } else {
-                        toast({
-                            title: 'Профиль сохранён',
-                            description: 'Не удалось отправить заявку на верификацию. Вы сможете отправить её позже в кабинете.',
-                            variant: 'destructive',
-                        })
-                    }
-                }
+                    },
+                })
+
+                toast({
+                    title: 'Профиль компании сохранён',
+                    description: 'Заявка на верификацию и профиль отправлены на проверку.',
+                })
 
                 navigate(returnTo)
             } else {
@@ -1407,11 +1428,11 @@ function ProfileEdit() {
                     interestTagIds: selectedInterestTagIds,
                 }
 
-                await updateApplicantProfile(applicantProfileData)
+                await completeApplicantOnboarding(applicantProfileData)
 
                 toast({
                     title: 'Профиль сохранён',
-                    description: 'Ваши данные успешно обновлены',
+                    description: 'Профиль сохранён и отправлен на модерацию',
                 })
 
                 navigate(returnTo)
@@ -1583,6 +1604,49 @@ function ProfileEdit() {
                                     />
                                     {errors.websiteUrl && <p className="field-error">{errors.websiteUrl}</p>}
                                 </div>
+
+                                <div className="profile-edit-form__field">
+                                    <Label>
+                                        Описание компании
+                                        <span className="required-star"> *</span>
+                                    </Label>
+                                    <Textarea
+                                        id="description"
+                                        rows={4}
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        placeholder="Расскажите о миссии, ценностях, продуктах и культуре компании"
+                                    />
+                                    {errors.description && <p className="field-error">{errors.description}</p>}
+                                </div>
+
+                                <section className="profile-public-channels">
+                                    <div>
+                                        <h3>
+                                            Публичные каналы связи
+                                            <span className="required-star"> *</span>
+                                        </h3>
+                                        <p className="field-hint">
+                                            Добавьте хотя бы один способ, по которому пользователи смогут проверить компанию или связаться с вами: сайт, email, Telegram, телефон, GitHub, LinkedIn.
+                                        </p>
+                                    </div>
+
+                                    {renderContactEditor(
+                                        'Социальные сети и публичные страницы',
+                                        socialRows,
+                                        setSocialRows,
+                                        SOCIAL_LINK_PRESETS,
+                                    )}
+
+                                    {renderContactEditor(
+                                        'Контакты для связи',
+                                        publicContactRows,
+                                        setPublicContactRows,
+                                        CONTACT_METHOD_PRESETS,
+                                    )}
+
+                                    {errors.publicChannel && <p className="field-error">{errors.publicChannel}</p>}
+                                </section>
                             </>
                         ) : (
                             <>
@@ -1726,6 +1790,9 @@ function ProfileEdit() {
                                         layout="stacked"
                                         skillInputRef={skillSearchInputRef}
                                     />
+                                    {errors.professionalSignal && (
+                                        <p className="field-error">{errors.professionalSignal}</p>
+                                    )}
                                 </section>
                             </>
                         )}
@@ -1764,30 +1831,6 @@ function ProfileEdit() {
                                             />
                                         </div>
 
-                                        <div className="profile-edit-form__field">
-                                            <Label>Описание компании</Label>
-                                            <Textarea
-                                                id="description"
-                                                rows={4}
-                                                value={description}
-                                                onChange={(e) => setDescription(e.target.value)}
-                                                placeholder="Расскажите о миссии, ценностях, продуктах и культуре компании"
-                                            />
-                                        </div>
-
-                                        {renderContactEditor(
-                                            'Социальные сети',
-                                            socialRows,
-                                            setSocialRows,
-                                            SOCIAL_LINK_PRESETS,
-                                        )}
-
-                                        {renderContactEditor(
-                                            'Контакты для связи',
-                                            publicContactRows,
-                                            setPublicContactRows,
-                                            CONTACT_METHOD_PRESETS,
-                                        )}
                                     </>
                                 ) : (
                                     <>

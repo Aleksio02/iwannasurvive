@@ -72,6 +72,7 @@ class ProfileServiceImpl(
     private val employerProfilePatchService: EmployerProfileDomainPatchService,
     private val applicantProfileDomainPatchService: ApplicantProfileDomainPatchService,
     private val employerVerificationDao: EmployerVerificationDao,
+    private val profileOnboardingPolicy: ProfileOnboardingPolicy,
     ) : ProfileService {
 
     @Transactional
@@ -988,31 +989,7 @@ class ProfileServiceImpl(
     private fun validateApplicantProfileCanBeSubmitted(
         profile: ApplicantProfile,
     ) {
-        val issues = mutableListOf<String>()
-
-        if (profile.firstName.isNullOrBlank()) {
-            issues += "укажите имя"
-        }
-        if (profile.lastName.isNullOrBlank()) {
-            issues += "укажите фамилию"
-        }
-        if (profile.universityName.isNullOrBlank()) {
-            issues += "укажите вуз"
-        }
-        if (profile.course == null && profile.graduationYear == null) {
-            issues += "укажите курс или год выпуска"
-        }
-
-        val hasProfessionalSignal =
-            !profile.resumeText.isNullOrBlank() ||
-                    profile.resumeFile != null ||
-                    profile.portfolioLinks.isNotEmpty() ||
-                    profile.portfolioFiles.isNotEmpty() ||
-                    profile.skills.isNotEmpty()
-
-        if (!hasProfessionalSignal) {
-            issues += "добавьте хотя бы один профессиональный сигнал: resumeText, resumeFile, portfolio или skills"
-        }
+        val issues = profileOnboardingPolicy.applicantIssues(profile)
 
         if (issues.isNotEmpty()) {
             throw ProfileBadRequestException(
@@ -1025,29 +1002,7 @@ class ProfileServiceImpl(
     private fun validateEmployerProfileCanBeSubmitted(
         profile: EmployerProfile,
     ) {
-        val issues = mutableListOf<String>()
-
-        if (profile.companyName.isNullOrBlank()) {
-            issues += "укажите название компании"
-        }
-        if (profile.description.isNullOrBlank()) {
-            issues += "добавьте описание компании"
-        }
-        if (profile.industry.isNullOrBlank()) {
-            issues += "укажите сферу деятельности"
-        }
-        if (profile.city == null && profile.location == null) {
-            issues += "укажите город или локацию компании"
-        }
-
-        val hasPublicChannel =
-            !profile.websiteUrl.isNullOrBlank() ||
-                    profile.socialLinks.isNotEmpty() ||
-                    profile.publicContacts.isNotEmpty()
-
-        if (!hasPublicChannel) {
-            issues += "добавьте хотя бы один публичный канал связи: websiteUrl, socialLinks или publicContacts"
-        }
+        val issues = profileOnboardingPolicy.employerIssues(profile)
 
         if (issues.isNotEmpty()) {
             throw ProfileBadRequestException(

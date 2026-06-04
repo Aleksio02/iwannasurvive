@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import Button from '@/shared/ui/Button'
 import Input from '@/shared/ui/Input'
 import Label from '@/shared/ui/Label'
@@ -47,11 +48,36 @@ function EmployerOpportunityForm({
     const isVerificationPending = verificationState === 'PENDING'
     const isVerificationRejected = verificationState === 'REJECTED'
     const isVerificationApproved = verificationState === 'APPROVED'
+    const [tagSearchQuery, setTagSearchQuery] = useState('')
     const hasExistingDescription = Boolean(
         opportunityForm.shortDescription?.trim() ||
         opportunityForm.fullDescription?.trim() ||
         opportunityForm.requirements?.trim()
     )
+    const selectedTagIds = useMemo(
+        () => (Array.isArray(opportunityForm.tagIds) ? opportunityForm.tagIds : []),
+        [opportunityForm.tagIds]
+    )
+    const selectedTags = useMemo(
+        () => techTags.filter((tag) => selectedTagIds.includes(tag.id)),
+        [selectedTagIds, techTags]
+    )
+    const availableTagSuggestions = useMemo(() => {
+        const normalizedQuery = tagSearchQuery.trim().toLowerCase()
+        return techTags
+            .filter((tag) => !selectedTagIds.includes(tag.id))
+            .filter((tag) => !normalizedQuery || tag.name.toLowerCase().includes(normalizedQuery))
+            .slice(0, 6)
+    }, [selectedTagIds, tagSearchQuery, techTags])
+
+    const toggleTag = (tagId) => {
+        onChangeOpportunityForm((prev) => ({
+            ...prev,
+            tagIds: prev.tagIds.includes(tagId)
+                ? prev.tagIds.filter((id) => id !== tagId)
+                : [...prev.tagIds, tagId],
+        }))
+    }
 
     return (
         <div className="employer-create-form">
@@ -304,18 +330,32 @@ function EmployerOpportunityForm({
             </div>
 
             <div className="employer-create-form__grid-3">
-                <Input
-                    type="number"
-                    value={opportunityForm.salaryFrom}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryFrom: e.target.value }))}
-                    placeholder="Зарплата от"
-                />
-                <Input
-                    type="number"
-                    value={opportunityForm.salaryTo}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryTo: e.target.value }))}
-                    placeholder="Зарплата до"
-                />
+                <div className="employer-create-form__field">
+                    <Label>Зарплата от</Label>
+                    <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        className="employer-create-form__salary-input"
+                        value={opportunityForm.salaryFrom}
+                        onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryFrom: e.target.value }))}
+                        placeholder="Например, 50000"
+                    />
+                    <p className={`field-error ${errors.salaryFrom ? '' : 'is-placeholder'}`}>{errors.salaryFrom || '\u00A0'}</p>
+                </div>
+                <div className="employer-create-form__field">
+                    <Label>Зарплата до</Label>
+                    <Input
+                        type="number"
+                        min="0"
+                        inputMode="numeric"
+                        className="employer-create-form__salary-input"
+                        value={opportunityForm.salaryTo}
+                        onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryTo: e.target.value }))}
+                        placeholder="Например, 100000"
+                    />
+                    <p className={`field-error ${errors.salaryTo ? '' : 'is-placeholder'}`}>{errors.salaryTo || '\u00A0'}</p>
+                </div>
                 <Input
                     value={opportunityForm.contactEmail}
                     onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
@@ -357,24 +397,50 @@ function EmployerOpportunityForm({
                         {isSuggestingTags ? 'Подбираем...' : 'Предложить теги с помощью ИИ'}
                     </Button>
                 </div>
-                <div className="employer-opportunities__skills">
-                    {techTags.map((tag) => (
-                        <button
-                            key={tag.id}
-                            type="button"
-                            className={`skill-tag ${opportunityForm.tagIds.includes(tag.id) ? 'skill-tag--active' : ''}`}
-                            onClick={() =>
-                                onChangeOpportunityForm((prev) => ({
-                                    ...prev,
-                                    tagIds: prev.tagIds.includes(tag.id)
-                                        ? prev.tagIds.filter((id) => id !== tag.id)
-                                        : [...prev.tagIds, tag.id],
-                                }))
-                            }
-                        >
-                            #{tag.name}
-                        </button>
-                    ))}
+                <div className="employer-create-form__tag-picker">
+                    <div className="employer-create-form__selected-tags">
+                        {selectedTags.length > 0 ? (
+                            selectedTags.map((tag) => (
+                                <button
+                                    key={tag.id}
+                                    type="button"
+                                    className="skill-tag skill-tag--active"
+                                    onClick={() => toggleTag(tag.id)}
+                                    aria-label={`Удалить тег ${tag.name}`}
+                                >
+                                    #{tag.name}
+                                    <span aria-hidden="true">×</span>
+                                </button>
+                            ))
+                        ) : (
+                            <p className="field-hint">
+                                Выберите теги из поиска или воспользуйтесь ИИ-подбором
+                            </p>
+                        )}
+                    </div>
+
+                    <Input
+                        value={tagSearchQuery}
+                        onChange={(e) => setTagSearchQuery(e.target.value)}
+                        placeholder="Найти тег: Java, React, SQL..."
+                    />
+
+                    <div className="employer-create-form__tag-suggestions">
+                        {availableTagSuggestions.length > 0 ? (
+                            availableTagSuggestions.map((tag) => (
+                                <button
+                                    key={tag.id}
+                                    type="button"
+                                    className="skill-tag"
+                                    onClick={() => toggleTag(tag.id)}
+                                >
+                                    #{tag.name}
+                                </button>
+                            ))
+                        ) : (
+                            <p className="field-hint">Теги не найдены</p>
+                        )}
+                    </div>
                 </div>
             </div>
 

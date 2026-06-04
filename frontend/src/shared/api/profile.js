@@ -59,6 +59,9 @@ let applicantProfileCache = null
 let applicantProfileCacheAt = 0
 let applicantProfileInFlight = null
 let applicantProfileCacheUserId = null
+let profileOnboardingStatusCache = null
+let profileOnboardingStatusCacheUserId = null
+let profileOnboardingStatusInFlight = null
 const APPLICANT_PROFILE_CACHE_TTL_MS = 30_000
 const GEO_CITY_SEARCH_CACHE_TTL_MS = 2 * 60_000
 const GEO_ADDRESS_SUGGEST_CACHE_TTL_MS = 60_000
@@ -80,6 +83,12 @@ function setApplicantProfileCache(profile, userId = applicantProfileCacheUserId)
     applicantProfileInFlight = null
     applicantProfileCacheUserId = userId || null
     return applicantProfileCache
+}
+
+export function invalidateProfileOnboardingStatusCache() {
+    profileOnboardingStatusCache = null
+    profileOnboardingStatusCacheUserId = null
+    profileOnboardingStatusInFlight = null
 }
 
 async function parseApiResponse(response) {
@@ -157,6 +166,50 @@ export async function apiRequest(url, options = {}) {
     }
 
     return response.text()
+}
+
+function normalizeProfileOnboardingStatus(data = {}) {
+    return {
+        role: data?.role || null,
+        completed: Boolean(data?.completed),
+        requiredPath: data?.requiredPath || '/profile/edit',
+        missingFields: Array.isArray(data?.missingFields) ? data.missingFields : [],
+        issues: Array.isArray(data?.issues) ? data.issues : [],
+    }
+}
+
+export async function getProfileOnboardingStatus(options = {}) {
+    const currentUser = await getAuthenticatedUserPayload()
+    const currentUserId = currentUser?.userId ?? currentUser?.id ?? null
+
+    if (
+        !options.force &&
+        profileOnboardingStatusCache &&
+        profileOnboardingStatusCacheUserId === currentUserId
+    ) {
+        return profileOnboardingStatusCache
+    }
+
+    if (
+        !options.force &&
+        profileOnboardingStatusInFlight &&
+        profileOnboardingStatusCacheUserId === currentUserId
+    ) {
+        return profileOnboardingStatusInFlight
+    }
+
+    const encodedUser = encodeURIComponent(JSON.stringify(currentUser))
+    profileOnboardingStatusCacheUserId = currentUserId
+    profileOnboardingStatusInFlight = apiRequest(`${API_BASE}/profile/onboarding/status?currentUser=${encodedUser}`)
+        .then((data) => {
+            profileOnboardingStatusCache = normalizeProfileOnboardingStatus(data)
+            return profileOnboardingStatusCache
+        })
+        .finally(() => {
+            profileOnboardingStatusInFlight = null
+        })
+
+    return profileOnboardingStatusInFlight
 }
 
 async function multipartRequest(endpoint, formData, options = {}) {
@@ -1052,6 +1105,7 @@ export async function updateApplicantProfile(profile) {
         body: JSON.stringify(payload),
     })
 
+    invalidateProfileOnboardingStatusCache()
     return setApplicantProfileCache(normalizeApplicantProfile(data))
 }
 
@@ -1111,6 +1165,7 @@ export async function updateEmployerProfile(profile) {
         body: JSON.stringify(payload),
     })
 
+    invalidateProfileOnboardingStatusCache()
     return normalizeEmployerProfile(data)
 }
 
@@ -1127,6 +1182,7 @@ export async function updateEmployerCompanyData(companyData) {
         body: JSON.stringify(payload),
     })
 
+    invalidateProfileOnboardingStatusCache()
     return normalizeEmployerProfile(data)
 }
 
@@ -1593,7 +1649,23 @@ export async function submitApplicantProfileForModeration() {
         method: 'POST',
     })
 
+    invalidateProfileOnboardingStatusCache()
     return normalizeApplicantProfile(data)
+}
+
+export async function completeApplicantOnboarding(profile) {
+    const saved = await updateApplicantProfile(profile)
+
+    try {
+        await submitApplicantProfileForModeration()
+    } catch (error) {
+        if (error?.status !== 409) {
+            throw error
+        }
+    }
+
+    invalidateProfileOnboardingStatusCache()
+    return saved
 }
 
 export async function getEmployerProfileWorkspace(userId) {
@@ -1611,7 +1683,18 @@ export async function completeEmployerOnboarding({
     await updateEmployerProfile(publicProfile)
 
     if (verification) {
-        await submitVerification(verification)
+        try {
+            await submitVerification(verification)
+        } catch (error) {
+            const code = String(error?.code || '').toLowerCase()
+            if (
+                error?.status !== 409 &&
+                code !== 'employer_verification_already_exists' &&
+                code !== 'verification_already_exists'
+            ) {
+                throw error
+            }
+        }
     }
 
     try {
@@ -1621,6 +1704,8 @@ export async function completeEmployerOnboarding({
             throw error
         }
     }
+
+    invalidateProfileOnboardingStatusCache()
 
     const userId = await getSessionUserIdFromApi()
     if (!userId) {
