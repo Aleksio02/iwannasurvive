@@ -124,7 +124,7 @@ class CommonGlobalExceptionHandler {
     fun handleMaxUploadSizeExceeded(): ResponseEntity<ApiError> {
         return buildResponse(
             status = HttpStatus.BAD_REQUEST,
-            message = "Размер файла превышает допустимый лимит: для изображений — до 10 МБ, для PDF — до 20 МБ",
+            message = "Файл или общий размер вложений слишком большой",
             code = "file_too_large",
         )
     }
