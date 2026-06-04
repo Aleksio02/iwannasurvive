@@ -405,13 +405,16 @@ html, body, #root {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
+  flex-direction: row;
+  flex-wrap: nowrap;
 }
 
 .profile-contact-editor__card-title {
   min-width: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
+  flex: 1;
 
   strong {
     display: block;
@@ -429,9 +432,49 @@ html, body, #root {
   }
 }
 
+.profile-contact-editor__card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(31, 182, 170, 0.12);
+  color: #159a90;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+  text-align: center;
+  align-self: flex-start;
+}
+
+.profile-contact-editor__card-title > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-contact-editor__card-title > div strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.profile-contact-editor__card-title > div span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .profile-contact-editor__remove {
   width: 40px;
   height: 40px;
+  min-width: 40px;
   border: 1px solid #fecaca;
   border-radius: 14px;
   background: #fff5f5;
@@ -441,10 +484,60 @@ html, body, #root {
   flex-shrink: 0;
   cursor: pointer;
   transition: 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
 
   &:hover {
     background: #fee2e2;
     border-color: #fca5a5;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-contact-editor__card-header {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-start !important;
+  }
+
+  .profile-contact-editor__card-title {
+    align-items: flex-start;
+  }
+
+  .profile-contact-editor__card-badge {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    font-size: 11px;
+  }
+
+  .profile-contact-editor__remove {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-contact-editor__card-header {
+    gap: 8px;
+  }
+
+  .profile-contact-editor__card-badge {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    font-size: 10px;
+  }
+
+  .profile-contact-editor__remove {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    font-size: 16px;
   }
 }
 
@@ -821,4 +914,39 @@ html, body, #root {
     min-width: 24px;
     font-size: 9px;
   }
+}
+
+.profile-edit-form {
+  position: relative;
+  z-index: auto;
+}
+
+.profile-edit__card {
+  overflow: visible !important;
+}
+
+.card-content {
+  overflow: visible !important;
+}
+
+.autocomplete {
+  position: relative;
+  z-index: 100;
+}
+
+.autocomplete__list {
+  z-index: 10000 !important;
+}
+
+.modal-overlay {
+  z-index: 1000;
+}
+
+.modal {
+  z-index: 1001;
+  overflow: visible !important;
+}
+
+.modal .autocomplete__list {
+  z-index: 10002 !important;
 }
