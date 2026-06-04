@@ -51,6 +51,34 @@ class EmployerVerificationServiceImpl(
         employerUserId: Long,
         request: EmployerVerificationRequest,
     ): EmployerVerificationResponse {
+        return createVerificationRequestInternal(
+            employerUserId = employerUserId,
+            request = request,
+            files = emptyList(),
+            sourceAction = "createEmployerVerificationRequest",
+        )
+    }
+
+    @Transactional
+    override fun createVerificationRequestWithAttachments(
+        employerUserId: Long,
+        request: EmployerVerificationRequest,
+        files: List<MultipartFile>,
+    ): EmployerVerificationResponse {
+        return createVerificationRequestInternal(
+            employerUserId = employerUserId,
+            request = request,
+            files = files,
+            sourceAction = "createEmployerVerificationRequestWithAttachments",
+        )
+    }
+
+    private fun createVerificationRequestInternal(
+        employerUserId: Long,
+        request: EmployerVerificationRequest,
+        files: List<MultipartFile>,
+        sourceAction: String,
+    ): EmployerVerificationResponse {
         val profile = employerProfileDao.findById(employerUserId)
             .orElseThrow {
                 ProfileNotFoundException(
@@ -94,6 +122,7 @@ class EmployerVerificationServiceImpl(
             corporateEmail = request.corporateEmail,
             professionalLinks = request.professionalLinks,
         )
+        validateVerificationFiles(files)
 
         val entity = EmployerVerificationDto(
             employerUserId = employerUserId,
@@ -107,25 +136,28 @@ class EmployerVerificationServiceImpl(
         val saved = employerVerificationDao.save(entity)
         profile.verificationStatus = VerificationStatus.PENDING
 
+        val createdAttachmentIds = mutableListOf<Long>()
+        try {
+            files.forEach { file ->
+                val attachment = attachVerificationFile(saved, file)
+                createdAttachmentIds += attachment.attachmentId
+            }
+        } catch (ex: Exception) {
+            cleanupCreatedAttachments(createdAttachmentIds)
+            throw ex
+        }
+
         val response = toResponse(saved)
 
-        runModerationAction(
-            logMessage = "Не удалось создать задачу модерации для employerUserId=$employerUserId",
-            errorMessage = "Не удалось отправить запрос на верификацию в модерацию",
-            code = "employer_verification_task_create_failed",
-        ) {
-            moderationServiceClient.createTask(
-                CreateInternalModerationTaskRequest(
-                    entityType = ModerationEntityType.EMPLOYER_VERIFICATION,
-                    entityId = response.id,
-                    taskType = ModerationTaskType.VERIFICATION_REVIEW,
-                    priority = ModerationTaskPriority.MEDIUM,
-                    createdByUserId = employerUserId,
-                    snapshot = objectMapper.valueToTree(response),
-                    sourceService = "profile",
-                    sourceAction = "createEmployerVerificationRequest",
-                ),
+        try {
+            createModerationTask(
+                employerUserId = employerUserId,
+                response = response,
+                sourceAction = sourceAction,
             )
+        } catch (ex: Exception) {
+            cleanupCreatedAttachments(createdAttachmentIds)
+            throw ex
         }
 
         return response
@@ -216,41 +248,67 @@ class EmployerVerificationServiceImpl(
     ): List<InternalFileAttachmentResponse> {
         val verification = getOwnedVerification(employerUserId, verificationId)
         ensureVerificationIsOpen(verification)
-
-        val createdFile = runMediaAction(
-            logMessage = "Не удалось загрузить вложение для verificationId=$verificationId, employerUserId=$employerUserId",
-            errorMessage = "Не удалось загрузить вложение для запроса на верификацию",
-            code = "employer_verification_attachment_upload_failed",
-        ) {
-            mediaServiceClient.uploadFile(
-                file = file,
-                ownerUserId = verification.employerUserId,
-                kind = FileAssetKind.VERIFICATION_ATTACHMENT,
-                visibility = FileAssetVisibility.PRIVATE,
-            )
-        }
-
-        runMediaAction(
-            logMessage = "Не удалось создать вложение для verificationId=$verificationId",
-            errorMessage = "Не удалось привязать вложение к запросу на верификацию",
-            code = "employer_verification_attachment_create_failed",
-        ) {
-            mediaServiceClient.createAttachment(
-                InternalCreateFileAttachmentRequest(
-                    fileId = createdFile.fileId,
-                    entityType = FileAttachmentEntityType.EMPLOYER_VERIFICATION,
-                    entityId = verificationId,
-                    attachmentRole = FileAttachmentRole.VERIFICATION,
-                ),
-            )
-        }
-
-        return runMediaAction(
-            logMessage = "Не удалось загрузить список вложений для verificationId=$verificationId",
+        val verificationIdValue = requireNotNull(verification.id)
+        val existingAttachments = runMediaAction(
+            logMessage = "Не удалось загрузить список вложений для verificationId=$verificationIdValue",
             errorMessage = "Не удалось получить вложения запроса на верификацию",
             code = "employer_verification_attachments_load_failed",
         ) {
-            loadVerificationAttachments(verificationId)
+            loadVerificationAttachments(verificationIdValue)
+        }
+        validateVerificationFiles(listOf(file), existingCount = existingAttachments.size)
+
+        attachVerificationFile(verification, file)
+
+        return runMediaAction(
+            logMessage = "Не удалось загрузить список вложений для verificationId=$verificationIdValue",
+            errorMessage = "Не удалось получить вложения запроса на верификацию",
+            code = "employer_verification_attachments_load_failed",
+        ) {
+            loadVerificationAttachments(verificationIdValue)
+        }
+    }
+
+    @Transactional
+    override fun deleteAttachment(
+        employerUserId: Long,
+        verificationId: Long,
+        attachmentId: Long,
+    ): List<InternalFileAttachmentResponse> {
+        val verification = getOwnedVerification(employerUserId, verificationId)
+        ensureVerificationIsOpen(verification)
+        val verificationIdValue = requireNotNull(verification.id)
+
+        val attachment = runMediaAction(
+            logMessage = "Не удалось загрузить список вложений для verificationId=$verificationIdValue",
+            errorMessage = "Не удалось получить вложения запроса на верификацию",
+            code = "employer_verification_attachments_load_failed",
+        ) {
+            loadVerificationAttachments(verificationIdValue)
+        }.firstOrNull { currentAttachment ->
+            currentAttachment.attachmentId == attachmentId &&
+                currentAttachment.entityType == FileAttachmentEntityType.EMPLOYER_VERIFICATION &&
+                currentAttachment.entityId == verificationIdValue &&
+                currentAttachment.attachmentRole == FileAttachmentRole.VERIFICATION
+        } ?: throw ProfileNotFoundException(
+            message = "Вложение запроса на верификацию не найдено",
+            code = "employer_verification_attachment_not_found",
+        )
+
+        runMediaAction(
+            logMessage = "Не удалось удалить вложение verification attachmentId=${attachment.attachmentId}, verificationId=$verificationIdValue",
+            errorMessage = "Не удалось удалить вложение запроса на верификацию",
+            code = "employer_verification_attachment_delete_failed",
+        ) {
+            mediaServiceClient.deleteAttachment(attachment.attachmentId)
+        }
+
+        return runMediaAction(
+            logMessage = "Не удалось загрузить список вложений для verificationId=$verificationIdValue после удаления",
+            errorMessage = "Не удалось получить вложения запроса на верификацию",
+            code = "employer_verification_attachments_load_failed",
+        ) {
+            loadVerificationAttachments(verificationIdValue)
         }
     }
 
@@ -328,6 +386,113 @@ class EmployerVerificationServiceImpl(
             }
 
             VerificationMethod.MANUAL -> Unit
+        }
+    }
+
+    private fun validateVerificationFiles(
+        files: List<MultipartFile>,
+        existingCount: Int = 0,
+    ) {
+        if (existingCount + files.size > MAX_VERIFICATION_FILES) {
+            throw ProfileBadRequestException(
+                message = "К заявке можно приложить не более 5 файлов",
+                code = "employer_verification_files_limit_exceeded",
+            )
+        }
+
+        files.forEach { file ->
+            if (file.isEmpty) {
+                throw ProfileBadRequestException(
+                    message = "Прикреплённый файл пустой",
+                    code = "employer_verification_file_empty",
+                )
+            }
+
+            if (file.size > MAX_VERIFICATION_FILE_SIZE_BYTES) {
+                throw ProfileBadRequestException(
+                    message = "Размер файла не должен превышать 20 МБ",
+                    code = "employer_verification_file_too_large",
+                )
+            }
+
+            val contentType = file.contentType?.lowercase().orEmpty()
+            val filename = file.originalFilename?.lowercase().orEmpty()
+
+            if (contentType != PDF_CONTENT_TYPE && !filename.endsWith(".pdf")) {
+                throw ProfileBadRequestException(
+                    message = "Можно загружать только PDF файлы",
+                    code = "employer_verification_file_invalid_type",
+                )
+            }
+        }
+    }
+
+    private fun attachVerificationFile(
+        verification: EmployerVerificationDto,
+        file: MultipartFile,
+    ): InternalFileAttachmentResponse {
+        val verificationId = requireNotNull(verification.id)
+        val createdFile = runMediaAction(
+            logMessage = "Не удалось загрузить вложение для verificationId=$verificationId, employerUserId=${verification.employerUserId}",
+            errorMessage = "Не удалось загрузить вложение для запроса на верификацию",
+            code = "employer_verification_attachment_upload_failed",
+        ) {
+            mediaServiceClient.uploadFile(
+                file = file,
+                ownerUserId = verification.employerUserId,
+                kind = FileAssetKind.VERIFICATION_ATTACHMENT,
+                visibility = FileAssetVisibility.PRIVATE,
+            )
+        }
+
+        return runMediaAction(
+            logMessage = "Не удалось создать вложение для verificationId=$verificationId",
+            errorMessage = "Не удалось привязать вложение к запросу на верификацию",
+            code = "employer_verification_attachment_create_failed",
+        ) {
+            mediaServiceClient.createAttachment(
+                InternalCreateFileAttachmentRequest(
+                    fileId = createdFile.fileId,
+                    entityType = FileAttachmentEntityType.EMPLOYER_VERIFICATION,
+                    entityId = verificationId,
+                    attachmentRole = FileAttachmentRole.VERIFICATION,
+                ),
+            )
+        }
+    }
+
+    private fun createModerationTask(
+        employerUserId: Long,
+        response: EmployerVerificationResponse,
+        sourceAction: String,
+    ) {
+        runModerationAction(
+            logMessage = "Не удалось создать задачу модерации для employerUserId=$employerUserId",
+            errorMessage = "Не удалось отправить запрос на верификацию в модерацию",
+            code = "employer_verification_task_create_failed",
+        ) {
+            moderationServiceClient.createTask(
+                CreateInternalModerationTaskRequest(
+                    entityType = ModerationEntityType.EMPLOYER_VERIFICATION,
+                    entityId = response.id,
+                    taskType = ModerationTaskType.VERIFICATION_REVIEW,
+                    priority = ModerationTaskPriority.MEDIUM,
+                    createdByUserId = employerUserId,
+                    snapshot = objectMapper.valueToTree(response),
+                    sourceService = "profile",
+                    sourceAction = sourceAction,
+                ),
+            )
+        }
+    }
+
+    private fun cleanupCreatedAttachments(attachmentIds: List<Long>) {
+        attachmentIds.forEach { attachmentId ->
+            try {
+                mediaServiceClient.deleteAttachment(attachmentId)
+            } catch (ex: Exception) {
+                logger.warn("Не удалось очистить attachmentId=$attachmentId после ошибки создания заявки", ex)
+            }
         }
     }
 
@@ -448,5 +613,8 @@ class EmployerVerificationServiceImpl(
 
     companion object {
         private val logger = LoggerFactory.getLogger(EmployerVerificationServiceImpl::class.java)
+        private const val MAX_VERIFICATION_FILES = 5
+        private const val MAX_VERIFICATION_FILE_SIZE_BYTES = 20L * 1024L * 1024L
+        private const val PDF_CONTENT_TYPE = "application/pdf"
     }
 }
