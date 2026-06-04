@@ -3148,3 +3148,9 @@ $section-title-size: 19px;
     padding: 4px 10px;
   }
 }
+
+@media (max-width: 768px) {
+  .field-error.is-placeholder {
+    display: none;
+  }
+}
