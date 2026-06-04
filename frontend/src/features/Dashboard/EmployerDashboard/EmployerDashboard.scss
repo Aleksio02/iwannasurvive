@@ -3202,51 +3202,67 @@ $section-title-size: 19px;
 }
 
 .employer-create-form__field {
-  input[type="date"],
-  input[type="datetime-local"] {
+  min-width: 0;
+}
+
+.employer-create-form__date-input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-right: 10px;
+  color: var(--color-text);
+
+  &::-webkit-date-and-time-value {
+    min-width: 0;
     width: 100%;
+    margin: 0;
+    text-align: left;
+  }
+
+  &::-webkit-datetime-edit {
     min-width: 0;
     max-width: 100%;
-    box-sizing: border-box;
-    display: block;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-    &::-webkit-datetime-edit-fields-wrapper {
-      padding: 0;
-    }
+  &::-webkit-datetime-edit-fields-wrapper {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+  }
 
-    &::-webkit-datetime-edit-text {
-      padding: 0 2px;
-    }
+  &::-webkit-datetime-edit-text,
+  &::-webkit-datetime-edit-day-field,
+  &::-webkit-datetime-edit-month-field,
+  &::-webkit-datetime-edit-year-field {
+    padding: 0 1px;
+  }
 
-    &::-webkit-datetime-edit-month-field,
-    &::-webkit-datetime-edit-day-field,
-    &::-webkit-datetime-edit-year-field {
-      padding: 0 2px;
-    }
+  &::-webkit-clear-button,
+  &::-webkit-inner-spin-button {
+    display: none;
+  }
 
-    &::-webkit-calendar-picker-indicator {
-      padding: 2px;
-      margin: 0;
-    }
+  &::-webkit-calendar-picker-indicator {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0;
   }
 }
 
 @media (max-width: 768px) {
-  .employer-create-form__field {
-    input[type="date"],
-    input[type="datetime-local"] {
-      font-size: 14px;
-      padding: 0 8px;
-      height: var(--control-height);
-      min-height: var(--control-height);
-    }
-  }
-}
-
-input[type="date"] {
-  &::-webkit-datetime-edit {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .employer-create-form__date-input {
+    font-size: 16px !important;
   }
 }
