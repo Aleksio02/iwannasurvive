@@ -659,14 +659,12 @@ function EmployerVerificationModal({
                         {isRejectedVerification && (
                             <div className="employer-verification-modal__helper">
                                 Предыдущая заявка отклонена. Исправьте данные и отправьте новую заявку повторно.
-                                После создания новой заявки можно будет прикрепить файлы.
                             </div>
                         )}
 
                         {isRevokedVerification && (
                             <div className="employer-verification-modal__helper">
                                 Верификация отозвана. Пройдите верификацию заново.
-                                После создания новой заявки можно будет прикрепить файлы.
                             </div>
                         )}
 
