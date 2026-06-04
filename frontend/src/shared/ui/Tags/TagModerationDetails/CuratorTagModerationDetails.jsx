@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getCuratorTagModerationDetails } from '@/shared/api/curatorTag';
 import TagModerationDetailsContent from './TagModerationDetailsContent.jsx';
-import styles from './TagModerationDetails.module.scss';
+import Modal from '@/shared/ui/Modal';
 
 const CuratorTagModerationDetails = ({ tagId, onClose }) => {
   const [details, setDetails] = useState(null);
@@ -17,7 +17,7 @@ const CuratorTagModerationDetails = ({ tagId, onClose }) => {
       try {
         const data = await getCuratorTagModerationDetails(tagId);
         if (!ignore) setDetails(data);
-      } catch (err) {
+      } catch {
         if (!ignore) setError('Не удалось загрузить карточку тега');
       } finally {
         if (!ignore) setLoading(false);
@@ -33,37 +33,16 @@ const CuratorTagModerationDetails = ({ tagId, onClose }) => {
     };
   }, [tagId]);
 
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose?.();
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
-  useEffect(() => {
-    document.documentElement.classList.add('is-lock');
-    return () => document.documentElement.classList.remove('is-lock');
-  }, []);
-
   if (!tagId) return null;
 
   return (
-    <div
-      className={styles.overlay}
-      onClick={(event) => event.target === event.currentTarget && onClose?.()}
-    >
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+    <Modal isOpen={Boolean(tagId)} title="Проверка тега" onClose={onClose}>
         <TagModerationDetailsContent
           details={details}
-          title="Проверка тега"
           loading={loading}
           error={error}
-          onClose={onClose}
         />
-      </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { X } from 'lucide-react'
 import TrashIcon from '@/assets/icons/trash.svg'
 import { createLinkRow } from '../../lib/employerDashboard.helpers'
 import Textarea from '@/shared/ui/Textarea'
@@ -103,24 +104,30 @@ function EmployerVerificationModal({
                                    }) {
     const overlayPressStartedOutsideRef = useRef(false)
     const attachmentInputRef = useRef(null)
+    const isCloseDisabled = isVerificationSubmitting || isVerificationAttachmentUploading || isDeletingAttachment
+
+    const handleClose = () => {
+        if (isCloseDisabled) return
+        onClose()
+    }
 
     useEffect(() => {
         if (!isOpen) return
 
         const handleKeyDown = (event) => {
-            if (event.key === 'Escape') {
+            if (event.key === 'Escape' && !isCloseDisabled) {
                 onClose()
             }
         }
 
         document.addEventListener('keydown', handleKeyDown)
-        document.body.style.overflow = 'hidden'
+        document.documentElement.classList.add('is-lock')
 
         return () => {
             document.removeEventListener('keydown', handleKeyDown)
-            document.body.style.overflow = ''
+            document.documentElement.classList.remove('is-lock')
         }
-    }, [isOpen, onClose])
+    }, [isCloseDisabled, isOpen, onClose])
 
     const rawVerificationStatus = String(
         currentVerification?.status ||
@@ -302,7 +309,7 @@ function EmployerVerificationModal({
 
     const handleOverlayClick = (event) => {
         const clickedOutside = event.target === event.currentTarget
-        if (overlayPressStartedOutsideRef.current && clickedOutside) {
+        if (overlayPressStartedOutsideRef.current && clickedOutside && !isCloseDisabled) {
             onClose()
         }
         overlayPressStartedOutsideRef.current = false
@@ -364,10 +371,11 @@ function EmployerVerificationModal({
                     <button
                         type="button"
                         className="employer-verification-modal__close"
-                        onClick={onClose}
+                        onClick={handleClose}
                         aria-label="Закрыть"
+                        disabled={isCloseDisabled}
                     >
-                        ×
+                        <X size={20} aria-hidden="true" />
                     </button>
                 </div>
 
@@ -651,14 +659,12 @@ function EmployerVerificationModal({
                         {isRejectedVerification && (
                             <div className="employer-verification-modal__helper">
                                 Предыдущая заявка отклонена. Исправьте данные и отправьте новую заявку повторно.
-                                После создания новой заявки можно будет прикрепить файлы.
                             </div>
                         )}
 
                         {isRevokedVerification && (
                             <div className="employer-verification-modal__helper">
                                 Верификация отозвана. Пройдите верификацию заново.
-                                После создания новой заявки можно будет прикрепить файлы.
                             </div>
                         )}
 
@@ -800,7 +806,8 @@ function EmployerVerificationModal({
                     <button
                         type="button"
                         className="button button--ghost employer-verification-modal__footer-button"
-                        onClick={onClose}
+                        onClick={handleClose}
+                        disabled={isCloseDisabled}
                     >
                         Закрыть
                     </button>

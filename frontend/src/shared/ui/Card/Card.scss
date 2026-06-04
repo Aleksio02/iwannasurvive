@@ -6,7 +6,7 @@
   background-color: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(217, 232, 235, 0.9);
-  border-radius: 28px;
+  border-radius: var(--border-radius-m);
   box-shadow: var(--shadow-card);
 }
 
@@ -39,7 +39,7 @@
 
 @include mobile {
   .card {
-    border-radius: 22px;
+    border-radius: var(--border-radius-s);
   }
 
   .card__header {

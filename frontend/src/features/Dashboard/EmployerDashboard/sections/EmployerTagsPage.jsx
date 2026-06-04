@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { getEmployerTags, cancelEmployerTagModeration, createEmployerTag } from '@/shared/api/employerTag.js';
 import TagStatusBadge from '@/shared/ui/Tags/TagStatusBadge/TagStatusBadge.jsx';
 import TagModerationDetails from '@/shared/ui/Tags/TagModerationDetails/TagModerationDetails.jsx';
@@ -73,7 +74,7 @@ const CancelTagModerationDialog = ({
           disabled={loading}
           aria-label="Закрыть"
         >
-          ×
+          <X size={18} aria-hidden="true" />
         </button>
 
         <div className={styles.dialogHeader}>

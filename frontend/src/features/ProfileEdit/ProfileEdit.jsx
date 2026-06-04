@@ -41,6 +41,7 @@ import Textarea from '@/shared/ui/Textarea'
 import Autocomplete from '@/shared/ui/Autocomplete'
 import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
+import Modal from '@/shared/ui/Modal'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
 import ApplicantTagsEditor from './components/ApplicantTagsEditor'
@@ -333,7 +334,6 @@ function ProfileEdit() {
 
     const locationCityRef = useRef(null)
     const locationAddressRef = useRef(null)
-    const locationModalOverlayMouseDownStartedOutsideRef = useRef(false)
     const applicantCityRequestIdRef = useRef(0)
     const locationCityRequestIdRef = useRef(0)
     const locationAddressRequestIdRef = useRef(0)
@@ -940,7 +940,6 @@ function ProfileEdit() {
                 setStudyProgramActiveIndex(-1)
                 setLocationCityActiveIndex(-1)
                 setLocationAddressActiveIndex(-1)
-                setIsLocationModalOpen(false)
             }
         }
 
@@ -952,11 +951,6 @@ function ProfileEdit() {
             document.removeEventListener('keydown', handleEsc)
         }
     }, [])
-
-    useEffect(() => {
-        document.documentElement.classList.toggle('is-lock', isLocationModalOpen)
-        return () => document.documentElement.classList.remove('is-lock')
-    }, [isLocationModalOpen])
 
     if (isLoading || isProfileLoading) {
         return (
@@ -1114,18 +1108,6 @@ function ProfileEdit() {
         setLocationAddressOptions([])
         setLocationCityOptions([])
         setIsLocationModalOpen(true)
-    }
-
-    const handleLocationModalOverlayMouseDown = (event) => {
-        locationModalOverlayMouseDownStartedOutsideRef.current = event.target === event.currentTarget
-    }
-
-    const handleLocationModalOverlayMouseUp = (event) => {
-        const endedOutside = event.target === event.currentTarget
-        if (locationModalOverlayMouseDownStartedOutsideRef.current && endedOutside) {
-            setIsLocationModalOpen(false)
-        }
-        locationModalOverlayMouseDownStartedOutsideRef.current = false
     }
 
     const handleSelectLocationCity = (selectedValue) => {
@@ -1907,14 +1889,36 @@ function ProfileEdit() {
             </Card>
 
             {isLocationModalOpen && (
-                <div
-                    className="modal-overlay"
-                    onMouseDown={handleLocationModalOverlayMouseDown}
-                    onMouseUp={handleLocationModalOverlayMouseUp}
-                >
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <h3>Добавить локацию компании</h3>
+                <Modal
+                    isOpen={isLocationModalOpen}
+                    title="Добавить локацию компании"
+                    onClose={() => setIsLocationModalOpen(false)}
+                    closeDisabled={isLocationSaving}
+                    closeOnBackdrop={!isLocationSaving}
+                    closeOnEscape={!isLocationSaving}
+                    dialogClassName="profile-edit-location-modal"
+                    footer={(
+                        <>
+                            <Button
+                                type="button"
+                                className="button--primary"
+                                onClick={handleSaveLocation}
+                                disabled={isLocationSaving}
+                            >
+                                {isLocationSaving ? 'Сохранение...' : 'Сохранить локацию'}
+                            </Button>
 
+                            <Button
+                                type="button"
+                                className="button--ghost"
+                                onClick={() => setIsLocationModalOpen(false)}
+                                disabled={isLocationSaving}
+                            >
+                                Отменить
+                            </Button>
+                        </>
+                    )}
+                >
                         <div className="modal__field modal__field--location-title">
                             <Label>Название локации <span className="required-star">*</span></Label>
                             <Input
@@ -2010,28 +2014,7 @@ function ProfileEdit() {
                                 placeholder="Этаж, офис, корпус"
                             />
                         </div>
-
-                        <div className="modal__actions">
-                            <Button
-                                type="button"
-                                className="button--primary"
-                                onClick={handleSaveLocation}
-                                disabled={isLocationSaving}
-                            >
-                                {isLocationSaving ? 'Сохранение...' : 'Сохранить локацию'}
-                            </Button>
-
-                            <Button
-                                type="button"
-                                className="button--ghost"
-                                onClick={() => setIsLocationModalOpen(false)}
-                                disabled={isLocationSaving}
-                            >
-                                Отменить
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                </Modal>
             )}
         </div>
     )

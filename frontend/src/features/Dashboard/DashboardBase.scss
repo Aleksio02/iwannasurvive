@@ -4,7 +4,7 @@
   position: relative;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
-  border-radius: 28px;
+  border-radius: var(--border-radius-l);
   box-shadow: var(--panel-shadow);
   padding: 28px;
   overflow: hidden;
@@ -20,12 +20,12 @@
 
   @media (max-width: 768px) {
     padding: 20px;
-    border-radius: 22px;
+    border-radius: var(--border-radius-m);
   }
 
   @media (max-width: 480px) {
     padding: 16px;
-    border-radius: 18px;
+    border-radius: var(--border-radius-s);
   }
 }
 

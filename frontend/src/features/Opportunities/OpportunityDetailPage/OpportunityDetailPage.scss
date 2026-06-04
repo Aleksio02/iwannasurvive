@@ -151,6 +151,41 @@
     }
   }
 
+  &__employer-favorite {
+    width: auto;
+    min-height: 34px;
+    padding: 8px 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #99f6e4;
+    border-radius: 999px;
+    background: #ecfeff;
+    color: #0f766e;
+    box-shadow: 0 6px 14px rgba(31, 182, 170, 0.1);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    transition:
+      border-color var(--transition-duration),
+      background-color var(--transition-duration),
+      color var(--transition-duration),
+      opacity var(--transition-duration);
+
+    &.is-favorite {
+      border-color: #fcd34d;
+      background: #fffbeb;
+      color: #b45309;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.72;
+    }
+  }
+
   &__location-row {
     display: flex;
     align-items: center;

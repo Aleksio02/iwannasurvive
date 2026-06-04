@@ -196,10 +196,9 @@
   display: grid;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 50%;
+  border-radius: 10px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 24px;
   line-height: 1;
   cursor: pointer;
   transition: all 0.2s ease;

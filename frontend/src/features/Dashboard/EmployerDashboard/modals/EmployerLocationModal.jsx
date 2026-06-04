@@ -1,7 +1,8 @@
-import { useRef } from 'react'
 import Input from '@/shared/ui/Input'
 import Label from '@/shared/ui/Label'
 import Button from '@/shared/ui/Button'
+import Modal from '@/shared/ui/Modal'
+
 function EmployerLocationModal({
                                    isOpen,
                                    locationMode,
@@ -24,38 +25,30 @@ function EmployerLocationModal({
                                    onAddressSuggest,
                                onSelectAddressSuggestion,
                                }) {
-    const overlayMouseDownStartedOutsideRef = useRef(false)
-
-    if (!isOpen) return null
-
-    const handleOverlayMouseDown = (event) => {
-        overlayMouseDownStartedOutsideRef.current = event.target === event.currentTarget
-    }
-
-    const handleOverlayMouseUp = (event) => {
-        const endedOutside = event.target === event.currentTarget
-        if (
-            overlayMouseDownStartedOutsideRef.current &&
-            endedOutside &&
-            !isLocationSaving
-        ) {
-            onClose()
-        }
-        overlayMouseDownStartedOutsideRef.current = false
-    }
-
     return (
-        <div
-            className="modal-overlay"
-            onMouseDown={handleOverlayMouseDown}
-            onMouseUp={handleOverlayMouseUp}
+        <Modal
+            isOpen={isOpen}
+            title={locationMode === 'edit' ? 'Редактирование локации' : 'Новая локация компании'}
+            subtitle="Укажите офис компании. Эта локация будет принадлежать текущему работодателю и станет доступна для выбора в профиле и в вакансиях."
+            onClose={onClose}
+            closeDisabled={isLocationSaving}
+            closeOnBackdrop={!isLocationSaving}
+            closeOnEscape={!isLocationSaving}
+            footer={(
+                <>
+                    <Button className="button--primary" onClick={onSave} disabled={isLocationSaving}>
+                        {isLocationSaving
+                            ? 'Сохранение...'
+                            : locationMode === 'edit'
+                                ? 'Сохранить локацию'
+                                : 'Создать локацию'}
+                    </Button>
+                    <Button className="button--ghost" onClick={onClose} disabled={isLocationSaving}>
+                        Отмена
+                    </Button>
+                </>
+            )}
         >
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <h3>{locationMode === 'edit' ? 'Редактирование локации' : 'Новая локация компании'}</h3>
-                <p className="field-hint">
-                    Укажите офис компании. Эта локация будет принадлежать текущему работодателю и станет доступна
-                    для выбора в профиле и в вакансиях.
-                </p>
 
                 <div className="modal__field">
                     <Label>Название локации</Label>
@@ -145,21 +138,7 @@ function EmployerLocationModal({
                         placeholder="123456"
                     />
                 </div>
-
-                <div className="modal__actions">
-                    <Button className="button--primary" onClick={onSave} disabled={isLocationSaving}>
-                        {isLocationSaving
-                            ? 'Сохранение...'
-                            : locationMode === 'edit'
-                                ? 'Сохранить локацию'
-                                : 'Создать локацию'}
-                    </Button>
-                    <Button className="button--ghost" onClick={onClose} disabled={isLocationSaving}>
-                        Отмена
-                    </Button>
-                </div>
-            </div>
-        </div>
+        </Modal>
     )
 }
 

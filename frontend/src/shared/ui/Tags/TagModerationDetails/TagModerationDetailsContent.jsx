@@ -41,15 +41,12 @@ function Field({ label, children }) {
   );
 }
 
-const TagModerationDetailsContent = ({ details, title, loading, error, onClose, fallbackTag }) => {
+const TagModerationDetailsContent = ({ details, loading, error, fallbackTag }) => {
   const tag = details?.tag || fallbackTag;
   const task = details?.task || null;
 
   return (
     <>
-      <button className={styles.closeBtn} onClick={onClose} type="button" aria-label="Закрыть">×</button>
-      <h3>{title}</h3>
-
       {loading && <div className={styles.meta}>Загрузка...</div>}
       {error && <div className={styles.error}>{error}</div>}
 

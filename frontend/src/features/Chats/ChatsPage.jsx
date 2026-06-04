@@ -2318,8 +2318,18 @@ function ChatsPage() {
                             </form>
                             {confirmAction && (
                                 <div className="chats__modal-backdrop" role="presentation" onClick={() => { setConfirmAction(null); setDeleteForEveryone(false) }}>
-                                    <div className="chats__confirm" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-                                        <h3>Удалить сообщение?</h3>
+                                    <div className="chats__confirm" role="alertdialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+                                        <div className="chats__modal-head">
+                                            <h3>Удалить сообщение?</h3>
+                                            <button
+                                                type="button"
+                                                className="chats__modal-close"
+                                                aria-label="Закрыть"
+                                                onClick={() => { setConfirmAction(null); setDeleteForEveryone(false) }}
+                                            >
+                                                <X size={18} aria-hidden="true" />
+                                            </button>
+                                        </div>
                                         <p>
                                             {deleteForEveryone
                                                 ? 'Сообщение исчезнет из переписки для обоих участников.'
@@ -2373,7 +2383,22 @@ function ChatsPage() {
                                     }}
                                 >
                                     <div className="chats__forward-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-                                        <h3>Переслать сообщение</h3>
+                                        <div className="chats__modal-head">
+                                            <h3>Переслать сообщение</h3>
+                                            <button
+                                                type="button"
+                                                className="chats__modal-close"
+                                                aria-label="Закрыть"
+                                                disabled={isForwarding}
+                                                onClick={() => {
+                                                    setForwardingMessage(null)
+                                                    setForwardSearch('')
+                                                    setForwardClientMessageId('')
+                                                }}
+                                            >
+                                                <X size={18} aria-hidden="true" />
+                                            </button>
+                                        </div>
                                         <input
                                             value={forwardSearch}
                                             onChange={(event) => setForwardSearch(event.target.value)}
