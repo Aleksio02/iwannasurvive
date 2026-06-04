@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Redirect, Route, Switch } from 'wouter'
 import ProtectedRoute from '@/shared/ui/ProtectedRoute'
+import ProfileOnboardingGuard from '@/shared/ui/ProfileOnboardingGuard'
 
 const OpportunitiesPage = lazy(() => import('@/features/Opportunities/OpportunitiesPage/OpportunitiesPage'))
 const OpportunityDetailPage = lazy(() => import('@/features/Opportunities/OpportunityDetailPage/OpportunityDetailPage'))
@@ -32,9 +33,10 @@ function AppFallback() {
 function App() {
     return (
         <Suspense fallback={<AppFallback />}>
-            <Switch>
-                <Route path="/" component={OpportunitiesPage} />
-                <Route path="/opportunities/:id" component={OpportunityDetailPage} />
+            <ProfileOnboardingGuard>
+                <Switch>
+                    <Route path="/" component={OpportunitiesPage} />
+                    <Route path="/opportunities/:id" component={OpportunityDetailPage} />
 
                 <Route path="/seekers">
                     <ProtectedRoute>
@@ -97,10 +99,11 @@ function App() {
                     </ProtectedRoute>
                 </Route>
 
-                <Route>
-                    <Redirect to="/" />
-                </Route>
-            </Switch>
+                    <Route>
+                        <Redirect to="/" />
+                    </Route>
+                </Switch>
+            </ProfileOnboardingGuard>
         </Suspense>
     )
 }

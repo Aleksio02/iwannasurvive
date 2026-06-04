@@ -21,6 +21,7 @@ import ru.itplanet.trampline.profile.model.ApplicantProfileSearchPage
 import ru.itplanet.trampline.profile.model.ApplicantProfileWorkspace
 import ru.itplanet.trampline.profile.model.EmployerProfile
 import ru.itplanet.trampline.profile.model.EmployerProfileWorkspace
+import ru.itplanet.trampline.profile.model.ProfileOnboardingStatus
 import ru.itplanet.trampline.profile.model.request.ApplicantProfilePatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerCompanyPatchRequest
 import ru.itplanet.trampline.profile.model.request.EmployerProfilePatchRequest
@@ -28,6 +29,7 @@ import ru.itplanet.trampline.profile.model.request.GetApplicantProfileListReques
 import ru.itplanet.trampline.profile.security.AuthenticatedUser
 import ru.itplanet.trampline.profile.service.ApplicantProfileWorkspaceQueryService
 import ru.itplanet.trampline.profile.service.EmployerProfileWorkspaceQueryService
+import ru.itplanet.trampline.profile.service.ProfileOnboardingStatusService
 import ru.itplanet.trampline.profile.service.ProfileService
 
 @Validated
@@ -37,6 +39,7 @@ class ProfileController(
     private val profileService: ProfileService,
     private val applicantProfileWorkspaceQueryService: ApplicantProfileWorkspaceQueryService,
     private val employerProfileWorkspaceQueryService: EmployerProfileWorkspaceQueryService,
+    private val profileOnboardingStatusService: ProfileOnboardingStatusService,
 ) {
 
     @PatchMapping("/applicant")
@@ -110,6 +113,13 @@ class ProfileController(
         }
 
         return profileService.submitEmployerProfileForModeration(currentUser.userId)
+    }
+
+    @GetMapping("/onboarding/status")
+    fun getProfileOnboardingStatus(
+        @CurrentUser currentUser: AuthenticatedUser,
+    ): ProfileOnboardingStatus {
+        return profileOnboardingStatusService.getStatus(currentUser)
     }
 
     @GetMapping("/applicants")

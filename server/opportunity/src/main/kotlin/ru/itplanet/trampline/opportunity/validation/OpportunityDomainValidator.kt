@@ -24,6 +24,18 @@ class OpportunityDomainValidator {
 
     private fun validateSalary(opportunity: OpportunityDto) {
         opportunity.salaryFrom?.let { from ->
+            require(from >= 0) {
+                "salaryFrom must be greater than or equal to 0"
+            }
+        }
+
+        opportunity.salaryTo?.let { to ->
+            require(to >= 0) {
+                "salaryTo must be greater than or equal to 0"
+            }
+        }
+
+        opportunity.salaryFrom?.let { from ->
             opportunity.salaryTo?.let { to ->
                 require(from <= to) {
                     "salaryFrom ($from) must be less than or equal to salaryTo ($to)"
