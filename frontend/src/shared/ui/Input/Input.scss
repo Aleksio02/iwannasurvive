@@ -66,3 +66,23 @@
     font-size: 12px;
   }
 }
+
+@media (max-width: 768px) {
+  .input {
+    font-size: 14px !important;
+
+    &[value] {
+      font-size: 14px !important;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .input {
+    font-size: 14px !important;
+
+    &[value] {
+      font-size: 14px !important;
+    }
+  }
+}
