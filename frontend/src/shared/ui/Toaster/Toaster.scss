@@ -114,6 +114,26 @@
     right: 16px;
     left: 16px;
     width: auto;
+    row-gap: 10px;
+  }
+
+  .toast {
+    padding: 14px 16px;
+    border-radius: 16px;
+  }
+
+  .toast__title {
+    font-size: 13px;
+  }
+
+  .toast__description {
+    font-size: 13px;
+  }
+
+  .toast__close {
+    width: 32px;
+    height: 32px;
+    font-size: 22px;
   }
 
   @keyframes slideInRight {
@@ -136,5 +156,34 @@
       opacity: 0;
       transform: translateY(-20px);
     }
+  }
+}
+
+@media (max-width: 480px) {
+  .toaster {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    row-gap: 8px;
+  }
+
+  .toast {
+    padding: 12px 14px;
+    border-radius: 14px;
+  }
+
+  .toast__title {
+    font-size: 12px;
+  }
+
+  .toast__description {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .toast__close {
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
   }
 }
