@@ -2753,106 +2753,116 @@ function SeekerDashboard() {
                             </div>
                         </div>
 
-                        <div className="profile-overview-grid">
-                            <section ref={tagsOverviewRef} className="profile-overview-card profile-overview-card--wide">
-                                <div className="profile-overview-card__header">
-                                    <h3>Навыки и интересы</h3>
-                                    {!isEditingTags && (
-                                        <button
-                                            type="button"
-                                            className="profile-overview-card__action"
-                                            onClick={() => void openTagsEditor()}
-                                        >
-                                            {hasSkills || hasInterests ? 'Изменить' : 'Добавить'}
-                                        </button>
-                                    )}
-                                </div>
-
-                                {isEditingTags ? (
-                                    <div className="profile-overview-card__editor">
-                                        {isTagsLoading && (
-                                            <p className="profile-overview-card__status">Загружаем навыки...</p>
-                                        )}
-
-                                        {!isTagsLoading && tagsError && (
-                                            <div className="profile-overview-card__status">
-                                                <p>{tagsError}</p>
+                        {!isEditing && (
+                            <>
+                                <div className="profile-overview-grid">
+                                    <section ref={tagsOverviewRef}
+                                             className="profile-overview-card profile-overview-card--wide">
+                                        <div className="profile-overview-card__header">
+                                            <h3>Навыки и интересы</h3>
+                                            {!isEditingTags && (
                                                 <button
                                                     type="button"
                                                     className="profile-overview-card__action"
-                                                    onClick={() => void loadAvailableTags()}
+                                                    onClick={() => void openTagsEditor()}
                                                 >
-                                                    Повторить
+                                                    {hasSkills || hasInterests ? 'Изменить' : 'Добавить'}
                                                 </button>
+                                            )}
+                                        </div>
+
+                                        {isEditingTags ? (
+                                            <div className="profile-overview-card__editor">
+                                                {isTagsLoading && (
+                                                    <p className="profile-overview-card__status">Загружаем навыки...</p>
+                                                )}
+
+                                                {!isTagsLoading && tagsError && (
+                                                    <div className="profile-overview-card__status">
+                                                        <p>{tagsError}</p>
+                                                        <button
+                                                            type="button"
+                                                            className="profile-overview-card__action"
+                                                            onClick={() => void loadAvailableTags()}
+                                                        >
+                                                            Повторить
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {!isTagsLoading && !tagsError && (
+                                                    <ApplicantTagsEditor
+                                                        availableTags={availableTags}
+                                                        selectedSkillTagIds={draftSkillTagIds}
+                                                        selectedInterestTagIds={draftInterestTagIds}
+                                                        onSkillTagIdsChange={setDraftSkillTagIds}
+                                                        onInterestTagIdsChange={setDraftInterestTagIds}
+                                                        disabled={isSavingTags}
+                                                        compact
+                                                        layout="columns"
+                                                        skillInputRef={tagsSkillInputRef}
+                                                    />
+                                                )}
+
+                                                <div className="profile-overview-card__editor-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn-primary-small"
+                                                        onClick={handleSaveTags}
+                                                        disabled={isTagsLoading || Boolean(tagsError) || isSavingTags}
+                                                    >
+                                                        {isSavingTags ? 'Сохраняем...' : 'Сохранить'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-secondary-small"
+                                                        onClick={handleCancelTagsEdit}
+                                                        disabled={isSavingTags}
+                                                    >
+                                                        Отменить
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="profile-overview-card__columns">
+                                                <div className="profile-overview-card__group">
+                                                    <span className="profile-overview-card__label">Навыки</span>
+                                                    {hasSkills ? (
+                                                        <div className="profile-overview-card__chips">
+                                                            {profileSkills.slice(0, 8).map((tag) => (
+                                                                <span key={tag.id || tag.name}>{tag.name}</span>
+                                                            ))}
+                                                            {profileSkills.length > 8 &&
+                                                                <span>+{profileSkills.length - 8}</span>}
+                                                        </div>
+                                                    ) : (
+                                                        <span
+                                                            className="profile-overview-card__empty-text">Не указаны</span>
+                                                    )}
+                                                </div>
+                                                <div className="profile-overview-card__group">
+                                                    <span className="profile-overview-card__label">Интересы</span>
+                                                    {hasInterests ? (
+                                                        <div className="profile-overview-card__chips">
+                                                            {profileInterests.slice(0, 8).map((tag) => (
+                                                                <span key={tag.id || tag.name}>{tag.name}</span>
+                                                            ))}
+                                                            {profileInterests.length > 8 &&
+                                                                <span>+{profileInterests.length - 8}</span>}
+                                                        </div>
+                                                    ) : (
+                                                        <span
+                                                            className="profile-overview-card__empty-text">Не указаны</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
+                                    </section>
+                                    {renderResumeAnalysisBlock()}
+                                </div>
+                            </>
+                        )}
 
-                                        {!isTagsLoading && !tagsError && (
-                                            <ApplicantTagsEditor
-                                                availableTags={availableTags}
-                                                selectedSkillTagIds={draftSkillTagIds}
-                                                selectedInterestTagIds={draftInterestTagIds}
-                                                onSkillTagIdsChange={setDraftSkillTagIds}
-                                                onInterestTagIdsChange={setDraftInterestTagIds}
-                                                disabled={isSavingTags}
-                                                compact
-                                                layout="columns"
-                                                skillInputRef={tagsSkillInputRef}
-                                            />
-                                        )}
-
-                                        <div className="profile-overview-card__editor-actions">
-                                            <button
-                                                type="button"
-                                                className="btn-primary-small"
-                                                onClick={handleSaveTags}
-                                                disabled={isTagsLoading || Boolean(tagsError) || isSavingTags}
-                                            >
-                                                {isSavingTags ? 'Сохраняем...' : 'Сохранить'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn-secondary-small"
-                                                onClick={handleCancelTagsEdit}
-                                                disabled={isSavingTags}
-                                            >
-                                                Отменить
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="profile-overview-card__columns">
-                                        <div className="profile-overview-card__group">
-                                            <span className="profile-overview-card__label">Навыки</span>
-                                            {hasSkills ? (
-                                                <div className="profile-overview-card__chips">
-                                                    {profileSkills.slice(0, 8).map((tag) => (
-                                                        <span key={tag.id || tag.name}>{tag.name}</span>
-                                                    ))}
-                                                    {profileSkills.length > 8 && <span>+{profileSkills.length - 8}</span>}
-                                                </div>
-                                            ) : (
-                                                <span className="profile-overview-card__empty-text">Не указаны</span>
-                                            )}
-                                        </div>
-                                        <div className="profile-overview-card__group">
-                                            <span className="profile-overview-card__label">Интересы</span>
-                                            {hasInterests ? (
-                                                <div className="profile-overview-card__chips">
-                                                    {profileInterests.slice(0, 8).map((tag) => (
-                                                        <span key={tag.id || tag.name}>{tag.name}</span>
-                                                    ))}
-                                                    {profileInterests.length > 8 && <span>+{profileInterests.length - 8}</span>}
-                                                </div>
-                                            ) : (
-                                                <span className="profile-overview-card__empty-text">Не указаны</span>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </section>
-                            {renderResumeAnalysisBlock()}
-                        </div>
 
                         {isEditing && (
                             <div className="profile-edit-form">
