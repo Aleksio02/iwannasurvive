@@ -51,6 +51,7 @@ import {
 } from '@/shared/api/opportunities'
 import { ensureChatByResponse } from '@/shared/api/chats'
 import ApplicantTagsEditor from '@/features/ProfileEdit/components/ApplicantTagsEditor'
+import ApplicantPrivacyPreview from '@/features/ProfileEdit/components/ApplicantPrivacyPreview'
 const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
 const SavedFavoritesSection = lazy(() => import('./components/SavedFavoritesSection'))
 const RecommendationsSection = lazy(() => import('./components/RecommendationsSection'))
@@ -2987,6 +2988,13 @@ function SeekerDashboard() {
                                             />
                                         </div>
                                     </div>
+
+                                    <ApplicantPrivacyPreview
+                                        profileVisibility={profile.profileVisibility}
+                                        resumeVisibility={profile.resumeVisibility}
+                                        applicationsVisibility={profile.applicationsVisibility}
+                                        contactsVisibility={profile.contactsVisibility}
+                                    />
                                 </div>
 
                                 <div className="profile-edit-form__section">
