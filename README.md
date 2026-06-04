@@ -359,8 +359,11 @@ npm start
 
 - Настройки почтового сервера для отправки 2FA-кодов
 
-- Для production WebSocket/STOMP укажите разрешённые origin:
-  `CHAT_WEBSOCKET_ALLOWED_ORIGIN_PATTERNS=https://tramplin-career.ru,http://tramplin-career.ru`
+- Для локальной разработки WebSocket/STOMP ничего менять не нужно: `docker-compose.yml` по умолчанию разрешает `localhost` и `127.0.0.1`.
+
+- Для VPS/production обязательно укажите origin, с которого браузер открывает frontend. Пример:
+  `CHAT_WEBSOCKET_ALLOWED_ORIGIN_PATTERNS=https://tramplin-career.ru,https://www.tramplin-career.ru,http://tramplin-career.ru`
+  Без этого backend может отклонять WebSocket handshake. Если перед контейнером стоит внешний nginx/Timeweb proxy, он тоже должен прокидывать `Upgrade`, `Connection`, `Host` и `X-Forwarded-Proto`.
 
 - API-ключ Yandex Map API
 
