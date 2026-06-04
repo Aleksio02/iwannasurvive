@@ -2,6 +2,7 @@ package ru.itplanet.trampline.profile.service
 
 import org.springframework.web.multipart.MultipartFile
 import ru.itplanet.trampline.commons.model.file.InternalFileAttachmentResponse
+import ru.itplanet.trampline.commons.model.file.InternalFileDownloadUrlResponse
 import ru.itplanet.trampline.commons.model.moderation.InternalModerationTaskLookupResponse
 import ru.itplanet.trampline.profile.model.request.EmployerVerificationRequest
 import ru.itplanet.trampline.profile.model.response.EmployerVerificationResponse
@@ -11,6 +12,12 @@ interface EmployerVerificationService {
     fun createVerificationRequest(
         employerUserId: Long,
         request: EmployerVerificationRequest,
+    ): EmployerVerificationResponse
+
+    fun createVerificationRequestWithAttachments(
+        employerUserId: Long,
+        request: EmployerVerificationRequest,
+        files: List<MultipartFile>,
     ): EmployerVerificationResponse
 
     fun getModerationTask(
@@ -33,4 +40,16 @@ interface EmployerVerificationService {
         verificationId: Long,
         file: MultipartFile,
     ): List<InternalFileAttachmentResponse>
+
+    fun deleteAttachment(
+        employerUserId: Long,
+        verificationId: Long,
+        attachmentId: Long,
+    ): List<InternalFileAttachmentResponse>
+
+    fun getAttachmentDownloadUrl(
+        employerUserId: Long,
+        verificationId: Long,
+        fileId: Long,
+    ): InternalFileDownloadUrlResponse
 }

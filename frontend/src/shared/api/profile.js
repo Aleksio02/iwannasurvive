@@ -650,18 +650,48 @@ export async function uploadEmployerLogo(file) {
     return normalizeEmployerProfile(data)
 }
 
-export async function deleteEmployerFile(fileId) {
+export async function deleteEmployerOwnedFile(fileId) {
     if (!fileId) throw createApiError('Не указан fileId', 400)
 
     const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
-    const data = await apiRequest(`${API_BASE}/employer/profile/files/${fileId}?currentUser=${currentUser}`, {
+    const data = await apiRequest(`${API_BASE}/employer/files/${fileId}?currentUser=${currentUser}`, {
         method: 'DELETE',
     })
 
     return normalizeEmployerProfile(data)
 }
 
-export async function createEmployerVerification(payload) {
+export async function deleteEmployerFile(fileId) {
+    return deleteEmployerOwnedFile(fileId)
+}
+
+export async function createEmployerVerification(payload, files = []) {
+    const normalizedFiles = Array.isArray(files) ? files.filter(Boolean) : []
+
+    if (normalizedFiles.length > 0) {
+        const currentUser = await getRequiredCurrentUserPayload()
+        const formData = new FormData()
+
+        formData.append(
+            'request',
+            new Blob([JSON.stringify(payload)], { type: 'application/json' })
+        )
+
+        normalizedFiles.forEach((file) => {
+            formData.append('files', file)
+        })
+
+        formData.append(
+            'currentUser',
+            new Blob([JSON.stringify(currentUser)], { type: 'application/json' })
+        )
+
+        return apiRequest(`${API_BASE}/employer/verification`, {
+            method: 'POST',
+            body: formData,
+        })
+    }
+
     const userId = await getSessionUserIdFromApi()
 
     if (!userId) {
@@ -672,6 +702,18 @@ export async function createEmployerVerification(payload) {
         method: 'POST',
         body: JSON.stringify(payload),
     })
+}
+
+export async function deleteEmployerVerificationAttachment(verificationId, attachmentId) {
+    if (!verificationId) throw createApiError('Не указан verificationId', 400)
+    if (!attachmentId) throw createApiError('Не указан attachmentId', 400)
+
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    return apiRequest(
+        `${API_BASE}/employer/verifications/${verificationId}/attachments/${attachmentId}?currentUser=${currentUser}`,
+        { method: 'DELETE' }
+    )
 }
 
 export async function uploadEmployerVerificationAttachment(verificationId, file) {
@@ -706,6 +748,15 @@ export async function getEmployerVerificationAttachments(verificationId) {
     return apiRequest(`/api/employer/verifications/${verificationId}/attachments?currentUser=${currentUserParam}`, {
         method: 'GET',
     })
+}
+
+export async function getEmployerVerificationAttachmentOpenUrl(verificationId, fileId) {
+    if (!verificationId) throw createApiError('Не указан verificationId', 400)
+    if (!fileId) throw createApiError('Не указан fileId', 400)
+
+    const currentUser = encodeURIComponent(JSON.stringify(await getAuthenticatedUserPayload()))
+
+    return `${API_BASE}/employer/verifications/${verificationId}/attachments/${fileId}?currentUser=${currentUser}`
 }
 
 export async function getEmployerVerificationModerationTask(verificationId) {
@@ -1127,7 +1178,7 @@ export async function submitEmployerProfileForModeration() {
     })
 }
 
-export async function submitVerification(payload) {
+export async function submitVerification(payload, files = []) {
     const body = {
         verificationMethod: payload.verificationMethod,
         corporateEmail: payload.corporateEmail || null,
@@ -1137,7 +1188,7 @@ export async function submitVerification(payload) {
         submittedComment: payload.submittedComment || null,
     }
 
-    return createEmployerVerification(body)
+    return createEmployerVerification(body, files)
 }
 
 // ========== EMPLOYER LOCATIONS ==========
@@ -1628,22 +1679,21 @@ export function getVerificationAttachmentDownloadUrl(employerUserId, fileId) {
 }
 
 export async function openVerificationAttachment(attachment) {
-    if (attachment?.url) {
-        window.open(attachment.url, '_blank', 'noopener,noreferrer')
+    const fileId = attachment?.fileId || attachment?.file?.fileId || attachment?.attachmentId || attachment?.id
+    const verificationId = attachment?.entityId || attachment?.verificationId
+
+    if (verificationId && fileId) {
+        const url = await getEmployerVerificationAttachmentOpenUrl(verificationId, fileId)
+        window.open(url, '_blank', 'noopener,noreferrer')
         return
     }
 
-    if (attachment?.file?.url) {
-        window.open(attachment.file.url, '_blank', 'noopener,noreferrer')
-        return
-    }
-
-    const fileId = attachment?.fileId || attachment?.id
     const ownerUserId = attachment?.ownerUserId || attachment?.file?.ownerUserId
 
     if (ownerUserId && fileId) {
         const url = `${API_BASE}/profile/employer/${ownerUserId}/files/${fileId}`
         window.open(url, '_blank', 'noopener,noreferrer')
+        return
     }
 
     throw new Error('Невозможно открыть файл: отсутствует URL')

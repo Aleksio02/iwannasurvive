@@ -23,6 +23,8 @@ import {
     uploadModerationTaskAttachment,
     deleteModerationTaskAttachment,
     getModerationTaskAttachmentDownloadUrl,
+    getModerationEntityAttachmentDownloadUrl,
+    deleteModerationEntityAttachment,
     createManualModerationTask,
     TASK_TYPES,
     TASK_STATUSES,
@@ -1023,8 +1025,18 @@ function CuratorDashboard() {
 
     const handleOpenEntityAttachment = async (attachment) => {
         if (!selectedTask) return
+        const fileId = attachment?.fileId || attachment?.file?.fileId
+        if (!fileId) {
+            toast({
+                title: 'Не удалось открыть файл сущности',
+                description: 'Не найден идентификатор файла',
+                variant: 'destructive',
+            })
+            return
+        }
+
         try {
-            const response = await getModerationTaskAttachmentDownloadUrl(selectedTask.id, attachment.fileId)
+            const response = await getModerationEntityAttachmentDownloadUrl(selectedTask.id, fileId)
             if (response?.url) {
                 window.open(response.url, '_blank', 'noopener,noreferrer')
                 return
@@ -1034,7 +1046,7 @@ function CuratorDashboard() {
         } catch (error) {
             toast({
                 title: 'Не удалось открыть файл сущности',
-                description: error.message || 'Этот файл не поддерживает открытие через API вложений задачи',
+                description: error.message || 'Не удалось получить ссылку на скачивание',
                 variant: 'destructive',
             })
         }
@@ -1042,17 +1054,27 @@ function CuratorDashboard() {
 
     const handleDeleteEntityAttachment = async (attachment) => {
         if (!selectedTask) return
-        try {
-            await deleteModerationTaskAttachment(selectedTask.id, attachment.id || attachment.attachmentId)
+        const attachmentId = attachment?.id || attachment?.attachmentId
+        if (!attachmentId) {
             toast({
-                title: 'Запрос отправлен',
-                description: 'Если backend поддерживает это вложение как вложение задачи, файл будет удалён.',
+                title: 'Не удалось удалить файл сущности',
+                description: 'Не найден идентификатор вложения',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        try {
+            await deleteModerationEntityAttachment(selectedTask.id, attachmentId)
+            toast({
+                title: 'Файл удалён',
+                description: 'Файл удалён из проверяемой сущности',
             })
             await loadTaskDetail(selectedTask.id)
         } catch (error) {
             toast({
                 title: 'Не удалось удалить файл сущности',
-                description: error.message || 'Этот файл не поддерживает удаление через API вложений задачи',
+                description: error.message || 'Удаление этого файла недоступно',
                 variant: 'destructive',
             })
         }
@@ -1235,7 +1257,7 @@ function CuratorDashboard() {
     const canRequestChanges = canModerateAfterTake && hasTaskAction(selectedTask, 'REQUEST_CHANGES')
     const canCommentTask = hasTaskAction(selectedTask, 'COMMENT') || Boolean(selectedTask)
     const canCancelTask = hasTaskAction(selectedTask, 'CANCEL')
-    const canUploadAttachments = Boolean(selectedTask)
+    const canUploadAttachments = ['OPEN', 'IN_PROGRESS'].includes(selectedTask?.status)
     const canEditEntity = canApproveTask && selectedTaskAssigneeId === Number(currentUserId)
     const sortedTaskHistory = useMemo(() => {
         const history = Array.isArray(taskHistory) ? [...taskHistory] : []
@@ -1719,6 +1741,9 @@ function CuratorDashboard() {
                                                 title={null}
                                                 description="Здесь показываются файлы, которые уже прикреплены к записи: например, резюме, логотип, медиа или документы верификации."
                                                 attachments={entityAttachments}
+                                                onOpen={handleOpenEntityAttachment}
+                                                onDelete={handleDeleteEntityAttachment}
+                                                allowDelete={canUploadAttachments}
                                                 emptyText="У этой записи пока нет файлов."
                                             />
                                         </div>

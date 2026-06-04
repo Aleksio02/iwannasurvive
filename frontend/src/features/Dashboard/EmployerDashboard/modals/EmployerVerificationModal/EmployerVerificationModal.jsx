@@ -89,9 +89,12 @@ function EmployerVerificationModal({
                                        currentVerification = null,
                                        verificationModerationTask = null,
                                        verificationAttachments = [],
+                                       pendingFiles = [],
                                        isVerificationAttachmentUploading = false,
                                        isVerificationSubmitting = false,
                                        onUploadVerificationAttachment,
+                                       onAddPendingFiles,
+                                       onRemovePendingFile,
                                        onCancelVerificationModerationTask,
                                        profileVerificationStatus = 'NOT_STARTED',
                                        onOpenAttachment,
@@ -141,8 +144,6 @@ function EmployerVerificationModal({
     const verificationStatusMeta =
         VERIFICATION_STATUS_META[verificationStatus] || VERIFICATION_STATUS_META.NOT_STARTED
 
-    const employerUserId = currentVerification?.employerUserId ?? null
-
     const persistedMethod = String(
         currentVerification?.verificationMethod ||
         verificationData?.verificationMethod ||
@@ -170,10 +171,12 @@ function EmployerVerificationModal({
     const isRevokedVerification = verificationStatus === 'REVOKED'
 
     const isReadonlyForm = isActiveVerification || isApprovedVerification
+    const shouldShowSubmitButton = canResubmitVerification && !isActiveVerification && !isApprovedVerification
 
     const canUploadAttachments =
         hasVerificationId &&
         ['PENDING', 'IN_PROGRESS', 'UNDER_REVIEW'].includes(verificationStatus)
+    const canPickAttachments = canUploadAttachments || shouldShowSubmitButton
 
     const moderationTaskLabel = hasModerationTask ? 'Создана' : 'Не создана'
 
@@ -182,8 +185,6 @@ function EmployerVerificationModal({
         hasModerationTask &&
         isActiveVerification &&
         typeof onCancelVerificationModerationTask === 'function'
-
-    const shouldShowSubmitButton = canResubmitVerification && !isActiveVerification && !isApprovedVerification
 
     const submitButtonText = useMemo(() => {
         if (isRejectedVerification || isRevokedVerification) {
@@ -245,48 +246,31 @@ function EmployerVerificationModal({
     }
 
     const handlePickAttachment = () => {
-        if (!canUploadAttachments || isVerificationAttachmentUploading) return
+        if (!canPickAttachments || isVerificationAttachmentUploading) return
         attachmentInputRef.current?.click()
     }
 
     const handleAttachmentChange = async (event) => {
-        const file = event.target.files?.[0]
-        if (!file) return
-
-        if (file.type !== 'application/pdf') {
-            alert('Можно загружать только PDF файлы')
-            event.target.value = ''
-            return
-        }
-
-        if (file.size > 20 * 1024 * 1024) {
-            alert('Размер файла не должен превышать 20 МБ')
-            event.target.value = ''
-            return
-        }
+        const files = Array.from(event.target.files || [])
+        if (!files.length) return
 
         try {
-            await onUploadVerificationAttachment?.(file)
+            if (!canUploadAttachments) {
+                onAddPendingFiles?.(files)
+                return
+            }
+
+            for (const file of files) {
+                await onUploadVerificationAttachment?.(file)
+            }
         } finally {
             event.target.value = ''
         }
     }
 
     const handleOpenAttachment = (file) => {
-        const fileData = file?.file || file
-        const fileId = fileData?.fileId || file?.fileId
-        const verificationId = file?.entityId
-        const ownerUserId = fileData?.ownerUserId
-
-        if (verificationId && fileId) {
-            const downloadUrl = `/api/employer/verifications/${verificationId}/attachments/${fileId}`
-            window.open(downloadUrl, '_blank', 'noopener,noreferrer')
-            return
-        }
-
-        if (ownerUserId && fileId) {
-            const downloadUrl = `/api/profile/employer/${ownerUserId}/files/${fileId}`
-            window.open(downloadUrl, '_blank', 'noopener,noreferrer')
+        if (typeof onOpenAttachment === 'function') {
+            onOpenAttachment(file)
             return
         }
 
@@ -294,10 +278,22 @@ function EmployerVerificationModal({
     }
 
     const handleDeleteAttachment = (file) => {
-        const fileId = file?.fileId || file?.file?.fileId || file?.id
-        if (fileId && onDeleteAttachment) {
-            onDeleteAttachment(fileId, file)
+        const attachmentId = file?.attachmentId || file?.id
+        if (attachmentId && onDeleteAttachment) {
+            onDeleteAttachment(file)
         }
+    }
+
+    const handleDeletePendingFile = (clientId) => {
+        onRemovePendingFile?.(clientId)
+    }
+
+    const handleOpenPendingFile = (pendingFile) => {
+        if (!pendingFile?.file) return
+
+        const url = URL.createObjectURL(pendingFile.file)
+        window.open(url, '_blank', 'noopener,noreferrer')
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
     }
 
     const handleOverlayMouseDown = (event) => {
@@ -332,6 +328,12 @@ function EmployerVerificationModal({
             return `att_${attachmentId}_idx_${index}`
         }
         return `temp_${fileName}_${index}`
+    }
+
+    const formatFileSize = (size) => {
+        if (typeof size !== 'number' || Number.isNaN(size)) return ''
+        if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} КБ`
+        return `${(size / (1024 * 1024)).toFixed(1)} МБ`
     }
 
     return (
@@ -619,7 +621,7 @@ function EmployerVerificationModal({
                         <div className="employer-verification-modal__section-head">
                             <label className="label">Файлы к заявке</label>
 
-                            {canUploadAttachments && (
+                            {canPickAttachments && (
                                 <button
                                     type="button"
                                     className="button button--ghost employer-verification-modal__footer-button"
@@ -635,13 +637,14 @@ function EmployerVerificationModal({
                             ref={attachmentInputRef}
                             type="file"
                             accept=".pdf,application/pdf"
+                            multiple
                             hidden
                             onChange={handleAttachmentChange}
                         />
 
                         {!hasVerificationId && verificationStatus === 'NOT_STARTED' && (
                             <div className="employer-verification-modal__helper">
-                                Сначала отправьте заявку на верификацию, затем можно будет прикрепить файлы.
+                                Прикрепите подтверждающие PDF-файлы сейчас, и они будут отправлены вместе с заявкой.
                             </div>
                         )}
 
@@ -656,6 +659,63 @@ function EmployerVerificationModal({
                             <div className="employer-verification-modal__helper">
                                 Верификация отозвана. Пройдите верификацию заново.
                                 После создания новой заявки можно будет прикрепить файлы.
+                            </div>
+                        )}
+
+                        {pendingFiles.length > 0 && (
+                            <div className="employer-verification-modal__attachments">
+                                <div className="employer-verification-modal__attachments-title">
+                                    Файлы к отправке ({pendingFiles.length}):
+                                </div>
+                                {pendingFiles.map((pendingFile, index) => {
+                                    const fileName = pendingFile?.name || `Файл ${index + 1}`
+                                    const fileSize = formatFileSize(pendingFile?.size)
+                                    const canOpenPendingFile = Boolean(pendingFile?.file)
+
+                                    return (
+                                        <div
+                                            key={pendingFile.clientId}
+                                            className="employer-verification-modal__attachment"
+                                        >
+                                            <div className="employer-verification-modal__attachment-info">
+                                                <div
+                                                    className="employer-verification-modal__attachment-name"
+                                                    onClick={() => canOpenPendingFile && handleOpenPendingFile(pendingFile)}
+                                                    onKeyDown={(event) => {
+                                                        if (!canOpenPendingFile) return
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault()
+                                                            handleOpenPendingFile(pendingFile)
+                                                        }
+                                                    }}
+                                                    style={{ cursor: canOpenPendingFile ? 'pointer' : 'default' }}
+                                                    role={canOpenPendingFile ? 'button' : undefined}
+                                                    tabIndex={canOpenPendingFile ? 0 : undefined}
+                                                >
+                                                    {fileName}
+                                                </div>
+                                                <div className="employer-verification-modal__helper">
+                                                    {fileSize ? `${fileSize} · ` : ''}Будет отправлен
+                                                </div>
+                                            </div>
+                                            <div className="employer-verification-modal__attachment-actions">
+                                                <button
+                                                    type="button"
+                                                    className="employer-verification-modal__attachment-delete"
+                                                    onClick={() => handleDeletePendingFile(pendingFile.clientId)}
+                                                    aria-label="Удалить файл из отправки"
+                                                    disabled={isVerificationSubmitting}
+                                                >
+                                                    <img
+                                                        src={TrashIcon}
+                                                        alt=""
+                                                        className="employer-verification-modal__icon"
+                                                    />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
                             </div>
                         )}
 
@@ -674,7 +734,7 @@ function EmployerVerificationModal({
                                 </div>
                                 {verificationAttachments.map((file, index) => {
                                     const attachmentKey = getAttachmentKey(file, index)
-                                    const fileId = file?.fileId || file?.file?.fileId || file?.id
+                                    const fileId = file?.fileId || file?.file?.fileId || file?.attachmentId || file?.id
                                     const fileName =
                                         file?.file?.originalFileName ||
                                         file?.originalFilename ||
@@ -683,9 +743,10 @@ function EmployerVerificationModal({
                                         file?.name ||
                                         `Файл ${index + 1}`
 
-                                    const ownerUserId = file?.file?.ownerUserId || employerUserId
-                                    const canOpen = Boolean(fileId && ownerUserId)
-                                    const canDelete = Boolean(fileId && !isDeletingAttachment && canUploadAttachments)
+                                    const attachmentVerificationId = file?.entityId || verificationId
+                                    const canOpen = Boolean(fileId && attachmentVerificationId)
+                                    const attachmentId = file?.attachmentId || file?.id
+                                    const canDelete = Boolean(attachmentId && !isDeletingAttachment && canUploadAttachments)
 
                                     return (
                                         <div
@@ -696,6 +757,13 @@ function EmployerVerificationModal({
                                                 <div
                                                     className="employer-verification-modal__attachment-name"
                                                     onClick={() => canOpen && handleOpenAttachment(file)}
+                                                    onKeyDown={(event) => {
+                                                        if (!canOpen) return
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault()
+                                                            handleOpenAttachment(file)
+                                                        }
+                                                    }}
                                                     style={{ cursor: canOpen ? 'pointer' : 'default' }}
                                                     role={canOpen ? 'button' : undefined}
                                                     tabIndex={canOpen ? 0 : undefined}
