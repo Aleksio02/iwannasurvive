@@ -3,22 +3,10 @@ import {
     toQuery,
     getSessionUserFromApi,
     getSessionUserIdFromApi,
-    getRequiredCurrentUserPayload,
     clearHttpGetCache,
 } from './http'
 
 const API_BASE = '/api/interaction'
-
-async function getCurrentUser() {
-    const user = await getSessionUserFromApi()
-    if (!user?.id || !user?.email || !user?.role) return null
-
-    return {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-    }
-}
 
 async function getRequiredUserId() {
     const userId = await getSessionUserIdFromApi()
@@ -28,21 +16,6 @@ async function getRequiredUserId() {
         throw error
     }
     return userId
-}
-
-async function getCurrentUserQueryValue() {
-    const currentUser = await getCurrentUser()
-    return currentUser ? JSON.stringify(currentUser) : null
-}
-
-async function getRequiredCurrentUser() {
-    const currentUser = JSON.stringify(await getRequiredCurrentUserPayload())
-    if (!currentUser) {
-        const error = new Error('Пользователь не авторизован')
-        error.status = 401
-        throw error
-    }
-    return currentUser
 }
 
 export async function getContacts() {
@@ -94,10 +67,9 @@ export async function getMyResponses() {
 }
 
 export async function getEmployerResponses(params = {}) {
-    const currentUser = await getCurrentUserQueryValue()
-    const user = await getSessionUserFromApi()
+    await getRequiredUserId()
 
-    const fullQuery = toQuery({
+    const query = toQuery({
         limit: params.limit ?? 20,
         offset: params.offset ?? 0,
         sortBy: params.sortBy || 'CREATED_AT',
@@ -105,31 +77,9 @@ export async function getEmployerResponses(params = {}) {
         opportunityId: params.opportunityId,
         status: params.status,
         search: params.search,
-        currentUser,
     })
 
-    try {
-        return await httpJson(`/api/employer/responses${fullQuery ? `?${fullQuery}` : ''}`)
-    } catch (error) {
-        console.warn('[interaction] employer responses with currentUser failed, retrying with currentUserId:', error)
-
-        if (!user?.id) {
-            throw error
-        }
-
-        const fallbackQuery = toQuery({
-            limit: params.limit ?? 20,
-            offset: params.offset ?? 0,
-            sortBy: params.sortBy || 'CREATED_AT',
-            sortDirection: params.sortDirection || 'DESC',
-            opportunityId: params.opportunityId,
-            status: params.status,
-            search: params.search,
-            currentUserId: user.id,
-        })
-
-        return httpJson(`/api/employer/responses${fallbackQuery ? `?${fallbackQuery}` : ''}`)
-    }
+    return httpJson(`/api/employer/responses${query ? `?${query}` : ''}`)
 }
 
 export async function createResponse(opportunityId, applicantComment = '', coverLetter = '') {
