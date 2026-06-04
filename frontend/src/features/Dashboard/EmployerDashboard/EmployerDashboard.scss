@@ -1095,6 +1095,35 @@ $section-title-size: 19px;
 
   .input {
     min-width: 280px;
+
+    &::placeholder {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .employer-opportunities__filters {
+    .input {
+      min-width: 0;
+      width: 100%;
+
+      &::placeholder {
+        white-space: normal;
+        word-break: break-word;
+        font-size: 13px;
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .employer-opportunities__filters {
+    .input::placeholder {
+      font-size: 12px;
+    }
   }
 }
 
