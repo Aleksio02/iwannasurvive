@@ -2,13 +2,18 @@ package ru.itplanet.trampline.profile.service
 
 import org.springframework.stereotype.Service
 import ru.itplanet.trampline.commons.model.Role
-import ru.itplanet.trampline.profile.exception.ProfileNotFoundException
+import ru.itplanet.trampline.profile.dao.ApplicantProfileDao
+import ru.itplanet.trampline.profile.dao.ApplicantTagDao
+import ru.itplanet.trampline.profile.dao.EmployerProfileDao
 import ru.itplanet.trampline.profile.model.ProfileOnboardingStatus
+import ru.itplanet.trampline.profile.model.enums.ApplicantTagRelationType
 import ru.itplanet.trampline.profile.security.AuthenticatedUser
 
 @Service
 class ProfileOnboardingStatusService(
-    private val profileService: ProfileService,
+    private val applicantProfileDao: ApplicantProfileDao,
+    private val applicantTagDao: ApplicantTagDao,
+    private val employerProfileDao: EmployerProfileDao,
     private val onboardingPolicy: ProfileOnboardingPolicy,
 ) {
 
@@ -28,16 +33,19 @@ class ProfileOnboardingStatusService(
     }
 
     private fun applicantStatus(currentUser: AuthenticatedUser): ProfileOnboardingStatus {
-        val profile = try {
-            profileService.getApplicantProfile(currentUser.userId, currentUser.userId)
-        } catch (_: ProfileNotFoundException) {
-            null
-        }
+        val profile = applicantProfileDao.findById(currentUser.userId).orElse(null)
+        val missingFields = mutableListOf<String>()
+        val issues = mutableListOf<String>()
 
-        val missingFields = profile?.let(onboardingPolicy::applicantMissingFields)
-            ?: listOf("firstName", "lastName", "universityName", "city", "courseOrGraduationYear", "professionalSignal")
-        val issues = profile?.let(onboardingPolicy::applicantIssues)
-            ?: listOf("заполните профиль соискателя")
+        if (profile == null) {
+            missingFields += listOf("firstName", "lastName", "universityName", "city", "courseOrGraduationYear", "professionalSignal")
+            issues += "заполните профиль соискателя"
+        } else {
+            val hasSkillTag = applicantTagDao.findAllByApplicantUserId(currentUser.userId)
+                .any { it.relationType == ApplicantTagRelationType.SKILL }
+            missingFields += onboardingPolicy.applicantMissingFields(profile, hasSkillTag)
+            issues += onboardingPolicy.applicantIssues(profile, hasSkillTag)
+        }
 
         return ProfileOnboardingStatus(
             role = currentUser.role,
@@ -49,16 +57,17 @@ class ProfileOnboardingStatusService(
     }
 
     private fun employerStatus(currentUser: AuthenticatedUser): ProfileOnboardingStatus {
-        val profile = try {
-            profileService.getEmployerProfile(currentUser.userId, currentUser.userId)
-        } catch (_: ProfileNotFoundException) {
-            null
-        }
+        val profile = employerProfileDao.findById(currentUser.userId).orElse(null)
+        val missingFields = mutableListOf<String>()
+        val issues = mutableListOf<String>()
 
-        val missingFields = profile?.let(onboardingPolicy::employerMissingFields)
-            ?: listOf("companyName", "legalName", "inn", "industry", "description", "cityOrLocation", "publicChannel")
-        val issues = profile?.let(onboardingPolicy::employerIssues)
-            ?: listOf("заполните профиль компании")
+        if (profile == null) {
+            missingFields += listOf("companyName", "legalName", "inn", "industry", "description", "cityOrLocation", "publicChannel")
+            issues += "заполните профиль компании"
+        } else {
+            missingFields += onboardingPolicy.employerMissingFields(profile)
+            issues += onboardingPolicy.employerIssues(profile)
+        }
 
         return ProfileOnboardingStatus(
             role = currentUser.role,

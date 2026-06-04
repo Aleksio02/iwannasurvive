@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import {
+    getProfileOnboardingIncompleteHint,
     getProfileOnboardingStatus,
     invalidateProfileOnboardingStatusCache,
 } from '@/shared/api/profile'
@@ -78,6 +79,16 @@ function ProfileOnboardingGuard({ children }) {
             }
         }
 
+        const incompleteHint = getProfileOnboardingIncompleteHint(user)
+        if (incompleteHint) {
+            const returnTo = normalizeReturnTo(currentPath, user?.role)
+            const target = `${incompleteHint.requiredPath || '/profile/edit'}?returnTo=${encodeURIComponent(returnTo)}`
+            navigate(target)
+            return () => {
+                isCancelled = true
+            }
+        }
+
         const checkingTimer = window.setTimeout(() => {
             if (!isCancelled) {
                 setIsChecking(true)
@@ -115,7 +126,7 @@ function ProfileOnboardingGuard({ children }) {
             isCancelled = true
             window.clearTimeout(checkingTimer)
         }
-    }, [currentPath, isAllowedCurrentPath, navigate, shouldCheck, user?.role])
+    }, [currentPath, isAllowedCurrentPath, navigate, shouldCheck, user])
 
     if (isChecking || (redirectPath && !isAllowedCurrentPath)) {
         return (

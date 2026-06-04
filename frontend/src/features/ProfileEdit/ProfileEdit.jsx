@@ -1011,7 +1011,7 @@ function ProfileEdit() {
         return () => document.documentElement.classList.remove('is-lock')
     }, [isLocationModalOpen])
 
-    if (isLoading || isProfileLoading) {
+    if (isLoading) {
         return (
             <div className="profile-edit">
                 <Card className="profile-edit__card">
@@ -1477,6 +1477,12 @@ function ProfileEdit() {
 
                 <CardContent>
                     <form className="profile-edit-form" onSubmit={handleSubmit}>
+                        {isProfileLoading && (
+                            <p className="field-hint">
+                                Загружаем сохранённые данные профиля...
+                            </p>
+                        )}
+
                         {isEmployer ? (
                             <>
                                 <div className="profile-edit-form__grid-2">
@@ -1976,9 +1982,11 @@ function ProfileEdit() {
                         )}
 
                         <div className="profile-edit-form__actions">
-                            <Button type="submit" disabled={isSubmitting}>
+                            <Button type="submit" disabled={isSubmitting || isProfileLoading}>
                                 {isSubmitting
                                     ? 'Сохранение...'
+                                    : isProfileLoading
+                                        ? 'Загрузка профиля...'
                                     : isEmployer
                                         ? 'Сохранить и перейти в кабинет'
                                         : 'Сохранить профиль'}

@@ -62,6 +62,7 @@ let applicantProfileCacheUserId = null
 let profileOnboardingStatusCache = null
 let profileOnboardingStatusCacheUserId = null
 let profileOnboardingStatusInFlight = null
+const PROFILE_ONBOARDING_INCOMPLETE_HINT_KEY = 'tramplin_profile_onboarding_incomplete_hint'
 const APPLICANT_PROFILE_CACHE_TTL_MS = 30_000
 const GEO_CITY_SEARCH_CACHE_TTL_MS = 2 * 60_000
 const GEO_ADDRESS_SUGGEST_CACHE_TTL_MS = 60_000
@@ -89,6 +90,11 @@ export function invalidateProfileOnboardingStatusCache() {
     profileOnboardingStatusCache = null
     profileOnboardingStatusCacheUserId = null
     profileOnboardingStatusInFlight = null
+    try {
+        sessionStorage.removeItem(PROFILE_ONBOARDING_INCOMPLETE_HINT_KEY)
+    } catch {
+        // sessionStorage may be unavailable in private contexts.
+    }
 }
 
 async function parseApiResponse(response) {
@@ -178,6 +184,47 @@ function normalizeProfileOnboardingStatus(data = {}) {
     }
 }
 
+function getOnboardingUserKey(user) {
+    const userId = user?.userId ?? user?.id ?? null
+    const role = user?.role || ''
+    return userId ? `${userId}:${role}` : ''
+}
+
+function storeProfileOnboardingIncompleteHint(user, status) {
+    try {
+        if (!status || status.completed !== false) {
+            sessionStorage.removeItem(PROFILE_ONBOARDING_INCOMPLETE_HINT_KEY)
+            return
+        }
+
+        sessionStorage.setItem(
+            PROFILE_ONBOARDING_INCOMPLETE_HINT_KEY,
+            JSON.stringify({
+                userKey: getOnboardingUserKey(user),
+                status,
+                createdAt: Date.now(),
+            })
+        )
+    } catch {
+        // The hint only optimizes redirect speed; backend status remains authoritative.
+    }
+}
+
+export function getProfileOnboardingIncompleteHint(user) {
+    try {
+        const raw = sessionStorage.getItem(PROFILE_ONBOARDING_INCOMPLETE_HINT_KEY)
+        if (!raw) return null
+
+        const parsed = JSON.parse(raw)
+        if (parsed?.userKey !== getOnboardingUserKey(user)) return null
+
+        const status = normalizeProfileOnboardingStatus(parsed?.status)
+        return status.completed === false ? status : null
+    } catch {
+        return null
+    }
+}
+
 export async function getProfileOnboardingStatus(options = {}) {
     const currentUser = await getAuthenticatedUserPayload()
     const currentUserId = currentUser?.userId ?? currentUser?.id ?? null
@@ -187,6 +234,7 @@ export async function getProfileOnboardingStatus(options = {}) {
         profileOnboardingStatusCache &&
         profileOnboardingStatusCacheUserId === currentUserId
     ) {
+        storeProfileOnboardingIncompleteHint(currentUser, profileOnboardingStatusCache)
         return profileOnboardingStatusCache
     }
 
@@ -203,6 +251,7 @@ export async function getProfileOnboardingStatus(options = {}) {
     profileOnboardingStatusInFlight = apiRequest(`${API_BASE}/profile/onboarding/status?currentUser=${encodedUser}`)
         .then((data) => {
             profileOnboardingStatusCache = normalizeProfileOnboardingStatus(data)
+            storeProfileOnboardingIncompleteHint(currentUser, profileOnboardingStatusCache)
             return profileOnboardingStatusCache
         })
         .finally(() => {
