@@ -219,7 +219,7 @@
     word-break: break-word !important;
     line-height: 1.4 !important;
     padding: 14px !important;
-    font-size: 15px !important;
+    font-size: 14px !important;
   }
 
   .custom-select__button {
@@ -228,7 +228,7 @@
   }
 
   .custom-select__text {
-    font-size: 15px !important;
+    font-size: 14px !important;
   }
 }
 
@@ -241,6 +241,10 @@
 
   .custom-select__item {
     padding: 12px !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
+  }
+
+  .custom-select__text {
+    font-size: 13px !important;
   }
 }
