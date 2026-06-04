@@ -2593,7 +2593,7 @@ function EmployerDashboard() {
     }
 
     const handleOpenVerificationAttachment = async (attachment) => {
-        const fileId = attachment?.fileId || attachment?.file?.fileId || attachment?.id
+        const fileId = attachment?.fileId || attachment?.file?.fileId || attachment?.attachmentId || attachment?.id
         const verificationId = attachment?.entityId || currentVerification?.id
 
         if (!verificationId || !fileId) {

@@ -1679,7 +1679,7 @@ export function getVerificationAttachmentDownloadUrl(employerUserId, fileId) {
 }
 
 export async function openVerificationAttachment(attachment) {
-    const fileId = attachment?.fileId || attachment?.file?.fileId || attachment?.id
+    const fileId = attachment?.fileId || attachment?.file?.fileId || attachment?.attachmentId || attachment?.id
     const verificationId = attachment?.entityId || attachment?.verificationId
 
     if (verificationId && fileId) {

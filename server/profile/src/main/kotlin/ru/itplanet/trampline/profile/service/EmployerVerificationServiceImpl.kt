@@ -327,7 +327,7 @@ class EmployerVerificationServiceImpl(
         ) {
             loadVerificationAttachments(requireNotNull(verification.id))
         }.firstOrNull { currentAttachment ->
-            currentAttachment.fileId == fileId &&
+            (currentAttachment.fileId == fileId || currentAttachment.attachmentId == fileId) &&
                 currentAttachment.entityType == FileAttachmentEntityType.EMPLOYER_VERIFICATION &&
                 currentAttachment.entityId == verificationId &&
                 currentAttachment.attachmentRole == FileAttachmentRole.VERIFICATION
