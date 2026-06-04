@@ -2,9 +2,18 @@ import { Link, useLocation } from 'wouter'
 import { useState, useEffect, useRef } from 'react'
 import brandMark from '@/assets/icons/brand-mark.png'
 import { getCurrentUserInfo, logoutUser } from '@/shared/api/auth'
-import { getApplicantProfile, getEmployerProfile } from '@/shared/api/profile'
+import {
+    getApplicantProfile,
+    getEmployerProfile,
+    getProfileOnboardingCachedStatus,
+    getProfileOnboardingStatus,
+} from '@/shared/api/profile'
 import { getChatDialogs } from '@/shared/api/chats'
 import { useChatRealtime } from '@/features/Chats/useChatRealtime'
+import {
+    isOnboardingRole,
+    isPublicGuestPath,
+} from '@/shared/lib/utils/onboardingRoutes'
 import {
     clearSessionUser,
     getSessionUser,
@@ -18,6 +27,12 @@ function Navbar() {
     const [user, setUser] = useState(getSessionUser())
     const [displayName, setDisplayName] = useState('')
     const [isCheckingSession, setIsCheckingSession] = useState(!!getSessionUser())
+    const [onboardingStatus, setOnboardingStatus] = useState(() => {
+        const localUser = getSessionUser()
+        return isOnboardingRole(localUser?.role)
+            ? getProfileOnboardingCachedStatus(localUser)
+            : null
+    })
     const [unreadChatCount, setUnreadChatCount] = useState(0)
     const { eventVersion } = useChatRealtime()
     const lastUnreadRefreshAtRef = useRef(0)
@@ -28,6 +43,23 @@ function Navbar() {
         if (!localUser) {
             setUser(null)
             setDisplayName('')
+            setOnboardingStatus(null)
+            setIsCheckingSession(false)
+            return
+        }
+
+        const cachedStatus = isOnboardingRole(localUser?.role)
+            ? getProfileOnboardingCachedStatus(localUser)
+            : null
+
+        if (
+            isPublicGuestPath(location) &&
+            isOnboardingRole(localUser?.role) &&
+            cachedStatus?.completed !== true
+        ) {
+            setUser(localUser)
+            setDisplayName('')
+            setOnboardingStatus(cachedStatus)
             setIsCheckingSession(false)
             return
         }
@@ -42,6 +74,7 @@ function Navbar() {
                 clearSessionUser()
                 setUser(null)
                 setDisplayName('')
+                setOnboardingStatus(null)
                 return
             }
 
@@ -83,6 +116,7 @@ function Navbar() {
             clearSessionUser()
             setUser(null)
             setDisplayName('')
+            setOnboardingStatus(null)
         } finally {
             setIsCheckingSession(false)
         }
@@ -121,6 +155,11 @@ function Navbar() {
 
         const unsubscribeSession = subscribeSessionChange((nextUser) => {
             setUser(nextUser)
+            setOnboardingStatus(
+                isOnboardingRole(nextUser?.role)
+                    ? getProfileOnboardingCachedStatus(nextUser)
+                    : null
+            )
 
             if (!nextUser) {
                 setDisplayName('')
@@ -137,7 +176,39 @@ function Navbar() {
     }, [])
 
     useEffect(() => {
-        if (!['APPLICANT', 'EMPLOYER'].includes(user?.role)) {
+        if (!isOnboardingRole(user?.role)) {
+            setOnboardingStatus(null)
+            return undefined
+        }
+
+        let isCancelled = false
+        const cachedStatus = getProfileOnboardingCachedStatus(user)
+        setOnboardingStatus(cachedStatus)
+
+        getProfileOnboardingStatus()
+            .then((status) => {
+                if (!isCancelled) {
+                    setOnboardingStatus(status)
+                }
+            })
+            .catch(() => {
+                if (!isCancelled) {
+                    setOnboardingStatus(cachedStatus)
+                }
+            })
+
+        return () => {
+            isCancelled = true
+        }
+    }, [user?.id, user?.role])
+
+    const isGuestMode = isPublicGuestPath(location) &&
+        isOnboardingRole(user?.role) &&
+        onboardingStatus?.completed !== true
+    const visibleUser = isGuestMode ? null : user
+
+    useEffect(() => {
+        if (!['APPLICANT', 'EMPLOYER'].includes(visibleUser?.role)) {
             setUnreadChatCount(0)
             return
         }
@@ -173,7 +244,7 @@ function Navbar() {
             isActive = false
             if (refreshTimer) clearTimeout(refreshTimer)
         }
-    }, [eventVersion, user?.id, user?.role])
+    }, [eventVersion, visibleUser?.id, visibleUser?.role])
 
     const handleLogout = async () => {
         setUser(null)
@@ -193,8 +264,8 @@ function Navbar() {
     const isChatsActive = location.startsWith('/chats')
 
     const getDashboardLink = () => {
-        if (user?.role === 'EMPLOYER') return '/employer'
-        if (user?.role === 'CURATOR' || user?.role === 'ADMIN') return '/curator'
+        if (visibleUser?.role === 'EMPLOYER') return '/employer'
+        if (visibleUser?.role === 'CURATOR' || visibleUser?.role === 'ADMIN') return '/curator'
         return '/seeker'
     }
 
@@ -203,8 +274,8 @@ function Navbar() {
             return displayName
         }
 
-        const firstName = user?.firstName || ''
-        const lastName = user?.lastName || ''
+        const firstName = visibleUser?.firstName || ''
+        const lastName = visibleUser?.lastName || ''
 
         if (lastName && firstName) {
             return `${lastName} ${firstName}`
@@ -212,7 +283,7 @@ function Navbar() {
         if (lastName) return lastName
         if (firstName) return firstName
 
-        return user?.displayName || user?.email?.split('@')[0] || 'Пользователь'
+        return visibleUser?.displayName || visibleUser?.email?.split('@')[0] || 'Пользователь'
     }
 
     return (
@@ -228,7 +299,7 @@ function Navbar() {
                         Главная
                     </Link>
 
-                    {user ? (
+                    {visibleUser ? (
                         <>
                             <Link
                                 href={getDashboardLink()}
@@ -237,7 +308,7 @@ function Navbar() {
                                 Личный кабинет
                             </Link>
 
-                            {['APPLICANT', 'EMPLOYER'].includes(user.role) && (
+                            {['APPLICANT', 'EMPLOYER'].includes(visibleUser.role) && (
                                 <Link
                                     href="/chats"
                                     className={`navbar__link navbar__chat-link ${isChatsActive ? 'is-active' : ''}`}

@@ -40,6 +40,7 @@ import {
     clearSessionUserCache,
     httpJson,
 } from './http'
+import { getSessionUser } from '@/shared/lib/utils/sessionStore'
 import { translateStatusTokensInText } from '@/shared/lib/utils/statusLabels'
 import {
     detectContactMethodType,
@@ -59,6 +60,11 @@ let applicantProfileCache = null
 let applicantProfileCacheAt = 0
 let applicantProfileInFlight = null
 let applicantProfileCacheUserId = null
+let profileOnboardingStatusCache = null
+let profileOnboardingStatusCacheUserId = null
+let profileOnboardingStatusInFlight = null
+const PROFILE_ONBOARDING_STATUS_CACHE_KEY = 'tramplin_profile_onboarding_status'
+const PROFILE_ONBOARDING_STATUS_SESSION_TTL_MS = 60_000
 const APPLICANT_PROFILE_CACHE_TTL_MS = 30_000
 const GEO_CITY_SEARCH_CACHE_TTL_MS = 2 * 60_000
 const GEO_ADDRESS_SUGGEST_CACHE_TTL_MS = 60_000
@@ -80,6 +86,17 @@ function setApplicantProfileCache(profile, userId = applicantProfileCacheUserId)
     applicantProfileInFlight = null
     applicantProfileCacheUserId = userId || null
     return applicantProfileCache
+}
+
+export function invalidateProfileOnboardingStatusCache() {
+    profileOnboardingStatusCache = null
+    profileOnboardingStatusCacheUserId = null
+    profileOnboardingStatusInFlight = null
+    try {
+        sessionStorage.removeItem(PROFILE_ONBOARDING_STATUS_CACHE_KEY)
+    } catch {
+        // sessionStorage may be unavailable in private contexts.
+    }
 }
 
 async function parseApiResponse(response) {
@@ -109,6 +126,15 @@ export async function getCurrentSessionUser(options = {}) {
 }
 
 async function getAuthenticatedUserPayload() {
+    const localUser = getSessionUser()
+    if (localUser?.id && localUser?.email && localUser?.role) {
+        return {
+            userId: localUser.id,
+            email: localUser.email,
+            role: localUser.role,
+        }
+    }
+
     return getRequiredCurrentUserPayload()
 }
 
@@ -157,6 +183,95 @@ export async function apiRequest(url, options = {}) {
     }
 
     return response.text()
+}
+
+function normalizeProfileOnboardingStatus(data = {}) {
+    return {
+        role: data?.role || null,
+        completed: Boolean(data?.completed),
+        requiredPath: data?.requiredPath || '/profile/edit',
+        missingFields: Array.isArray(data?.missingFields) ? data.missingFields : [],
+        issues: Array.isArray(data?.issues) ? data.issues : [],
+    }
+}
+
+function getOnboardingUserKey(user) {
+    const userId = user?.userId ?? user?.id ?? null
+    const role = user?.role || ''
+    return userId ? `${userId}:${role}` : ''
+}
+
+export function storeProfileOnboardingStatusCache(user, status) {
+    try {
+        if (!status) {
+            sessionStorage.removeItem(PROFILE_ONBOARDING_STATUS_CACHE_KEY)
+            return
+        }
+
+        sessionStorage.setItem(
+            PROFILE_ONBOARDING_STATUS_CACHE_KEY,
+            JSON.stringify({
+                userKey: getOnboardingUserKey(user),
+                status,
+                createdAt: Date.now(),
+            })
+        )
+    } catch {
+        // The cache only optimizes route responsiveness; backend status remains authoritative.
+    }
+}
+
+export function getProfileOnboardingCachedStatus(user) {
+    try {
+        const raw = sessionStorage.getItem(PROFILE_ONBOARDING_STATUS_CACHE_KEY)
+        if (!raw) return null
+
+        const parsed = JSON.parse(raw)
+        if (parsed?.userKey !== getOnboardingUserKey(user)) return null
+        if (!parsed?.createdAt || Date.now() - parsed.createdAt > PROFILE_ONBOARDING_STATUS_SESSION_TTL_MS) {
+            sessionStorage.removeItem(PROFILE_ONBOARDING_STATUS_CACHE_KEY)
+            return null
+        }
+
+        return normalizeProfileOnboardingStatus(parsed?.status)
+    } catch {
+        return null
+    }
+}
+
+export async function getProfileOnboardingStatus(options = {}) {
+    const currentUser = await getAuthenticatedUserPayload()
+    const currentUserId = currentUser?.userId ?? currentUser?.id ?? null
+
+    if (
+        !options.force &&
+        profileOnboardingStatusCache &&
+        profileOnboardingStatusCacheUserId === currentUserId
+    ) {
+        storeProfileOnboardingStatusCache(currentUser, profileOnboardingStatusCache)
+        return profileOnboardingStatusCache
+    }
+
+    if (
+        !options.force &&
+        profileOnboardingStatusInFlight &&
+        profileOnboardingStatusCacheUserId === currentUserId
+    ) {
+        return profileOnboardingStatusInFlight
+    }
+
+    profileOnboardingStatusCacheUserId = currentUserId
+    profileOnboardingStatusInFlight = apiRequest(`${API_BASE}/profile/onboarding/status`)
+        .then((data) => {
+            profileOnboardingStatusCache = normalizeProfileOnboardingStatus(data)
+            storeProfileOnboardingStatusCache(currentUser, profileOnboardingStatusCache)
+            return profileOnboardingStatusCache
+        })
+        .finally(() => {
+            profileOnboardingStatusInFlight = null
+        })
+
+    return profileOnboardingStatusInFlight
 }
 
 async function multipartRequest(endpoint, formData, options = {}) {
@@ -1052,6 +1167,7 @@ export async function updateApplicantProfile(profile) {
         body: JSON.stringify(payload),
     })
 
+    invalidateProfileOnboardingStatusCache()
     return setApplicantProfileCache(normalizeApplicantProfile(data))
 }
 
@@ -1111,6 +1227,7 @@ export async function updateEmployerProfile(profile) {
         body: JSON.stringify(payload),
     })
 
+    invalidateProfileOnboardingStatusCache()
     return normalizeEmployerProfile(data)
 }
 
@@ -1127,6 +1244,7 @@ export async function updateEmployerCompanyData(companyData) {
         body: JSON.stringify(payload),
     })
 
+    invalidateProfileOnboardingStatusCache()
     return normalizeEmployerProfile(data)
 }
 
@@ -1593,7 +1711,23 @@ export async function submitApplicantProfileForModeration() {
         method: 'POST',
     })
 
+    invalidateProfileOnboardingStatusCache()
     return normalizeApplicantProfile(data)
+}
+
+export async function completeApplicantOnboarding(profile) {
+    const saved = await updateApplicantProfile(profile)
+
+    try {
+        await submitApplicantProfileForModeration()
+    } catch (error) {
+        if (error?.status !== 409) {
+            throw error
+        }
+    }
+
+    invalidateProfileOnboardingStatusCache()
+    return saved
 }
 
 export async function getEmployerProfileWorkspace(userId) {
@@ -1603,15 +1737,26 @@ export async function getEmployerProfileWorkspace(userId) {
 }
 
 export async function completeEmployerOnboarding({
-                                                     companyData,
-                                                     publicProfile,
-                                                     verification,
-                                                 }) {
-    await updateEmployerCompanyData(companyData)
+    companyData,
+    publicProfile,
+    verification,
+}) {
     await updateEmployerProfile(publicProfile)
+    await updateEmployerCompanyData(companyData)
 
     if (verification) {
-        await submitVerification(verification)
+        try {
+            await submitVerification(verification)
+        } catch (error) {
+            const code = String(error?.code || '').toLowerCase()
+            if (
+                error?.status !== 409 &&
+                code !== 'employer_verification_already_exists' &&
+                code !== 'verification_already_exists'
+            ) {
+                throw error
+            }
+        }
     }
 
     try {
@@ -1621,6 +1766,8 @@ export async function completeEmployerOnboarding({
             throw error
         }
     }
+
+    invalidateProfileOnboardingStatusCache()
 
     const userId = await getSessionUserIdFromApi()
     if (!userId) {

@@ -973,6 +973,27 @@ function EmployerDashboard() {
             nextErrors.locationId = 'Для офисного или гибридного формата выберите офис'
         }
 
+        const salaryFrom = opportunityForm.salaryFrom !== '' ? Number(opportunityForm.salaryFrom) : null
+        const salaryTo = opportunityForm.salaryTo !== '' ? Number(opportunityForm.salaryTo) : null
+
+        if (salaryFrom !== null && (!Number.isFinite(salaryFrom) || salaryFrom < 0)) {
+            nextErrors.salaryFrom = 'Зарплата не может быть меньше 0'
+        }
+
+        if (salaryTo !== null && (!Number.isFinite(salaryTo) || salaryTo < 0)) {
+            nextErrors.salaryTo = 'Зарплата не может быть меньше 0'
+        }
+
+        if (
+            salaryFrom !== null &&
+            salaryTo !== null &&
+            Number.isFinite(salaryFrom) &&
+            Number.isFinite(salaryTo) &&
+            salaryFrom > salaryTo
+        ) {
+            nextErrors.salaryTo = 'Зарплата до должна быть не меньше зарплаты от'
+        }
+
         setErrors(nextErrors)
         return Object.keys(nextErrors).length === 0
     }

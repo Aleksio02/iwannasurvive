@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
 import { getCurrentUserInfo } from '@/shared/api/auth'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
@@ -6,7 +6,12 @@ import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessi
 function ProtectedRoute({ children, allowedRoles = [] }) {
     const [, navigate] = useLocation()
     const [user, setUser] = useState(getSessionUser())
-    const [isChecking, setIsChecking] = useState(!!getSessionUser())
+    const [isChecking, setIsChecking] = useState(!getSessionUser())
+    const allowedRoleKey = useMemo(() => allowedRoles.join('|'), [allowedRoles])
+    const normalizedAllowedRoles = useMemo(
+        () => allowedRoleKey.split('|').filter(Boolean),
+        [allowedRoleKey]
+    )
 
     useEffect(() => {
         const unsubscribe = subscribeSessionChange((nextUser) => {
@@ -26,6 +31,14 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
                 return
             }
 
+            setUser(localUser)
+            setIsChecking(false)
+
+            if (normalizedAllowedRoles.length > 0 && !normalizedAllowedRoles.includes(localUser.role)) {
+                navigate('/')
+                return
+            }
+
             try {
                 const session = await getCurrentUserInfo()
                 const nextUser = session?.user || session || null
@@ -38,7 +51,7 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
 
                 setUser(nextUser)
 
-                if (allowedRoles.length > 0 && !allowedRoles.includes(nextUser.role)) {
+                if (normalizedAllowedRoles.length > 0 && !normalizedAllowedRoles.includes(nextUser.role)) {
                     navigate('/')
                 }
             } catch {
@@ -52,11 +65,11 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
         checkSession()
 
         return unsubscribe
-    }, [navigate, allowedRoles])
+    }, [navigate, normalizedAllowedRoles])
 
     if (isChecking) return null
     if (!user) return null
-    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) return null
+    if (normalizedAllowedRoles.length > 0 && !normalizedAllowedRoles.includes(user.role)) return null
 
     return children
 }

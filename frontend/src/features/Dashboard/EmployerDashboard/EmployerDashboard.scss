@@ -1452,6 +1452,55 @@ $section-title-size: 19px;
   flex-shrink: 0;
 }
 
+.employer-create-form__salary-input {
+  appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+}
+
+.employer-create-form__tag-picker {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.employer-create-form__selected-tags,
+.employer-create-form__tag-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.employer-create-form__selected-tags {
+  min-height: 38px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid $gray-200;
+  border-radius: 12px;
+  background: #fbfcfe;
+
+  .field-hint {
+    margin: 0;
+  }
+
+  .skill-tag {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+}
+
+.employer-create-form__tag-suggestions {
+  .field-hint {
+    margin: 0;
+  }
+}
+
 .employer-create-form__ai-description-card {
   display: grid;
   gap: 12px;
