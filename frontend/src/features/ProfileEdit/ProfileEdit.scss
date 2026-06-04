@@ -822,3 +822,41 @@ html, body, #root {
     font-size: 9px;
   }
 }
+
+// Убери ограничения z-index у родительских элементов
+.profile-edit-form {
+  position: relative;
+  z-index: auto; // или убери вообще
+}
+
+.profile-edit__card {
+  overflow: visible !important; // важно!
+}
+
+.card-content {
+  overflow: visible !important;
+}
+
+// Для всех автокомплитов на странице
+.autocomplete {
+  position: relative;
+  z-index: 100;
+}
+
+.autocomplete__list {
+  z-index: 10000 !important;
+}
+
+// Чтобы модалка не перекрывала
+.modal-overlay {
+  z-index: 1000;
+}
+
+.modal {
+  z-index: 1001;
+  overflow: visible !important;
+}
+
+.modal .autocomplete__list {
+  z-index: 10002 !important;
+}
