@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Input from '@/shared/ui/Input'
 import Label from '@/shared/ui/Label'
 import Button from '@/shared/ui/Button'
@@ -17,7 +17,6 @@ const CuratorCreateTagForm = ({ onCreate, onCancel, isLoading }) => {
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onCancel?.()
     }
-
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onCancel])
