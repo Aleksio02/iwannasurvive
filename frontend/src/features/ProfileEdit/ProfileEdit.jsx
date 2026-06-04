@@ -44,13 +44,21 @@ import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
 import ApplicantTagsEditor from './components/ApplicantTagsEditor'
+import ApplicantPrivacyPreview from './components/ApplicantPrivacyPreview'
 import './ProfileEdit.scss'
 
 const LinksEditor = lazy(() => import('@/shared/ui/LinksEditor'))
 
-const VISIBILITY_OPTIONS = [
+const PROFILE_VISIBILITY_OPTIONS = [
     { value: 'PUBLIC', label: 'Публично' },
     { value: 'AUTHENTICATED', label: 'Только зарегистрированным' },
+    { value: 'PRIVATE', label: 'Только мне' },
+]
+
+const AUDIENCE_VISIBILITY_OPTIONS = [
+    { value: 'PUBLIC', label: 'Публично' },
+    { value: 'AUTHENTICATED', label: 'Только зарегистрированным' },
+    { value: 'CONTACTS_ONLY', label: 'Только контактам' },
     { value: 'PRIVATE', label: 'Только мне' },
 ]
 
@@ -1854,27 +1862,34 @@ function ProfileEdit() {
                                                 label="Видимость профиля"
                                                 value={profileVisibility}
                                                 onChange={setProfileVisibility}
-                                                options={VISIBILITY_OPTIONS}
+                                                options={PROFILE_VISIBILITY_OPTIONS}
                                             />
                                             <CustomSelect
                                                 label="Видимость резюме"
                                                 value={resumeVisibility}
                                                 onChange={setResumeVisibility}
-                                                options={VISIBILITY_OPTIONS}
+                                                options={AUDIENCE_VISIBILITY_OPTIONS}
                                             />
                                             <CustomSelect
                                                 label="Видимость откликов"
                                                 value={applicationsVisibility}
                                                 onChange={setApplicationsVisibility}
-                                                options={VISIBILITY_OPTIONS}
+                                                options={AUDIENCE_VISIBILITY_OPTIONS}
                                             />
                                             <CustomSelect
                                                 label="Видимость контактов"
                                                 value={contactsVisibility}
                                                 onChange={setContactsVisibility}
-                                                options={VISIBILITY_OPTIONS}
+                                                options={AUDIENCE_VISIBILITY_OPTIONS}
                                             />
                                         </div>
+
+                                        <ApplicantPrivacyPreview
+                                            profileVisibility={profileVisibility}
+                                            resumeVisibility={resumeVisibility}
+                                            applicationsVisibility={applicationsVisibility}
+                                            contactsVisibility={contactsVisibility}
+                                        />
 
                                         <div className="profile-edit-form__checkboxes">
                                             <CustomCheckbox
