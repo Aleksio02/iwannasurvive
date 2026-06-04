@@ -11,7 +11,6 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
   const [category, setCategory] = useState('TECH')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const overlayMouseDownStartedOutsideRef = useRef(false)
   const isBusy = isLoading || submitting
 
   useEffect(() => {
@@ -51,25 +50,9 @@ const CreateTagForm = ({ onCreate, onCancel, isLoading }) => {
     }
   }
 
-  const handleOverlayMouseDown = (event) => {
-    overlayMouseDownStartedOutsideRef.current = event.target === event.currentTarget
-  }
-
-  const handleOverlayMouseUp = (event) => {
-    const endedOutside = event.target === event.currentTarget
-    if (overlayMouseDownStartedOutsideRef.current && endedOutside) {
-      onCancel?.()
-    }
-    overlayMouseDownStartedOutsideRef.current = false
-  }
-
   return (
-      <div
-          className={styles.overlay}
-          onMouseDown={handleOverlayMouseDown}
-          onMouseUp={handleOverlayMouseUp}
-      >
-        <div className={styles.formContainer} onMouseDown={(e) => e.stopPropagation()}>
+      <div className={styles.overlay}>
+        <div className={styles.formContainer}>
           <button
               type="button"
               className={styles.closeButton}
