@@ -14,6 +14,8 @@ import {
     removeGuestFavoriteOpportunity,
     isGuestFavoriteOpportunity,
     migrateGuestFavoritesToAccount,
+    getProfileOnboardingCachedStatus,
+    getProfileOnboardingStatus,
 } from '@/shared/api/profile'
 import {
     addEmployerToSaved,
@@ -22,6 +24,7 @@ import {
 } from '@/shared/api/favorites'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
 import { isOpportunityFavoriteLocally } from '@/shared/lib/utils/favoriteStorage'
+import { isOnboardingRole } from '@/shared/lib/utils/onboardingRoutes'
 import { isEmployerVerified } from '@/shared/lib/utils/employerVerification'
 import VerifiedCompanyBadge from '@/shared/ui/VerifiedCompanyBadge/VerifiedCompanyBadge'
 import './OpportunityDetailPage.scss'
@@ -32,6 +35,14 @@ import calendarIcon from '@/assets/icons/calendar.svg'
 import mailIcon from '@/assets/icons/link.svg'
 import phoneIcon from '@/assets/icons/phone.svg'
 import companyIcon from '@/assets/icons/company.svg'
+
+function getGuestAwareSessionUser(user = getSessionUser(), status = getProfileOnboardingCachedStatus(user)) {
+    if (isOnboardingRole(user?.role) && status?.completed !== true) {
+        return null
+    }
+
+    return user
+}
 
 function formatDate(date) {
     if (!date) return '—'
@@ -118,7 +129,17 @@ export default function OpportunityDetailPage() {
     const [isApplying, setIsApplying] = useState(false)
     const [hasApplied, setHasApplied] = useState(false)
     const [isApplicationsStateLoading, setIsApplicationsStateLoading] = useState(false)
-    const [currentUser, setCurrentUser] = useState(getSessionUser())
+    const [sessionUser, setSessionUser] = useState(getSessionUser())
+    const [onboardingStatus, setOnboardingStatus] = useState(() => {
+        const user = getSessionUser()
+        return isOnboardingRole(user?.role)
+            ? getProfileOnboardingCachedStatus(user)
+            : null
+    })
+    const currentUser = useMemo(
+        () => getGuestAwareSessionUser(sessionUser, onboardingStatus),
+        [onboardingStatus, sessionUser]
+    )
     const [isFavorite, setIsFavorite] = useState(false)
     const [isFavoriteLoading, setIsFavoriteLoading] = useState(false)
     const [isEmployerFavorite, setIsEmployerFavorite] = useState(false)
@@ -126,27 +147,60 @@ export default function OpportunityDetailPage() {
 
     useEffect(() => {
         const unsubscribe = subscribeSessionChange(async (nextUser) => {
-            setCurrentUser(nextUser)
+            const nextStatus = isOnboardingRole(nextUser?.role)
+                ? getProfileOnboardingCachedStatus(nextUser)
+                : null
+            const nextCurrentUser = getGuestAwareSessionUser(nextUser, nextStatus)
 
-            if (nextUser) {
+            setSessionUser(nextUser)
+            setOnboardingStatus(nextStatus)
+
+            if (nextCurrentUser) {
                 await migrateGuestFavoritesToAccount()
             }
 
             if (params?.id) {
                 setIsFavorite(
-                    nextUser
+                    nextCurrentUser
                         ? false
                         : isGuestFavoriteOpportunity(Number(params.id))
                 )
             }
 
-            if (!nextUser) {
+            if (!nextCurrentUser) {
                 setIsEmployerFavorite(false)
             }
         })
 
         return unsubscribe
-    }, [currentUser, params?.id])
+    }, [params?.id])
+
+    useEffect(() => {
+        if (!isOnboardingRole(sessionUser?.role)) {
+            setOnboardingStatus(null)
+            return undefined
+        }
+
+        let isCancelled = false
+        const cachedStatus = getProfileOnboardingCachedStatus(sessionUser)
+        setOnboardingStatus(cachedStatus)
+
+        getProfileOnboardingStatus()
+            .then((status) => {
+                if (!isCancelled) {
+                    setOnboardingStatus(status)
+                }
+            })
+            .catch(() => {
+                if (!isCancelled) {
+                    setOnboardingStatus(cachedStatus)
+                }
+            })
+
+        return () => {
+            isCancelled = true
+        }
+    }, [sessionUser?.id, sessionUser?.role])
 
     useEffect(() => {
         const handleFavoritesUpdated = (event) => {

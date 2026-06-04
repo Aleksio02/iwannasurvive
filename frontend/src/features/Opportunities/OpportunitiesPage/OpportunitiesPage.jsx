@@ -19,6 +19,8 @@ import {
     removeFromSaved,
     applyToOpportunity,
     getSeekerApplications,
+    getProfileOnboardingCachedStatus,
+    getProfileOnboardingStatus,
 } from '@/shared/api/profile'
 import {
     addEmployerToSaved,
@@ -35,6 +37,7 @@ import {
     getSessionUser,
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
+import { isOnboardingRole } from '@/shared/lib/utils/onboardingRoutes'
 import { isEmployerVerified } from '@/shared/lib/utils/employerVerification'
 import VerifiedCompanyBadge from '@/shared/ui/VerifiedCompanyBadge/VerifiedCompanyBadge'
 import './OpportunitiesPage.scss'
@@ -50,6 +53,14 @@ import companyIcon from '@/assets/icons/company.svg'
 const PAGE_LIMIT = 12
 const MAP_SIDE_LIMIT = 8
 const DEFAULT_MAP_RADIUS = 100000
+
+function getGuestAwareSessionUser(user = getSessionUser(), status = getProfileOnboardingCachedStatus(user)) {
+    if (isOnboardingRole(user?.role) && status?.completed !== true) {
+        return null
+    }
+
+    return user
+}
 
 const TYPE_OPTIONS = [
     { value: '', label: 'Любой тип' },
@@ -389,7 +400,17 @@ function OpportunitiesPage() {
     const [, navigate] = useLocation()
     const { toast } = useToast()
 
-    const [currentUser, setCurrentUser] = useState(getSessionUser())
+    const [sessionUser, setSessionUser] = useState(getSessionUser())
+    const [onboardingStatus, setOnboardingStatus] = useState(() => {
+        const user = getSessionUser()
+        return isOnboardingRole(user?.role)
+            ? getProfileOnboardingCachedStatus(user)
+            : null
+    })
+    const currentUser = useMemo(
+        () => getGuestAwareSessionUser(sessionUser, onboardingStatus),
+        [onboardingStatus, sessionUser]
+    )
     const [viewMode, setViewMode] = useState('map')
     const [filters, setFilters] = useState({
         search: '',
@@ -431,13 +452,13 @@ function OpportunitiesPage() {
     const mapWrapRef = useRef(null)
 
     const [favoriteCompanies, setFavoriteCompanies] = useState(() =>
-        getStorageSet('favorite_companies', getSessionUser())
+        getStorageSet('favorite_companies', getGuestAwareSessionUser())
     )
     const [favoriteEmployerIds, setFavoriteEmployerIds] = useState(
-        () => new Set(getLocalFavoriteEmployerIds(getSessionUser()))
+        () => new Set(getLocalFavoriteEmployerIds(getGuestAwareSessionUser()))
     )
     const [favoriteOpportunities, setFavoriteOpportunities] = useState(() =>
-        getStorageSet('favorite_opportunities', getSessionUser())
+        getStorageSet('favorite_opportunities', getGuestAwareSessionUser())
     )
     const [appliedOpportunityIds, setAppliedOpportunityIds] = useState(() => new Set())
 
@@ -474,23 +495,56 @@ function OpportunitiesPage() {
     useEffect(() => {
         const unsubscribe = subscribeSessionChange((nextUser) => {
             resetPersonalizedRecommendations()
-            setCurrentUser(nextUser)
+            const nextStatus = isOnboardingRole(nextUser?.role)
+                ? getProfileOnboardingCachedStatus(nextUser)
+                : null
+            const nextCurrentUser = getGuestAwareSessionUser(nextUser, nextStatus)
+
+            setSessionUser(nextUser)
+            setOnboardingStatus(nextStatus)
             setAppliedOpportunityIds(new Set())
 
-            if (!nextUser?.id) {
+            if (!nextCurrentUser?.id) {
                 setFavoriteCompanies(getStorageSet('favorite_companies', null))
                 setFavoriteOpportunities(getStorageSet('favorite_opportunities', null))
                 setFavoriteEmployerIds(new Set())
                 return
             }
 
-            setFavoriteCompanies(getStorageSet('favorite_companies', nextUser))
-            setFavoriteOpportunities(getStorageSet('favorite_opportunities', nextUser))
-            setFavoriteEmployerIds(new Set(getLocalFavoriteEmployerIds(nextUser)))
+            setFavoriteCompanies(getStorageSet('favorite_companies', nextCurrentUser))
+            setFavoriteOpportunities(getStorageSet('favorite_opportunities', nextCurrentUser))
+            setFavoriteEmployerIds(new Set(getLocalFavoriteEmployerIds(nextCurrentUser)))
         })
 
         return unsubscribe
     }, [resetPersonalizedRecommendations])
+
+    useEffect(() => {
+        if (!isOnboardingRole(sessionUser?.role)) {
+            setOnboardingStatus(null)
+            return undefined
+        }
+
+        let isCancelled = false
+        const cachedStatus = getProfileOnboardingCachedStatus(sessionUser)
+        setOnboardingStatus(cachedStatus)
+
+        getProfileOnboardingStatus()
+            .then((status) => {
+                if (!isCancelled) {
+                    setOnboardingStatus(status)
+                }
+            })
+            .catch(() => {
+                if (!isCancelled) {
+                    setOnboardingStatus(cachedStatus)
+                }
+            })
+
+        return () => {
+            isCancelled = true
+        }
+    }, [sessionUser?.id, sessionUser?.role])
 
     useEffect(() => {
         if (!isApplicant) {

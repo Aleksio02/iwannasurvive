@@ -15,12 +15,17 @@ import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import ru.itplanet.trampline.commons.exception.ApiErrorResponseWriter
 import ru.itplanet.trampline.profile.client.AuthServiceClient
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 @Component
 class SessionAuthenticationFilter(
     private val authServiceClient: AuthServiceClient,
     private val apiErrorResponseWriter: ApiErrorResponseWriter,
 ) : OncePerRequestFilter() {
+
+    private val sessionPrincipalCache = ConcurrentHashMap<String, CachedPrincipal>()
 
     override fun shouldNotFilter(request: HttpServletRequest): Boolean {
         val path = request.servletPath
@@ -57,17 +62,10 @@ class SessionAuthenticationFilter(
         }
 
         try {
-            val authResponse = authServiceClient.me()
-            val user = authResponse.user
-
-            val principal = AuthenticatedUser(
-                userId = user.id,
-                email = user.email,
-                role = user.role,
-            )
+            val principal = resolvePrincipal(cookieHeader)
 
             val authorities = listOf(
-                SimpleGrantedAuthority("ROLE_${user.role.name}"),
+                SimpleGrantedAuthority("ROLE_${principal.role.name}"),
             )
 
             val authentication = UsernamePasswordAuthenticationToken(
@@ -96,6 +94,29 @@ class SessionAuthenticationFilter(
         }
     }
 
+    private fun resolvePrincipal(cookieHeader: String): AuthenticatedUser {
+        val now = Instant.now()
+        val cached = sessionPrincipalCache[cookieHeader]
+        if (cached != null && cached.expiresAt.isAfter(now)) {
+            return cached.principal
+        }
+
+        val authResponse = authServiceClient.me()
+        val user = authResponse.user
+        val principal = AuthenticatedUser(
+            userId = user.id,
+            email = user.email,
+            role = user.role,
+        )
+
+        sessionPrincipalCache[cookieHeader] = CachedPrincipal(
+            principal = principal,
+            expiresAt = now.plus(CACHE_TTL),
+        )
+
+        return principal
+    }
+
     private fun writeAuthServiceUnavailable(response: HttpServletResponse) {
         apiErrorResponseWriter.write(
             response = response,
@@ -103,5 +124,14 @@ class SessionAuthenticationFilter(
             message = "Сервис авторизации временно недоступен",
             code = "auth_service_unavailable",
         )
+    }
+
+    private data class CachedPrincipal(
+        val principal: AuthenticatedUser,
+        val expiresAt: Instant,
+    )
+
+    companion object {
+        private val CACHE_TTL = Duration.ofSeconds(10)
     }
 }
