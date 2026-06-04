@@ -22,6 +22,8 @@ function CustomSelect({
     const [isOpen, setIsOpen] = useState(false)
     const [activeIndex, setActiveIndex] = useState(-1)
     const [menuPosition, setMenuPosition] = useState(null)
+    const [isMobile, setIsMobile] = useState(false)
+    const [mobileMenuStyle, setMobileMenuStyle] = useState(null)
 
     const rootRef = useRef(null)
     const buttonRef = useRef(null)
@@ -30,6 +32,15 @@ function CustomSelect({
     const normalizedValue = normalizeSelectValue(value)
     const selected = options.find((o) => normalizeSelectValue(o.value) === normalizedValue)
     const safeOptions = Array.isArray(options) ? options : []
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth <= 768)
+        }
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
 
     useEffect(() => {
         const onDocClick = (e) => {
@@ -48,34 +59,93 @@ function CustomSelect({
         const updatePosition = () => {
             if (!buttonRef.current) return
             const rect = buttonRef.current.getBoundingClientRect()
+            const viewportHeight = window.innerHeight
+            const menuHeight = Math.min(320, viewportHeight - rect.bottom - 20)
+
+            let top = rect.bottom + 6
+
+            if (top + menuHeight > viewportHeight - 10) {
+                top = viewportHeight - menuHeight - 10
+            }
+
+            if (top < 10) top = 10
+
             setMenuPosition({
-                top: rect.bottom + 6,
-                left: rect.left,
+                top,
+                left: Math.max(8, Math.min(rect.left, window.innerWidth - rect.width - 8)),
                 width: rect.width,
             })
         }
 
         updatePosition()
+        window.addEventListener('resize', updatePosition)
 
-        const closeOnScroll = (event) => {
-            if (menuRef.current?.contains(event.target) || buttonRef.current?.contains(event.target)) {
+        const handleScroll = (e) => {
+            if (menuRef.current && menuRef.current.contains(e.target)) {
                 return
             }
             setIsOpen(false)
         }
-
-        window.addEventListener('resize', updatePosition)
-        window.addEventListener('scroll', closeOnScroll, true)
+        window.addEventListener('scroll', handleScroll, true)
 
         return () => {
             window.removeEventListener('resize', updatePosition)
-            window.removeEventListener('scroll', closeOnScroll, true)
+            window.removeEventListener('scroll', handleScroll, true)
         }
     }, [inModal, isOpen])
 
     useEffect(() => {
+        if (!isOpen || !inModal || !isMobile) {
+            setMobileMenuStyle(null)
+            return
+        }
+
+        const updateMobileMenuPosition = () => {
+            if (!buttonRef.current) return
+
+            const buttonRect = buttonRef.current.getBoundingClientRect()
+            const viewportHeight = window.innerHeight
+            const margin = 16
+            const topSpacing = 8
+
+            const spaceBelow = viewportHeight - buttonRect.bottom - margin
+            let maxMenuHeight = spaceBelow - topSpacing
+
+            if (maxMenuHeight < 100) {
+                maxMenuHeight = 100
+            }
+
+            const top = buttonRect.bottom + topSpacing
+
+            setMobileMenuStyle({
+                top: top,
+                left: margin,
+                right: margin,
+                maxHeight: maxMenuHeight,
+            })
+        }
+
+        updateMobileMenuPosition()
+        window.addEventListener('resize', updateMobileMenuPosition)
+
+        const handleScroll = (e) => {
+            if (menuRef.current && menuRef.current.contains(e.target)) {
+                return
+            }
+            setIsOpen(false)
+        }
+        window.addEventListener('scroll', handleScroll, true)
+
+        return () => {
+            window.removeEventListener('resize', updateMobileMenuPosition)
+            window.removeEventListener('scroll', handleScroll, true)
+        }
+    }, [isOpen, inModal, isMobile])
+
+    useEffect(() => {
         if (!isOpen) {
             setMenuPosition(null)
+            setMobileMenuStyle(null)
             setActiveIndex(-1)
         }
     }, [isOpen])
@@ -127,8 +197,16 @@ function CustomSelect({
     const inlineMenu = inModal && isOpen ? (
         <div
             ref={menuRef}
-            className="custom-select__menu custom-select__menu--inline"
+            className={`custom-select__menu custom-select__menu--inline ${isMobile ? 'custom-select__menu--inline-mobile' : ''}`}
             role="listbox"
+            style={isMobile && mobileMenuStyle ? {
+                position: 'fixed',
+                top: `${mobileMenuStyle.top}px`,
+                left: `${mobileMenuStyle.left}px`,
+                right: `${mobileMenuStyle.right}px`,
+                maxHeight: `${mobileMenuStyle.maxHeight}px`,
+                width: 'auto',
+            } : undefined}
         >
             {menuItems.length > 0 ? menuItems : (
                 <div className="custom-select__empty">Нет вариантов</div>
@@ -147,6 +225,8 @@ function CustomSelect({
                     top: `${menuPosition.top}px`,
                     left: `${menuPosition.left}px`,
                     width: `${menuPosition.width}px`,
+                    maxHeight: `${Math.min(320, window.innerHeight - menuPosition.top - 20)}px`,
+                    overflowY: 'auto',
                 }}
             >
                 {menuItems.length > 0 ? menuItems : (
@@ -159,7 +239,7 @@ function CustomSelect({
 
     return (
         <div
-            className={`custom-select ${inModal ? 'custom-select--modal' : ''} ${isOpen ? 'is-open' : ''}`.trim()}
+            className={`custom-select ${inModal ? 'custom-select--modal' : ''} ${isOpen ? 'is-open' : ''} ${disabled ? 'select-disabled' : ''}`.trim()}
             ref={rootRef}
         >
             {label && (

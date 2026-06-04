@@ -37,10 +37,6 @@
   position: relative;
 }
 
-:global(.custom-select__menu-portal) {
-  z-index: 1100 !important;
-}
-
 .error {
   color: var(--color-danger);
   margin-bottom: 10px;
