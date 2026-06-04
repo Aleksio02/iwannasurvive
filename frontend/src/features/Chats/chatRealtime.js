@@ -9,6 +9,8 @@ let activeUserId = null
 let retainCount = 0
 let connectionStatus = 'idle'
 
+const isDevMode = import.meta.env.DEV
+
 function setConnectionStatus(status) {
     connectionStatus = status
     statusListeners.forEach((listener) => listener(status))
@@ -132,13 +134,25 @@ function createClient() {
                 if (event) emitEvent(event)
             })
         },
-        onWebSocketClose: () => {
+        onWebSocketClose: (event) => {
+            if (isDevMode) {
+                console.warn('[chatRealtime] WebSocket closed', {
+                    code: event?.code,
+                    reason: event?.reason,
+                })
+            }
             if (client === stompClient && stompClient.active) setConnectionStatus('reconnecting')
         },
-        onWebSocketError: () => {
+        onWebSocketError: (event) => {
+            if (isDevMode) {
+                console.warn('[chatRealtime] WebSocket error', event)
+            }
             if (client === stompClient) setConnectionStatus('error')
         },
-        onStompError: () => {
+        onStompError: (frame) => {
+            if (isDevMode) {
+                console.warn('[chatRealtime] STOMP error', frame?.headers?.message || frame)
+            }
             if (client === stompClient) setConnectionStatus('error')
         },
     })

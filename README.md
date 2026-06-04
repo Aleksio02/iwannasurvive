@@ -359,6 +359,9 @@ npm start
 
 - Настройки почтового сервера для отправки 2FA-кодов
 
+- Для production WebSocket/STOMP укажите разрешённые origin:
+  `CHAT_WEBSOCKET_ALLOWED_ORIGIN_PATTERNS=https://tramplin-career.ru,http://tramplin-career.ru`
+
 - API-ключ Yandex Map API
 
 ### Команда

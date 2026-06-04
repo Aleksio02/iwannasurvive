@@ -61,6 +61,7 @@ import {
     normalizeLocationState,
     statusBucket,
 } from './lib/employerDashboard.helpers'
+import { normalizeSocialLinkUrl } from '@/shared/lib/utils/contactLinks'
 
 const DISMISSED_ALERTS_STORAGE_KEY = 'employer_dashboard_dismissed_alerts'
 const SEEN_APPROVED_PROFILE_ALERTS_STORAGE_KEY = 'employer_dashboard_seen_profile_approved_alerts'
@@ -396,7 +397,7 @@ function EmployerDashboard() {
             .filter((row) => row.url?.trim())
             .map((row, index) => ({
                 label: row.title?.trim() || `Ссылка ${index + 1}`,
-                url: row.url.trim(),
+                url: normalizeSocialLinkUrl(row.url, row.title),
             }))
 
     const persistVerification = useCallback((verification, attachments = null, userId = user?.userId) => {

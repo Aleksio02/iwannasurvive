@@ -1318,29 +1318,65 @@ function SeekerDashboard() {
         ensureDashboardTabVisible(activeTab, 'smooth')
     }, [activeTab, ensureDashboardTabVisible])
 
-    const validateProfile = () => {
-        const newErrors = {}
+    const hasProfessionalSignal = (profileData = profile) => (
+        Boolean(profileData.resumeText?.trim()) ||
+        Boolean(profileData.resumeFile) ||
+        (Array.isArray(profileData.portfolioLinks) && profileData.portfolioLinks.length > 0) ||
+        (Array.isArray(profileData.portfolioFiles) && profileData.portfolioFiles.length > 0) ||
+        (Array.isArray(profileData.skills) && profileData.skills.length > 0)
+    )
 
-        if (!profile.firstName?.trim()) newErrors.firstName = 'Укажите имя'
-        if (!profile.lastName?.trim()) newErrors.lastName = 'Укажите фамилию'
-        if (!profile.universityName?.trim()) newErrors.universityName = 'Укажите вуз'
-        if (!profile.course && !profile.graduationYear) {
+    const buildProfileValidationErrors = (profileData = profile, { forModeration = false } = {}) => {
+        const newErrors = {}
+        const course = String(profileData.course || '').trim()
+        const graduationYear = String(profileData.graduationYear || '').trim()
+        const currentYear = new Date().getFullYear()
+
+        if (!profileData.firstName?.trim()) newErrors.firstName = 'Укажите имя'
+        if (!profileData.lastName?.trim()) newErrors.lastName = 'Укажите фамилию'
+
+        if (course) {
+            const numericCourse = Number(course)
+            if (!Number.isInteger(numericCourse) || numericCourse < 1 || numericCourse > 6) {
+                newErrors.course = 'Курс от 1 до 6'
+            }
+        }
+
+        if (graduationYear) {
+            const numericGraduationYear = Number(graduationYear)
+            if (
+                !Number.isInteger(numericGraduationYear) ||
+                numericGraduationYear < 1900 ||
+                numericGraduationYear > currentYear + 5
+            ) {
+                newErrors.graduationYear = `Год выпуска 1900–${currentYear + 5}`
+            }
+        }
+
+        if (!forModeration) return newErrors
+
+        if (!profileData.universityName?.trim()) newErrors.universityName = 'Укажите вуз'
+        if (!course && !graduationYear) {
             newErrors.course = 'Укажите курс или год выпуска'
             newErrors.graduationYear = 'Укажите курс или год выпуска'
         }
 
-        const hasProfessionalSignal =
-            Boolean(profile.resumeText?.trim()) ||
-            Boolean(profile.resumeFile) ||
-            (Array.isArray(profile.portfolioLinks) && profile.portfolioLinks.length > 0) ||
-            (Array.isArray(profile.portfolioFiles) && profile.portfolioFiles.length > 0) ||
-            (Array.isArray(profile.skills) && profile.skills.length > 0)
-
-        if (!hasProfessionalSignal) {
+        if (!hasProfessionalSignal(profileData)) {
             newErrors.professionalSignal = 'Добавьте резюме, файл, портфолио или навыки'
         }
 
+        return newErrors
+    }
+
+    const validateProfileForSave = () => {
+        const newErrors = buildProfileValidationErrors(profile)
         setErrors(newErrors)
+        return Object.keys(newErrors).length === 0
+    }
+
+    const validateProfileForModeration = (profileData = profile, { updateErrors = true } = {}) => {
+        const newErrors = buildProfileValidationErrors(profileData, { forModeration: true })
+        if (updateErrors) setErrors(newErrors)
         return Object.keys(newErrors).length === 0
     }
 
@@ -1359,6 +1395,15 @@ function SeekerDashboard() {
             updatedModerationStatus !== 'PENDING_MODERATION'
 
         if (shouldSubmitManually) {
+            const mergedProfile = { ...profile, ...updatedProfile }
+            if (!validateProfileForModeration(mergedProfile, { updateErrors: false })) {
+                toast({
+                    title: 'Обновлено',
+                    description: `${baseDescription}. Для отправки на модерацию добавьте резюме, файл, портфолио или навыки.`,
+                })
+                return
+            }
+
             await submitApplicantProfileToModerationAction()
             toast({
                 title: 'Обновлено',
@@ -1383,7 +1428,7 @@ function SeekerDashboard() {
     }
 
     const handleSubmitApplicantProfileForModeration = async () => {
-        if (!validateProfile()) {
+        if (!validateProfileForModeration()) {
             toast({
                 title: 'Проверьте форму',
                 description: 'Заполните обязательные поля перед отправкой на модерацию',
@@ -1423,7 +1468,7 @@ function SeekerDashboard() {
     }
 
     const handleSaveProfile = async () => {
-        if (!validateProfile()) {
+        if (!validateProfileForSave()) {
             toast({
                 title: 'Проверьте форму',
                 description: 'Заполните обязательные поля',
@@ -1443,6 +1488,17 @@ function SeekerDashboard() {
                 !hasApprovedPublicVersion &&
                 updatedProfile?.moderationStatus !== 'PENDING_MODERATION'
             ) {
+                const mergedProfile = { ...profile, ...updatedProfile }
+                if (!validateProfileForModeration(mergedProfile, { updateErrors: false })) {
+                    toast({
+                        title: 'Профиль сохранён',
+                        description: 'Изменения сохранены. Для отправки на модерацию добавьте резюме, файл, портфолио или навыки.',
+                    })
+                    setIsEditing(false)
+                    setErrors({})
+                    return
+                }
+
                 await submitApplicantProfileToModerationAction()
                 toast({
                     title: 'Профиль обновлён',

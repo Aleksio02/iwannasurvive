@@ -233,106 +233,6 @@ function buildHint(point) {
     `
 }
 
-function MobileMapOpportunityCard({
-                                      point,
-                                      isFavorite,
-                                      onClose,
-                                      onOpenDetails,
-                                      onToggleFavorite,
-                                  }) {
-    const preview = point.preview || {}
-    const title = preview.title || point.title
-    const companyName = preview.companyName || point.companyName || 'Компания не указана'
-    const typeLabel = OPPORTUNITY_LABELS.type[point.type] || 'Возможность'
-    const rawWorkFormat =
-        preview.workFormat ||
-        point.workFormat ||
-        preview.format ||
-        point.format ||
-        ''
-    const formatLabel =
-        OPPORTUNITY_LABELS.workFormat[rawWorkFormat] ||
-        rawWorkFormat ||
-        'Формат не указан'
-    const salary = formatMoney(preview.salaryFrom, preview.salaryTo, preview.salaryCurrency)
-    const address = point.addressLine || point.cityName || 'Адрес не указан'
-    const description = preview.shortDescription || ''
-    const tags = (preview.tags || []).slice(0, 4)
-
-    return (
-        <article
-            className="yandex-opportunity-map__mobile-card"
-            role="region"
-            aria-label="Выбранная возможность на карте"
-        >
-            <div className="yandex-opportunity-map__mobile-card-header">
-                <h4 className="yandex-opportunity-map__mobile-card-title">{title}</h4>
-                <button
-                    type="button"
-                    className="yandex-opportunity-map__mobile-card-close"
-                    onClick={onClose}
-                    aria-label="Закрыть карточку возможности"
-                >
-                    ×
-                </button>
-            </div>
-
-            <p className="yandex-opportunity-map__mobile-card-company">{companyName}</p>
-
-            {isPointEmployerVerified(point) && (
-                <span className="yandex-opportunity-map__verified-badge">
-                    <span aria-hidden="true">✓</span>
-                    <span>Проверенная компания</span>
-                </span>
-            )}
-
-            <div className="yandex-opportunity-map__mobile-card-badges">
-                <span className="yandex-opportunity-map__badge yandex-opportunity-map__badge--type">
-                    {typeLabel}
-                </span>
-                <span className="yandex-opportunity-map__badge">{formatLabel}</span>
-                <span className="yandex-opportunity-map__badge yandex-opportunity-map__badge--salary">
-                    {salary}
-                </span>
-            </div>
-
-            <p className="yandex-opportunity-map__address">{address}</p>
-
-            {description ? (
-                <p className="yandex-opportunity-map__mobile-card-description">{description}</p>
-            ) : null}
-
-            {tags.length > 0 ? (
-                <div className="yandex-opportunity-map__mobile-card-tags">
-                    {tags.map((tag) => (
-                        <span className="yandex-opportunity-map__tag" key={`${point.id}-${tag.id || tag.name}`}>
-                            {tag.name}
-                        </span>
-                    ))}
-                </div>
-            ) : null}
-
-            <div className="yandex-opportunity-map__mobile-card-actions">
-                <button
-                    type="button"
-                    className="yandex-opportunity-map__mobile-card-action yandex-opportunity-map__mobile-card-action--primary"
-                    onClick={() => onOpenDetails(point.id)}
-                >
-                    Подробнее
-                </button>
-                <button
-                    type="button"
-                    className={`yandex-opportunity-map__mobile-card-action yandex-opportunity-map__mobile-card-action--favorite ${isFavorite ? 'is-favorite' : ''}`}
-                    onClick={() => onToggleFavorite?.(point)}
-                    disabled={!onToggleFavorite}
-                >
-                    {isFavorite ? 'В избранном' : 'В избранное'}
-                </button>
-            </div>
-        </article>
-    )
-}
-
 export default function YandexOpportunityMap({
                                                  points,
                                                  favoriteCompanies,
@@ -360,7 +260,6 @@ export default function YandexOpportunityMap({
     const didInitialCenterRef = useRef(false)
     const [isTouchMode, setIsTouchMode] = useState(false)
     const [isMapReady, setIsMapReady] = useState(false)
-    const [selectedTouchPointId, setSelectedTouchPointId] = useState(null)
 
     const center = useMemo(() => {
         const first = points.find((point) => point.latitude && point.longitude)
@@ -387,30 +286,12 @@ export default function YandexOpportunityMap({
         return new Set(Array.from(favoriteOpportunities || []).map(normalizeOpportunityId))
     }, [favoriteOpportunities])
 
-    const selectedTouchPoint = useMemo(() => {
-        if (!selectedTouchPointId) return null
-
-        return points.find((point) => (
-            normalizeOpportunityId(point.id) === normalizeOpportunityId(selectedTouchPointId)
-        )) || null
-    }, [points, selectedTouchPointId])
-
     useEffect(() => {
         onOpenCardRef.current = onOpenCard
         onOpenDetailsRef.current = onOpenDetails
         onToggleOpportunityFavoriteRef.current = onToggleOpportunityFavorite
         onCenterChangeRef.current = onCenterChange
     }, [onOpenCard, onOpenDetails, onToggleOpportunityFavorite, onCenterChange])
-
-    useEffect(() => {
-        if (!selectedTouchPointId) return
-
-        const exists = points.some((point) => (
-            normalizeOpportunityId(point.id) === normalizeOpportunityId(selectedTouchPointId)
-        ))
-
-        if (!exists) setSelectedTouchPointId(null)
-    }, [points, selectedTouchPointId])
 
     useEffect(() => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined
@@ -457,7 +338,6 @@ export default function YandexOpportunityMap({
                     const isRecentMarkerClick = Date.now() - lastMarkerClickAtRef.current < 700
                     if (suppressCenterEventRef.current || isRecentMarkerClick) return
 
-                    setSelectedTouchPointId(null)
                     map.balloon?.close?.()
                     map.hint?.close?.()
                     placemarksRef.current.forEach((placemark) => {
@@ -614,10 +494,6 @@ export default function YandexOpportunityMap({
                 placemark.events.add('click', () => {
                     lastMarkerClickAtRef.current = Date.now()
                     onOpenCardRef.current?.(point.id)
-
-                    if (isTouchMode) {
-                        setSelectedTouchPointId(normalizeOpportunityId(point.id))
-                    }
                 })
 
                 map.geoObjects.add(placemark)
@@ -699,9 +575,7 @@ export default function YandexOpportunityMap({
                     suppressCenterEventRef.current = false
                 }, 450)
 
-                if (isTouchMode) {
-                    setSelectedTouchPointId(normalizeOpportunityId(focusedOpportunityId))
-                } else {
+                if (!isTouchMode) {
                     placemark.balloon.open()
                 }
             } catch {
@@ -719,30 +593,9 @@ export default function YandexOpportunityMap({
         }
     }, [focusedOpportunityId, isTouchMode, points])
 
-    const handleOpenDetails = (id) => {
-        if (onOpenDetailsRef.current) {
-            onOpenDetailsRef.current(id)
-            return
-        }
-
-        window.location.href = `/opportunities/${id}`
-    }
-
     return (
         <div className="yandex-opportunity-map__surface">
             <div ref={rootRef} className="opportunities-page__map" />
-
-            {isTouchMode && selectedTouchPoint && (
-                <MobileMapOpportunityCard
-                    point={selectedTouchPoint}
-                    isFavorite={favoriteOpportunityIds.has(normalizeOpportunityId(selectedTouchPoint.id))}
-                    onClose={() => setSelectedTouchPointId(null)}
-                    onOpenDetails={handleOpenDetails}
-                    onToggleFavorite={onToggleOpportunityFavorite ? ((point) => (
-                        onToggleOpportunityFavoriteRef.current?.(point)
-                    )) : undefined}
-                />
-            )}
         </div>
     )
 }

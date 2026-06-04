@@ -41,6 +41,11 @@ import {
     httpJson,
 } from './http'
 import { translateStatusTokensInText } from '@/shared/lib/utils/statusLabels'
+import {
+    isTelegramLabel,
+    isTelegramValue,
+    normalizeSocialLinkUrl,
+} from '@/shared/lib/utils/contactLinks'
 
 function createApiError(message, status = 0, extra = {}) {
     const error = new Error(translateStatusTokensInText(message))
@@ -222,11 +227,13 @@ function normalizeProfileLinks(links) {
                 }
 
                 if (item && typeof item === 'object') {
-                    const url = item.url?.trim?.() || ''
+                    const rawUrl = item.url?.trim?.() || ''
+                    const label = item.label?.trim?.() || item.title?.trim?.() || `Ссылка ${index + 1}`
+                    const url = normalizeSocialLinkUrl(rawUrl, label)
                     if (!url) return null
 
                     return {
-                        label: item.label?.trim?.() || item.title?.trim?.() || `Ссылка ${index + 1}`,
+                        label,
                         url,
                     }
                 }
@@ -239,11 +246,15 @@ function normalizeProfileLinks(links) {
     if (typeof links === 'object') {
         return Object.entries(links)
             .map(([label, url], index) => {
-                const normalizedUrl = typeof url === 'string' ? url.trim() : ''
+                const normalizedLabel = label?.trim?.() || `Ссылка ${index + 1}`
+                const normalizedUrl = normalizeSocialLinkUrl(
+                    typeof url === 'string' ? url.trim() : '',
+                    normalizedLabel
+                )
                 if (!normalizedUrl) return null
 
                 return {
-                    label: label?.trim?.() || `Ссылка ${index + 1}`,
+                    label: normalizedLabel,
                     url: normalizedUrl,
                 }
             })
@@ -258,10 +269,17 @@ function detectContactType(value = '', label = '') {
     const normalizedLabel = String(label).trim().toLowerCase()
 
     if (
+        isTelegramLabel(normalizedLabel) ||
+        isTelegramValue(normalizedValue)
+    ) {
+        return 'TELEGRAM'
+    }
+
+    if (
         normalizedLabel.includes('email') ||
         normalizedLabel.includes('mail') ||
         normalizedLabel.includes('почт') ||
-        normalizedValue.includes('@')
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedValue)
     ) {
         return 'EMAIL'
     }

@@ -43,6 +43,7 @@ import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
+import { normalizeSocialLinkUrl } from '@/shared/lib/utils/contactLinks'
 import ApplicantTagsEditor from './components/ApplicantTagsEditor'
 import ApplicantPrivacyPreview from './components/ApplicantPrivacyPreview'
 import './ProfileEdit.scss'
@@ -1029,12 +1030,19 @@ function ProfileEdit() {
         if (!lastName.trim()) next.lastName = 'Укажите фамилию'
         if (!universityName.trim()) next.universityName = 'Укажите вуз'
 
-        if (!course.trim() || toShort(course) < 1 || toShort(course) > 6) {
+        const hasCourse = Boolean(course.trim())
+        const hasGraduationYear = Boolean(graduationYear.trim())
+
+        if (hasCourse && (toShort(course) < 1 || toShort(course) > 6)) {
             next.course = 'Курс от 1 до 6'
         }
 
-        if (!graduationYear.trim() || toShort(graduationYear) < 1990 || toShort(graduationYear) > 2100) {
+        if (hasGraduationYear && (toShort(graduationYear) < 1990 || toShort(graduationYear) > 2100)) {
             next.graduationYear = 'Год выпуска 1990–2100'
+        }
+
+        if (!hasCourse && !hasGraduationYear) {
+            next.educationPeriod = 'Укажите курс или год выпуска'
         }
 
         if (!cityId) {
@@ -1313,7 +1321,7 @@ function ProfileEdit() {
                         .filter((row) => row.url?.trim())
                         .map((row, index) => ({
                             label: row.title?.trim() || `Ссылка ${index + 1}`,
-                            url: row.url.trim(),
+                            url: normalizeSocialLinkUrl(row.url, row.title),
                         })),
                     publicContacts: publicContactRows
                         .filter((row) => row.url?.trim())
@@ -1616,12 +1624,13 @@ function ProfileEdit() {
                                     />
                                 </div>
 
+                                <div className="field-hint">
+                                    Для модерации достаточно указать одно из двух: текущий курс или год выпуска.
+                                </div>
+
                                 <div className="profile-edit-form__grid-3">
                                     <div className="profile-edit-form__field">
-                                        <Label>
-                                            Курс
-                                            <span className="required-star"> *</span>
-                                        </Label>
+                                        <Label>Курс</Label>
                                         <Input
                                             id="course"
                                             value={course}
@@ -1632,10 +1641,7 @@ function ProfileEdit() {
                                     </div>
 
                                     <div className="profile-edit-form__field">
-                                        <Label>
-                                            Год выпуска
-                                            <span className="required-star"> *</span>
-                                        </Label>
+                                        <Label>Год выпуска</Label>
                                         <Input
                                             id="graduationYear"
                                             value={graduationYear}
@@ -1670,6 +1676,7 @@ function ProfileEdit() {
                                         />
                                     </div>
                                 </div>
+                                {errors.educationPeriod && <p className="field-error">{errors.educationPeriod}</p>}
 
                                 <div className="profile-edit-form__field">
                                     <Label>О себе</Label>
