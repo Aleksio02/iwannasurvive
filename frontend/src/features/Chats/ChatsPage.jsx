@@ -246,6 +246,44 @@ function getFileExtension(filename = '') {
     return match ? match[0] : ''
 }
 
+function canUseSaveFilePicker() {
+    return typeof window !== 'undefined'
+        && window.isSecureContext
+        && typeof window.showSaveFilePicker === 'function'
+}
+
+function canUseClipboardWrite() {
+    return typeof navigator !== 'undefined'
+        && typeof window !== 'undefined'
+        && window.isSecureContext
+        && navigator.clipboard
+        && typeof navigator.clipboard.write === 'function'
+        && typeof ClipboardItem !== 'undefined'
+}
+
+function isDevelopment() {
+    return import.meta.env?.DEV === true
+}
+
+function debugMediaCapabilities(context = {}) {
+    if (!isDevelopment()) return
+    console.debug('[chat-attachment-media]', {
+        savePickerSupported: canUseSaveFilePicker(),
+        clipboardWriteSupported: canUseClipboardWrite(),
+        ...context,
+    })
+}
+
+function getMediaCapabilityWarning(action) {
+    if (action === 'save-as' && !canUseSaveFilePicker()) {
+        return 'Выбор папки поддерживается не во всех браузерах.'
+    }
+    if (action === 'copy-media' && !canUseClipboardWrite()) {
+        return 'Копирование медиа поддерживается не во всех браузерах.'
+    }
+    return ''
+}
+
 function downloadBlobFallback(blob, filename = 'attachment') {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -257,43 +295,86 @@ function downloadBlobFallback(blob, filename = 'attachment') {
     setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
+function normalizeContentType(...types) {
+    return types.find((type) => typeof type === 'string' && type.trim())?.split(';')[0].trim().toLowerCase() || ''
+}
+
+function isImageType(mediaType = '') {
+    return normalizeContentType(mediaType).startsWith('image/')
+}
+
 async function fetchAttachmentBlob(dialogId, attachment) {
     const response = await getChatAttachmentContent(dialogId, attachment.id)
     const blob = response.blob
+    const mediaType = normalizeContentType(response.contentType, attachment.mediaType, blob.type)
     return {
         blob,
         filename: response.filename || attachment.originalFileName || 'attachment',
-        mediaType: response.contentType || attachment.mediaType || blob.type || 'application/octet-stream',
+        mediaType: mediaType || 'application/octet-stream',
     }
 }
 
-async function saveBlobAsFile({ blob, filename, mediaType }) {
-    // showSaveFilePicker works only in supported secure-context browsers; fallback to download.
-    if (!window.showSaveFilePicker) {
+function buildSaveFileTypes(contentType, filename = '') {
+    const normalizedType = normalizeContentType(contentType)
+    const extensionByType = {
+        'image/png': '.png',
+        'image/jpeg': '.jpg',
+        'image/webp': '.webp',
+        'application/pdf': '.pdf',
+    }
+    const extension = extensionByType[normalizedType]
+    if (!extension) return undefined
+
+    const filenameExtension = getFileExtension(filename).toLowerCase()
+    const extensions = filenameExtension === extension || (normalizedType === 'image/jpeg' && filenameExtension === '.jpeg')
+        ? [filenameExtension]
+        : [extension]
+
+    return [{
+        description: normalizedType.startsWith('image/')
+            ? 'Изображение'
+            : normalizedType === 'application/pdf'
+                ? 'PDF'
+                : 'Файл',
+        accept: { [normalizedType]: extensions },
+    }]
+}
+
+async function saveBlobAs({ blob, filename, contentType }) {
+    if (!canUseSaveFilePicker()) {
         downloadBlobFallback(blob, filename)
-        return { fallback: true }
+        return { mode: 'download-fallback' }
     }
 
-    const extension = getFileExtension(filename)
     const pickerOptions = {
         suggestedName: filename || 'attachment',
     }
-    if (mediaType && extension) {
-        pickerOptions.types = [{
-            description: mediaType.startsWith('image/')
-                ? 'Изображение'
-                : mediaType === 'application/pdf'
-                    ? 'PDF'
-                    : 'Файл',
-            accept: { [mediaType]: [extension] },
-        }]
-    }
+    const types = buildSaveFileTypes(contentType, filename)
+    if (types) pickerOptions.types = types
 
-    const handle = await window.showSaveFilePicker(pickerOptions)
-    const writable = await handle.createWritable()
-    await writable.write(blob)
-    await writable.close()
-    return { fallback: false }
+    try {
+        const handle = await window.showSaveFilePicker(pickerOptions)
+        const writable = await handle.createWritable()
+        await writable.write(blob)
+        await writable.close()
+        return { mode: 'picker' }
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            return { mode: 'cancelled' }
+        }
+
+        if (error?.name === 'TypeError' && pickerOptions.types) {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: filename || 'attachment',
+            })
+            const writable = await handle.createWritable()
+            await writable.write(blob)
+            await writable.close()
+            return { mode: 'picker' }
+        }
+
+        throw error
+    }
 }
 
 async function convertImageBlobToPng(blob) {
@@ -312,29 +393,87 @@ async function convertImageBlobToPng(blob) {
     })
 }
 
-async function copyAttachmentToClipboard(dialogId, attachment) {
-    const { blob, mediaType } = await fetchAttachmentBlob(dialogId, attachment)
-    const ClipboardItemConstructor = window.ClipboardItem
-    // ClipboardItem support varies by browser and MIME type; unsupported cases use a toast fallback.
-    if (!navigator.clipboard?.write || !ClipboardItemConstructor) {
-        throw new Error('CLIPBOARD_UNSUPPORTED')
+class MediaCopyError extends Error {
+    constructor(code, cause) {
+        super(code)
+        this.name = 'MediaCopyError'
+        this.code = code
+        this.cause = cause
     }
+}
 
-    const clipboardType = mediaType || blob.type || 'application/octet-stream'
+async function copyImageBlobToClipboard(blob, contentType) {
+    const imageType = normalizeContentType(contentType, blob.type) || 'image/png'
     try {
         await navigator.clipboard.write([
-            new ClipboardItemConstructor({ [clipboardType]: blob }),
+            new ClipboardItem({ [imageType]: blob }),
+        ])
+        return
+    } catch (error) {
+        debugMediaCapabilities({
+            action: 'copy-media',
+            contentType: imageType,
+            errorName: error?.name,
+            errorMessage: error?.message,
+        })
+    }
+
+    try {
+        const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
+        await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': pngBlob }),
         ])
     } catch (error) {
-        if ((blob.type || mediaType).startsWith('image/') && clipboardType !== 'image/png') {
-            const pngBlob = await convertImageBlobToPng(blob)
-            await navigator.clipboard.write([
-                new ClipboardItemConstructor({ 'image/png': pngBlob }),
-            ])
-            return
-        }
-        throw error
+        debugMediaCapabilities({
+            action: 'copy-media',
+            contentType: imageType,
+            fallbackContentType: 'image/png',
+            errorName: error?.name,
+            errorMessage: error?.message,
+        })
+        throw new MediaCopyError('CLIPBOARD_IMAGE_FAILED', error)
     }
+}
+
+async function copyGenericBlobToClipboard(blob, contentType) {
+    const type = normalizeContentType(contentType, blob.type) || 'application/octet-stream'
+    try {
+        await navigator.clipboard.write([
+            new ClipboardItem({ [type]: blob }),
+        ])
+    } catch (error) {
+        debugMediaCapabilities({
+            action: 'copy-media',
+            contentType: type,
+            errorName: error?.name,
+            errorMessage: error?.message,
+        })
+        throw new MediaCopyError('CLIPBOARD_FILE_UNSUPPORTED', error)
+    }
+}
+
+async function copyAttachmentToClipboard(dialogId, attachment) {
+    if (!canUseClipboardWrite()) {
+        throw new MediaCopyError('CLIPBOARD_UNSUPPORTED')
+    }
+
+    const { blob, filename, mediaType } = await fetchAttachmentBlob(dialogId, attachment)
+    const contentType = normalizeContentType(mediaType, attachment.mediaType, blob.type)
+    debugMediaCapabilities({
+        action: 'copy-media',
+        contentType,
+        mediaType: attachment.mediaType,
+        attachmentKind: attachment.attachmentKind,
+        filename,
+    })
+
+    if (isImageType(contentType) || attachment.attachmentKind === 'IMAGE') {
+        await copyImageBlobToClipboard(blob, contentType)
+        return { copied: true, type: 'image' }
+    }
+
+    await copyGenericBlobToClipboard(blob, contentType)
+    return { copied: true, type: 'file' }
 }
 
 function ChatAttachment({ dialogId, attachment, failed = false, pending = false }) {
@@ -1330,57 +1469,30 @@ function ChatsPage() {
 
         setSavingAsAttachmentMessageId(message.id)
         closeMessageMenu()
-        if (!window.showSaveFilePicker) {
-            try {
-                const results = await Promise.allSettled(
-                    attachments.map(async (attachment) => {
-                        const file = await fetchAttachmentBlob(routeDialogId, attachment)
-                        downloadBlobFallback(file.blob, file.filename)
-                    })
-                )
-                const failedCount = results.filter((result) => result.status === 'rejected').length
-                if (failedCount === 0) {
-                    toast({
-                        title: attachments.length === 1
-                            ? 'Выбор папки недоступен, файл сохранён через загрузки'
-                            : 'Выбор папки недоступен, вложения сохранены через загрузки',
-                    })
-                } else if (failedCount < attachments.length) {
-                    toast({
-                        title: 'Часть вложений не удалось сохранить',
-                        description: `${attachments.length - failedCount} из ${attachments.length} сохранено`,
-                        variant: 'destructive',
-                    })
-                } else {
-                    const firstError = results.find((result) => result.status === 'rejected')?.reason
-                    toast({
-                        title: firstError?.status === 403 || firstError?.status === 404
-                            ? 'Файл недоступен'
-                            : 'Не удалось загрузить файл',
-                        variant: 'destructive',
-                    })
-                }
-            } finally {
-                setSavingAsAttachmentMessageId(null)
-            }
-            return
+
+        if (attachments.length > 1 && canUseSaveFilePicker()) {
+            toast({ title: 'Для каждого вложения будет открыт выбор места сохранения.' })
         }
 
-        if (attachments.length > 1 && window.showSaveFilePicker) {
-            toast({ title: 'Браузер попросит выбрать место для каждого файла' })
-        }
-
-        let fallbackUsed = false
         try {
             const results = []
             for (const attachment of attachments) {
                 try {
                     const file = await fetchAttachmentBlob(routeDialogId, attachment)
-                    const result = await saveBlobAsFile(file)
-                    fallbackUsed = fallbackUsed || result.fallback
-                    results.push({ status: 'fulfilled' })
+                    debugMediaCapabilities({
+                        action: 'save-as',
+                        contentType: file.mediaType,
+                        mediaType: attachment.mediaType,
+                        attachmentKind: attachment.attachmentKind,
+                    })
+                    const result = await saveBlobAs({
+                        blob: file.blob,
+                        filename: file.filename,
+                        contentType: file.mediaType,
+                    })
+                    results.push({ status: result.mode === 'cancelled' ? 'cancelled' : 'fulfilled', mode: result.mode })
                 } catch (error) {
-                    if (error.name === 'AbortError') {
+                    if (error?.name === 'AbortError') {
                         results.push({ status: 'cancelled' })
                     } else {
                         results.push({ status: 'rejected', reason: error })
@@ -1390,11 +1502,15 @@ function ChatsPage() {
 
             const savedCount = results.filter((result) => result.status === 'fulfilled').length
             const failedCount = results.filter((result) => result.status === 'rejected').length
+            const fallbackUsed = results.some((result) => result.mode === 'download-fallback')
             if (failedCount === 0 && savedCount > 0) {
                 toast({
                     title: fallbackUsed
-                        ? 'Выбор папки недоступен, файл сохранён через загрузки'
+                        ? attachments.length === 1 ? 'Файл сохранён в загрузки' : 'Вложения сохранены в загрузки'
                         : attachments.length === 1 ? 'Файл сохранён' : 'Вложения сохранены',
+                    description: fallbackUsed
+                        ? 'Выбор папки поддерживается не во всех браузерах. Для выбора папки используйте Chrome/Edge или настройку браузера “спрашивать место сохранения”.'
+                        : undefined,
                 })
             } else if (failedCount > 0 && savedCount > 0) {
                 toast({
@@ -1421,35 +1537,44 @@ function ChatsPage() {
         const attachments = (message.attachments || []).filter((attachment) => attachment.id)
         if (attachments.length === 0 || copyingAttachmentMessageId === message.id) return
 
-        const attachment = attachments.find((item) => item.mediaType?.startsWith('image/')) || attachments[0]
-        if (attachments.length > 1 && !attachment.mediaType?.startsWith('image/')) {
-            closeMessageMenu()
-            toast({
-                title: 'Копирование нескольких файлов в буфер не поддерживается браузером',
-                description: 'Используйте “Сохранить как...”',
-                variant: 'destructive',
-            })
-            return
-        }
+        const imageAttachments = attachments.filter((item) =>
+            isImageType(item.mediaType) || item.attachmentKind === 'IMAGE'
+        )
+        const attachment = imageAttachments[0] || attachments[0]
 
         setCopyingAttachmentMessageId(message.id)
         closeMessageMenu()
         try {
-            await copyAttachmentToClipboard(routeDialogId, attachment)
+            const result = await copyAttachmentToClipboard(routeDialogId, attachment)
             toast({
-                title: 'Медиа скопировано',
-                description: attachments.length > 1
-                    ? 'Скопировано первое изображение. Для остальных используйте “Сохранить как...”'
+                title: imageAttachments.length > 0 && attachments.length > 1
+                    ? 'Скопировано первое изображение'
+                    : result.type === 'file' ? 'Файл скопирован' : 'Медиа скопировано',
+                description: imageAttachments.length > 0 && attachments.length > 1
+                    ? 'Буфер браузера обычно поддерживает одно медиа за раз.'
                     : undefined,
             })
         } catch (error) {
+            const isUnavailable = error.status === 403 || error.status === 404
+            const isUnsupported = error.code === 'CLIPBOARD_UNSUPPORTED' || error.code === 'CLIPBOARD_FILE_UNSUPPORTED'
+            const isImageFailure = error.code === 'CLIPBOARD_IMAGE_FAILED'
             toast({
-                title: error.message === 'CLIPBOARD_UNSUPPORTED'
-                    ? 'Этот тип файла нельзя скопировать в буфер в текущем браузере'
-                    : error.status === 403 || error.status === 404
+                title: isUnsupported
+                    ? imageAttachments.length > 0
+                        ? 'Копирование медиа недоступно'
+                        : 'Этот тип файла нельзя скопировать в буфер в текущем браузере'
+                    : isUnavailable
                         ? 'Файл недоступен'
-                        : 'Не удалось скопировать медиа',
-                description: 'Используйте “Сохранить как...”',
+                        : isImageFailure
+                            ? 'Не удалось скопировать изображение'
+                            : 'Не удалось загрузить файл',
+                description: isUnavailable
+                    ? undefined
+                    : isImageFailure
+                        ? 'Попробуйте сохранить файл через “Сохранить как...”.'
+                        : error.code === 'CLIPBOARD_UNSUPPORTED'
+                            ? `${getMediaCapabilityWarning('copy-media')} Ваш браузер не поддерживает копирование этого типа файла. Используйте “Сохранить как...”.`.trim()
+                            : 'Используйте “Сохранить как...”.',
                 variant: 'destructive',
             })
         } finally {
