@@ -322,7 +322,7 @@ function EmployerProfileSection({
                                 onClick={() => setIsEditingProfile(true)}
                             >
                                 <img src={editIcon} alt="" className="icon" />
-                                Публичный профиль
+                                Редактировать данные
                             </button>
                             <button
                                 type="button"

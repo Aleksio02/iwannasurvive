@@ -86,6 +86,7 @@ $section-title-size: 19px;
 .profile-card__edit-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 8px 14px;
   background: transparent;
@@ -96,11 +97,25 @@ $section-title-size: 19px;
   color: $gray-600;
   cursor: pointer;
   transition: $transition;
+  white-space: nowrap;
 
   &:hover {
     border-color: $primary;
     color: $primary;
     background: $primary-light;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-card__edit-btn {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    word-break: break-word;
+    text-align: center;
+    padding: 10px 16px;
+    font-size: 14px;
+    line-height: 1.4;
   }
 }
 
@@ -1080,6 +1095,35 @@ $section-title-size: 19px;
 
   .input {
     min-width: 280px;
+
+    &::placeholder {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .employer-opportunities__filters {
+    .input {
+      min-width: 0;
+      width: 100%;
+
+      &::placeholder {
+        white-space: normal;
+        word-break: break-word;
+        font-size: 13px;
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .employer-opportunities__filters {
+    .input::placeholder {
+      font-size: 12px;
+    }
   }
 }
 
@@ -1233,6 +1277,22 @@ $section-title-size: 19px;
     padding: 6px 12px;
     border-radius: 10px;
     transition: $transition;
+  }
+}
+
+@media (max-width: 768px) {
+  .employer-opportunities__actions {
+    flex-direction: column;
+    width: 100%;
+
+    button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  .employer-opportunities__meta {
+    width: 100%;
   }
 }
 
@@ -1511,10 +1571,29 @@ $section-title-size: 19px;
   }
 }
 
+@media (max-width: 640px) {
+  .employer-applicants__actions {
+    align-items: stretch;
+
+    .employer-applicants__buttons {
+      justify-content: stretch;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .employer-applicants__actions {
+    .employer-applicants__buttons {
+      margin-bottom: 12px;
+    }
+  }
+}
+
 .employer-applicants__buttons {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-start;
 
   button {
     padding: 6px 14px;
@@ -1541,6 +1620,33 @@ $section-title-size: 19px;
     background: #e3f2fd;
     border-color: #bbdef5;
     color: #1976d2;
+  }
+}
+
+@media (max-width: 640px) {
+  .employer-applicants__buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+
+    .btn-approve {
+      grid-column: span 2;
+    }
+
+    .btn-reject,
+    .btn-reserve {
+      grid-column: span 1;
+    }
+  }
+
+  .employer-applicants__actions {
+    align-items: stretch;
+  }
+
+  .employer-applicants__buttons button {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -2949,5 +3055,148 @@ $section-title-size: 19px;
   .input--disabled,
   input[readonly] {
     font-size: 13px !important;
+  }
+}
+
+// Добавить в конец файла EmployerDashboard.scss
+
+.employer-profile__view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.employer-profile__view-header h2 {
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.employer-profile__view-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .employer-profile__view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .employer-profile__view-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .profile-card__edit-btn {
+    width: 100%;
+    justify-content: center;
+    white-space: nowrap;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 768px) {
+  .employer-opportunities__actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+
+    button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  .employer-opportunities__meta {
+    width: 100%;
+    align-items: stretch;
+    text-align: left;
+  }
+
+  .employer-opportunities__item {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .employer-opportunities__info {
+    order: 1;
+  }
+
+  .employer-opportunities__meta {
+    order: 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .opportunity-status-manager {
+    width: 100%;
+  }
+
+  .opportunity-status-manager__task-info {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+
+    > span {
+      width: 100%;
+      word-break: break-word;
+    }
+  }
+
+  .opportunity-status-manager__button--small {
+    width: 100%;
+    justify-content: center;
+    margin-top: 4px;
+  }
+
+  .opportunity-status-manager__badge {
+    justify-content: center;
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 320px) {
+  .employer-opportunities__actions {
+    gap: 8px;
+  }
+
+  .employer-opportunities__actions button,
+  .employer-opportunities__view {
+    font-size: 12px;
+    padding: 8px 12px;
+    min-height: 40px;
+  }
+
+  .opportunity-status-manager__task-info {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .opportunity-status-manager__badge {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .status-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .field-error.is-placeholder {
+    display: none;
   }
 }
