@@ -55,7 +55,7 @@ function getApplicationStatusClass(status) {
 // Добавляем недостающую функцию
 function getApplicantFileUrl(userId, fileId) {
     if (!userId || !fileId) return null
-    return `/api/profile/applicant/${userId}/file/${fileId}`
+    return `/api/profile/applicant/${userId}/files/${fileId}`
 }
 
 async function apiRequest(url) {
