@@ -70,6 +70,7 @@ const MAX_VERIFICATION_FILES = 5
 const MAX_VERIFICATION_FILE_SIZE_BYTES = 20 * 1024 * 1024
 const GEO_CITY_DEBOUNCE_MS = 60
 const GEO_ADDRESS_DEBOUNCE_MS = 90
+const MODERATION_HISTORY_ROLES = new Set(['ADMIN', 'CURATOR'])
 
 const getVerificationPendingFileClientId = (file) => `${file.name}_${file.size}_${file.lastModified}`
 
@@ -127,6 +128,10 @@ const areCompanyPayloadsEqual = (a = {}, b = {}) => {
         String(a.legalName || '').trim() === String(b.legalName || '').trim() &&
         String(a.inn || '').trim() === String(b.inn || '').trim()
     )
+}
+
+function canReadModerationHistory(actor) {
+    return MODERATION_HISTORY_ROLES.has(String(actor?.role || '').toUpperCase())
 }
 
 const normalizeVerificationResponse = (verification, fallbackUserId = null, fallbackMethod = 'TIN', fallbackInn = '') => {
@@ -557,9 +562,10 @@ function EmployerDashboard() {
     }, [])
 
     // Загружаем историю модерации (если доступно, но не критично)
-    const loadModerationFeedback = useCallback(async (entityId) => {
-        if (!entityId) {
+    const loadModerationFeedback = useCallback(async (entityId, actor = null) => {
+        if (!entityId || !canReadModerationHistory(actor)) {
             setModerationFeedback(null)
+            setLatestProfileApprovalAt(null)
             return []
         }
 
@@ -612,8 +618,12 @@ function EmployerDashboard() {
         }
     }, [])
 
-    const loadActiveModerationTask = useCallback(async (entityId, existingHistory = null) => {
-        if (!entityId || !isProfileAlreadyOnModeration(profile.moderationStatus)) {
+    const loadActiveModerationTask = useCallback(async (entityId, existingHistory = null, actor = null) => {
+        if (
+            !entityId ||
+            !canReadModerationHistory(actor) ||
+            !isProfileAlreadyOnModeration(profile.moderationStatus)
+        ) {
             setActiveModerationTask(null)
             return null
         }
@@ -724,8 +734,8 @@ function EmployerDashboard() {
             }
         }
 
-        const history = await loadModerationFeedback(normalized.userId || user.userId)
-        await loadActiveModerationTask(normalized.userId || user.userId, history)
+        const history = await loadModerationFeedback(normalized.userId || user.userId, user)
+        await loadActiveModerationTask(normalized.userId || user.userId, history, user)
 
         return normalized
     }, [
@@ -1736,8 +1746,8 @@ function EmployerDashboard() {
                 setVerificationModerationTask(null)
             }
 
-            const history = await loadModerationFeedback(normalized.userId || currentUser.userId)
-            await loadActiveModerationTask(normalized.userId || currentUser.userId, history)
+            const history = await loadModerationFeedback(normalized.userId || currentUser.userId, currentUser)
+            await loadActiveModerationTask(normalized.userId || currentUser.userId, history, currentUser)
 
             try {
                 const opportunityPage = await getEmployerOpportunities()
@@ -1746,18 +1756,7 @@ function EmployerDashboard() {
                 setOpportunities([])
             }
 
-            try {
-                const page = await getEmployerApplications({
-                    limit: 50,
-                    offset: 0,
-                    sortDirection: responseFilters.sortDirection,
-                    status: responseFilters.status || undefined,
-                    search: responseFilters.search || undefined,
-                })
-                setResponsesPage(page || { items: [], total: 0, limit: 50, offset: 0 })
-            } catch {
-                setResponsesPage({ items: [], total: 0, limit: 50, offset: 0 })
-            }
+            setResponsesPage((prev) => prev || { items: [], total: 0, limit: 50, offset: 0 })
         } catch (error) {
             if ([401, 403].includes(error?.status)) {
                 setUser(null)
@@ -1784,7 +1783,6 @@ function EmployerDashboard() {
         loadEmployerLocationsData,
         loadModerationFeedback,
         loadActiveModerationTask,
-        responseFilters,
         syncWorkspaceProfileState,
         toast,
     ])
