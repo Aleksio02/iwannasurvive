@@ -16,6 +16,8 @@ data class OpportunityListItem(
     val title: String,
     val shortDescription: String,
     val companyName: String,
+    val employerVerified: Boolean = false,
+    val employerVerificationStatus: String? = null,
     val type: OpportunityType,
     val workFormat: WorkFormat,
     val employmentType: EmploymentType?,
