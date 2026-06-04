@@ -288,6 +288,14 @@ function EmployerVerificationModal({
         onRemovePendingFile?.(clientId)
     }
 
+    const handleOpenPendingFile = (pendingFile) => {
+        if (!pendingFile?.file) return
+
+        const url = URL.createObjectURL(pendingFile.file)
+        window.open(url, '_blank', 'noopener,noreferrer')
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    }
+
     const handleOverlayMouseDown = (event) => {
         overlayPressStartedOutsideRef.current = event.target === event.currentTarget
     }
@@ -662,6 +670,7 @@ function EmployerVerificationModal({
                                 {pendingFiles.map((pendingFile, index) => {
                                     const fileName = pendingFile?.name || `Файл ${index + 1}`
                                     const fileSize = formatFileSize(pendingFile?.size)
+                                    const canOpenPendingFile = Boolean(pendingFile?.file)
 
                                     return (
                                         <div
@@ -669,7 +678,20 @@ function EmployerVerificationModal({
                                             className="employer-verification-modal__attachment"
                                         >
                                             <div className="employer-verification-modal__attachment-info">
-                                                <div className="employer-verification-modal__attachment-name">
+                                                <div
+                                                    className="employer-verification-modal__attachment-name"
+                                                    onClick={() => canOpenPendingFile && handleOpenPendingFile(pendingFile)}
+                                                    onKeyDown={(event) => {
+                                                        if (!canOpenPendingFile) return
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault()
+                                                            handleOpenPendingFile(pendingFile)
+                                                        }
+                                                    }}
+                                                    style={{ cursor: canOpenPendingFile ? 'pointer' : 'default' }}
+                                                    role={canOpenPendingFile ? 'button' : undefined}
+                                                    tabIndex={canOpenPendingFile ? 0 : undefined}
+                                                >
                                                     {fileName}
                                                 </div>
                                                 <div className="employer-verification-modal__helper">
@@ -712,7 +734,7 @@ function EmployerVerificationModal({
                                 </div>
                                 {verificationAttachments.map((file, index) => {
                                     const attachmentKey = getAttachmentKey(file, index)
-                                    const fileId = file?.fileId || file?.file?.fileId || file?.id
+                                    const fileId = file?.fileId || file?.file?.fileId || file?.attachmentId || file?.id
                                     const fileName =
                                         file?.file?.originalFileName ||
                                         file?.originalFilename ||
