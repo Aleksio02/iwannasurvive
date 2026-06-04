@@ -1675,12 +1675,12 @@ export async function getEmployerProfileWorkspace(userId) {
 }
 
 export async function completeEmployerOnboarding({
-                                                     companyData,
-                                                     publicProfile,
-                                                     verification,
-                                                 }) {
-    await updateEmployerCompanyData(companyData)
+    companyData,
+    publicProfile,
+    verification,
+}) {
     await updateEmployerProfile(publicProfile)
+    await updateEmployerCompanyData(companyData)
 
     if (verification) {
         try {
