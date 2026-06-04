@@ -43,6 +43,11 @@ import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import { toShort, cleanLinksToArray, createLinkRow } from '@/shared/lib/utils/formHelpers'
+import {
+    detectContactMethodType,
+    isEmployerPublicContactType,
+    normalizeSocialLinkUrl,
+} from '@/shared/lib/utils/contactLinks'
 import ApplicantTagsEditor from './components/ApplicantTagsEditor'
 import ApplicantPrivacyPreview from './components/ApplicantPrivacyPreview'
 import './ProfileEdit.scss'
@@ -132,7 +137,7 @@ const SOCIAL_LINK_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
 )
 
 const CONTACT_METHOD_PRESETS = CONTACT_LINK_PRESETS.filter((preset) =>
-    ['telegram', 'email', 'phone', 'whatsapp', 'website'].includes(preset.id)
+    ['telegram', 'email', 'phone', 'whatsapp'].includes(preset.id)
 )
 
 function mapLinksToRows(items = [], valueKey = 'url') {
@@ -393,7 +398,7 @@ function ProfileEdit() {
     const [companySize, setCompanySize] = useState('')
     const [foundedYear, setFoundedYear] = useState('')
     const [socialRows, setSocialRows] = useState([createLinkRow()])
-    const [publicContactRows, setPublicContactRows] = useState([createLinkRow()])
+    const [publicContactRows, setPublicContactRows] = useState([])
 
     const [locationForm, setLocationForm] = useState(createEmptyEmployerLocationForm())
     const [locationErrors, setLocationErrors] = useState({})
@@ -481,7 +486,16 @@ function ProfileEdit() {
                         setCompanySize(profile.companySize || '')
                         setFoundedYear(profile.foundedYear ? String(profile.foundedYear) : '')
                         setSocialRows(mapLinksToRows(profile.socialLinks, 'url'))
-                        setPublicContactRows(mapLinksToRows(profile.publicContacts, 'value'))
+                        setPublicContactRows(
+                            profile.publicContacts?.length
+                                ? mapLinksToRows(
+                                    profile.publicContacts.filter((item) => isEmployerPublicContactType(
+                                        item.type || detectContactMethodType(item.value || item.url || '', item.label || item.title || '')
+                                    )),
+                                    'value'
+                                )
+                                : []
+                        )
                     } else {
                         setCompanyName(user?.displayName || '')
                     }
@@ -1029,12 +1043,19 @@ function ProfileEdit() {
         if (!lastName.trim()) next.lastName = 'Укажите фамилию'
         if (!universityName.trim()) next.universityName = 'Укажите вуз'
 
-        if (!course.trim() || toShort(course) < 1 || toShort(course) > 6) {
+        const hasCourse = Boolean(course.trim())
+        const hasGraduationYear = Boolean(graduationYear.trim())
+
+        if (hasCourse && (toShort(course) < 1 || toShort(course) > 6)) {
             next.course = 'Курс от 1 до 6'
         }
 
-        if (!graduationYear.trim() || toShort(graduationYear) < 1990 || toShort(graduationYear) > 2100) {
+        if (hasGraduationYear && (toShort(graduationYear) < 1990 || toShort(graduationYear) > 2100)) {
             next.graduationYear = 'Год выпуска 1990–2100'
+        }
+
+        if (!hasCourse && !hasGraduationYear) {
+            next.educationPeriod = 'Укажите курс или год выпуска'
         }
 
         if (!cityId) {
@@ -1313,15 +1334,19 @@ function ProfileEdit() {
                         .filter((row) => row.url?.trim())
                         .map((row, index) => ({
                             label: row.title?.trim() || `Ссылка ${index + 1}`,
-                            url: row.url.trim(),
+                            url: normalizeSocialLinkUrl(row.url, row.title),
                         })),
                     publicContacts: publicContactRows
                         .filter((row) => row.url?.trim())
-                        .map((row, index) => ({
-                            type: 'OTHER',
-                            label: row.title?.trim() || `Контакт ${index + 1}`,
-                            value: row.url.trim(),
-                        })),
+                        .map((row, index) => {
+                            const type = detectContactMethodType(row.url, row.title)
+                            return {
+                                type,
+                                label: row.title?.trim() || `Контакт ${index + 1}`,
+                                value: row.url.trim(),
+                            }
+                        })
+                        .filter((contact) => isEmployerPublicContactType(contact.type)),
                 })
 
                 await updateEmployerCompanyData({
@@ -1616,12 +1641,13 @@ function ProfileEdit() {
                                     />
                                 </div>
 
+                                <div className="field-hint">
+                                    Для модерации достаточно указать одно из двух: текущий курс или год выпуска.
+                                </div>
+
                                 <div className="profile-edit-form__grid-3">
                                     <div className="profile-edit-form__field">
-                                        <Label>
-                                            Курс
-                                            <span className="required-star"> *</span>
-                                        </Label>
+                                        <Label>Курс</Label>
                                         <Input
                                             id="course"
                                             value={course}
@@ -1632,10 +1658,7 @@ function ProfileEdit() {
                                     </div>
 
                                     <div className="profile-edit-form__field">
-                                        <Label>
-                                            Год выпуска
-                                            <span className="required-star"> *</span>
-                                        </Label>
+                                        <Label>Год выпуска</Label>
                                         <Input
                                             id="graduationYear"
                                             value={graduationYear}
@@ -1670,6 +1693,7 @@ function ProfileEdit() {
                                         />
                                     </div>
                                 </div>
+                                {errors.educationPeriod && <p className="field-error">{errors.educationPeriod}</p>}
 
                                 <div className="profile-edit-form__field">
                                     <Label>О себе</Label>

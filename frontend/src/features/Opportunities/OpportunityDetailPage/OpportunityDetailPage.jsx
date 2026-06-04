@@ -7,6 +7,7 @@ import YandexOpportunityMap from '@/shared/ui/Map/YandexOpportunityMap'
 import { getOpportunity, OPPORTUNITY_LABELS } from '@/shared/api/opportunities'
 import {
     applyToOpportunity,
+    getSeekerApplications,
     addToSaved,
     removeFromSaved,
     addGuestFavoriteOpportunity,
@@ -115,6 +116,8 @@ export default function OpportunityDetailPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState('')
     const [isApplying, setIsApplying] = useState(false)
+    const [hasApplied, setHasApplied] = useState(false)
+    const [isApplicationsStateLoading, setIsApplicationsStateLoading] = useState(false)
     const [currentUser, setCurrentUser] = useState(getSessionUser())
     const [isFavorite, setIsFavorite] = useState(false)
     const [isFavoriteLoading, setIsFavoriteLoading] = useState(false)
@@ -143,7 +146,7 @@ export default function OpportunityDetailPage() {
         })
 
         return unsubscribe
-    }, [params?.id])
+    }, [currentUser, params?.id])
 
     useEffect(() => {
         const handleFavoritesUpdated = (event) => {
@@ -165,6 +168,38 @@ export default function OpportunityDetailPage() {
 
     const role = currentUser?.role || 'GUEST'
     const isApplicant = role === 'APPLICANT'
+
+    useEffect(() => {
+        if (!params?.id || !isApplicant) {
+            setHasApplied(false)
+            return
+        }
+
+        let isMounted = true
+
+        async function loadApplicationsState() {
+            setIsApplicationsStateLoading(true)
+            try {
+                const applications = await getSeekerApplications()
+                if (!isMounted) return
+
+                const exists = Array.isArray(applications) && applications.some((application) => (
+                    Number(application.opportunityId) === Number(params.id)
+                ))
+                setHasApplied(exists)
+            } catch {
+                if (isMounted) setHasApplied(false)
+            } finally {
+                if (isMounted) setIsApplicationsStateLoading(false)
+            }
+        }
+
+        void loadApplicationsState()
+
+        return () => {
+            isMounted = false
+        }
+    }, [isApplicant, params?.id])
 
     useEffect(() => {
         if (!params?.id) return
@@ -282,6 +317,7 @@ export default function OpportunityDetailPage() {
 
     const handleApply = async () => {
         if (!item) return
+        if (hasApplied) return
 
         if (!currentUser) {
             toast({
@@ -305,15 +341,35 @@ export default function OpportunityDetailPage() {
         setIsApplying(true)
         try {
             await applyToOpportunity(item.id)
+            setHasApplied(true)
             toast({
                 title: 'Отклик отправлен',
                 description: `Ваш отклик на «${item.title}» успешно отправлен`,
             })
         } catch (applyError) {
             if (applyError.message?.includes('already') || applyError.message?.includes('уже')) {
+                setHasApplied(true)
                 toast({
-                    title: 'Уже откликались',
-                    description: 'Вы уже откликались на эту возможность',
+                    title: 'Отклик уже отправлен',
+                    description: 'Вы можете отслеживать его статус в личном кабинете',
+                })
+                return
+            }
+
+            if (applyError.status === 401) {
+                toast({
+                    title: 'Сессия недоступна',
+                    description: 'Пожалуйста, войдите снова',
+                    variant: 'destructive',
+                })
+                navigate('/login')
+                return
+            }
+
+            if (applyError.status === 403) {
+                toast({
+                    title: 'Профиль ожидает модерацию',
+                    description: 'Чтобы откликнуться, отправьте профиль на модерацию и дождитесь одобрения.',
                     variant: 'destructive',
                 })
                 return
@@ -665,13 +721,27 @@ export default function OpportunityDetailPage() {
 
                             <div className="opportunity-detail-page__actions">
                                 {isApplicant && (
-                                    <Button
-                                        className="button--primary button--full"
-                                        onClick={handleApply}
-                                        disabled={isApplying}
-                                    >
-                                        {isApplying ? 'Отправка...' : 'Откликнуться'}
-                                    </Button>
+                                    hasApplied ? (
+                                        <div className="opportunity-detail-page__application-state" role="status">
+                                            <span className="opportunity-detail-page__application-status">
+                                                Отклик отправлен
+                                            </span>
+                                            <Link
+                                                href="/seeker?tab=applications"
+                                                className="opportunity-detail-page__applications-link"
+                                            >
+                                                Мои отклики
+                                            </Link>
+                                        </div>
+                                    ) : (
+                                        <Button
+                                            className="button--primary button--full"
+                                            onClick={handleApply}
+                                            disabled={isApplying || isApplicationsStateLoading}
+                                        >
+                                            {isApplying ? 'Отправка...' : 'Откликнуться'}
+                                        </Button>
+                                    )
                                 )}
 
                                 {role === 'EMPLOYER' && (

@@ -399,6 +399,58 @@
     }
   }
 
+  &__application-state {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #c8e7e3;
+    border-radius: 14px;
+    background: #f1fbf9;
+  }
+
+  &__application-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: #0f5f68;
+    font-size: 14px;
+    font-weight: 700;
+
+    &::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: #1fb6aa;
+    }
+  }
+
+  &__applications-link {
+    flex: 0 0 auto;
+    color: #0f5f68;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      color: #0b4a52;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #1fb6aa;
+      outline-offset: 3px;
+      border-radius: 6px;
+    }
+  }
+
   &__sidebar {
     position: sticky;
     top: 100px; /* Отступ от верха страницы, чтобы не перекрывать шапку */
@@ -619,6 +671,16 @@
         padding: 13px 18px;
         font-size: 15px;
       }
+    }
+
+    &__application-state {
+      flex-wrap: wrap;
+      align-items: flex-start;
+      padding: 12px;
+    }
+
+    &__applications-link {
+      width: 100%;
     }
 
     &__map-card {
