@@ -3200,3 +3200,53 @@ $section-title-size: 19px;
     display: none;
   }
 }
+
+.employer-create-form__field {
+  input[type="date"],
+  input[type="datetime-local"] {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: block;
+
+    &::-webkit-datetime-edit-fields-wrapper {
+      padding: 0;
+    }
+
+    &::-webkit-datetime-edit-text {
+      padding: 0 2px;
+    }
+
+    &::-webkit-datetime-edit-month-field,
+    &::-webkit-datetime-edit-day-field,
+    &::-webkit-datetime-edit-year-field {
+      padding: 0 2px;
+    }
+
+    &::-webkit-calendar-picker-indicator {
+      padding: 2px;
+      margin: 0;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .employer-create-form__field {
+    input[type="date"],
+    input[type="datetime-local"] {
+      font-size: 14px;
+      padding: 0 8px;
+      height: var(--control-height);
+      min-height: var(--control-height);
+    }
+  }
+}
+
+input[type="date"] {
+  &::-webkit-datetime-edit {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
