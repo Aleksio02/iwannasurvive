@@ -1,22 +1,35 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Input from '@/shared/ui/Input'
 
-const TAG_SUGGESTION_LIMIT = 6
-const DEFAULT_TAG_SUGGESTION_LIMIT = 3
+const TAG_SUGGESTION_LIMIT = 10
+const DESKTOP_TAG_SUGGESTION_LIMIT = 8
+const MOBILE_TAG_SUGGESTION_LIMIT = 4
 
 function normalizeTagName(value) {
     return String(value || '').trim().toLowerCase()
 }
 
 export default function OpportunityTagSearchFilter({
-    title,
-    placeholder,
-    tags,
-    selectedTagIds,
-    onToggleTag,
-}) {
+                                                       title,
+                                                       placeholder,
+                                                       tags,
+                                                       selectedTagIds,
+                                                       onToggleTag,
+                                                   }) {
     const [search, setSearch] = useState('')
+    const [isMobile, setIsMobile] = useState(false)
     const normalizedSearch = normalizeTagName(search)
+
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth <= 768)
+        }
+        checkMobile()
+        window.addEventListener('resize', checkMobile)
+        return () => window.removeEventListener('resize', checkMobile)
+    }, [])
+
+    const DEFAULT_TAG_SUGGESTION_LIMIT = isMobile ? MOBILE_TAG_SUGGESTION_LIMIT : DESKTOP_TAG_SUGGESTION_LIMIT
 
     const selectedTags = useMemo(
         () => tags.filter((tag) => selectedTagIds.includes(tag.id)),
@@ -35,7 +48,7 @@ export default function OpportunityTagSearchFilter({
             ...selectedTags,
             ...unselectedTags.slice(0, suggestionLimit),
         ]
-    }, [normalizedSearch, selectedTagIds, selectedTags, tags])
+    }, [normalizedSearch, selectedTagIds, selectedTags, tags, DEFAULT_TAG_SUGGESTION_LIMIT])
 
     const hasHiddenMatches = useMemo(() => {
         const matchingUnselectedCount = tags
@@ -46,7 +59,7 @@ export default function OpportunityTagSearchFilter({
         const suggestionLimit = normalizedSearch ? TAG_SUGGESTION_LIMIT : DEFAULT_TAG_SUGGESTION_LIMIT
 
         return matchingUnselectedCount > suggestionLimit
-    }, [normalizedSearch, selectedTagIds, tags])
+    }, [normalizedSearch, selectedTagIds, tags, DEFAULT_TAG_SUGGESTION_LIMIT])
 
     const hiddenMatchesCount = useMemo(() => {
         const matchingUnselectedCount = tags
@@ -56,7 +69,7 @@ export default function OpportunityTagSearchFilter({
         const suggestionLimit = normalizedSearch ? TAG_SUGGESTION_LIMIT : DEFAULT_TAG_SUGGESTION_LIMIT
 
         return Math.max(0, matchingUnselectedCount - suggestionLimit)
-    }, [normalizedSearch, selectedTagIds, tags])
+    }, [normalizedSearch, selectedTagIds, tags, DEFAULT_TAG_SUGGESTION_LIMIT])
 
     return (
         <div className="opportunities-page__tag-filter">
