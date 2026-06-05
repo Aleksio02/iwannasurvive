@@ -581,6 +581,13 @@ class EmployerOpportunityServiceImpl(
             )
         }
 
+        if (location.latitude == null || location.longitude == null) {
+            throw OpportunityValidationException(
+                message = "У выбранной локации нет координат. Обновите адрес локации через подсказку.",
+                details = mapOf("locationId" to locationId.toString()),
+            )
+        }
+
         val locationCityId = requireNotNull(location.cityId)
         cityDao.findByIdAndIsActiveTrue(locationCityId)
             .orElseThrow {
