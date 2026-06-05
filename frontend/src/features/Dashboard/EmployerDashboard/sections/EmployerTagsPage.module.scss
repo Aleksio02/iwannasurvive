@@ -300,6 +300,98 @@
   opacity: 0.65;
 }
 
+html[data-theme='dark'] {
+  .createBtn {
+    border-color: rgba(77, 225, 214, 0.42);
+    background: linear-gradient(135deg, #138f86 0%, #24cfc3 100%);
+    color: #ffffff;
+    box-shadow: 0 12px 24px rgba(33, 200, 188, 0.14);
+  }
+
+  .createBtn:hover {
+    border-color: rgba(111, 243, 234, 0.62);
+    background: linear-gradient(135deg, #16a39a 0%, #38ded2 100%);
+    box-shadow: 0 14px 28px rgba(33, 200, 188, 0.2);
+  }
+
+  .filters,
+  .table,
+  .dialog {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: none;
+  }
+
+  .table th {
+    background: rgba(18, 29, 43, 0.86);
+    color: var(--color-text-muted);
+  }
+
+  .table td {
+    color: var(--color-text);
+    border-bottom-color: var(--color-border);
+  }
+
+  .table tbody tr {
+    background: transparent;
+  }
+
+  .detailBtn,
+  .dialogSecondary {
+    border-color: rgba(156, 190, 208, 0.28);
+    background: rgba(22, 35, 52, 0.78);
+    color: #e8f7fb;
+  }
+
+  .detailBtn:hover,
+  .dialogSecondary:hover:not(:disabled) {
+    border-color: rgba(77, 225, 214, 0.5);
+    background: rgba(33, 200, 188, 0.14);
+    color: #ffffff;
+  }
+
+  .cancelBtn,
+  .btnReject {
+    border-color: rgba(255, 107, 134, 0.34);
+    background: rgba(255, 107, 134, 0.1);
+    color: #ffb7c5;
+  }
+
+  .cancelBtn:hover,
+  .btnReject:hover {
+    border-color: rgba(255, 107, 134, 0.5);
+    background: rgba(255, 107, 134, 0.18);
+    color: #ffd6dd;
+  }
+
+  .btnApprove {
+    border-color: rgba(77, 225, 165, 0.3);
+    background: rgba(77, 225, 165, 0.1);
+    color: #8ff4c5;
+  }
+
+  .btnApprove:hover {
+    background: rgba(77, 225, 165, 0.18);
+  }
+
+  .dialogError {
+    border-color: rgba(255, 107, 134, 0.34);
+    background: rgba(255, 107, 134, 0.1);
+    color: #ffb7c5;
+  }
+
+  .dialogDanger {
+    border-color: rgba(255, 107, 134, 0.42);
+    background: linear-gradient(135deg, #d83f5f 0%, #b4233f 100%);
+    color: #ffffff;
+  }
+
+  .dialogDanger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e64e6d 0%, #c92d4c 100%);
+  }
+}
+
 @media (max-width: 900px) {
   .header {
     flex-direction: column;
@@ -388,5 +480,13 @@
   .dialogSecondary,
   .dialogDanger {
     width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  html[data-theme='dark'] {
+    .table tr {
+      background: var(--color-surface);
+    }
   }
 }

@@ -250,18 +250,6 @@ export default function RecommendationsSection({
                                         </span>
                                     )}
 
-                                    <button
-                                        type="button"
-                                        className="recommendation-btn recommendation-btn--primary"
-                                        onClick={(event) => {
-                                            event.stopPropagation()
-                                            handleOpenRecommendation(item)
-                                        }}
-                                        disabled={isUpdating}
-                                    >
-                                        Перейти к вакансии
-                                    </button>
-
                                     {isIncomingTab ? (
                                         <div className="recommendation-card__secondary-actions">
                                             {canMoveToStatus(item.status, 'VIEWED') && (

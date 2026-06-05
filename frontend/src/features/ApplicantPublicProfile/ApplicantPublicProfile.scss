@@ -244,11 +244,11 @@
     }
   }
 
-@keyframes applicant-avatar-spin {
-  to {
-    transform: rotate(360deg);
+  @keyframes applicant-avatar-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
-}
 
   &__avatar-fallback-icon {
     width: 42px;
@@ -696,5 +696,92 @@
   .profile-contact {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* ===== DARK THEME ===== */
+html[data-theme='dark'] {
+  .meta-item,
+  .meta-item strong,
+  .meta-item span {
+    color: #ffffff;
+  }
+
+  .applicant-public-profile__hero-card,
+  .applicant-public-profile__section-card {
+    background: rgba(18, 29, 43, 0.94);
+    backdrop-filter: blur(14px);
+    border-color: rgba(77, 225, 214, 0.38);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 40px rgba(0, 0, 0, 0.15);
+  }
+
+  .applicant-public-profile__contact-panel,
+  .applicant-public-profile__contact-panel--default,
+  .applicant-public-profile__contact-panel--pending,
+  .applicant-public-profile__contact-panel--connected,
+  .applicant-public-profile__contact-panel--incoming {
+    background: rgba(18, 29, 43, 0.92);
+    backdrop-filter: blur(14px);
+    border-color: rgba(77, 225, 214, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 12px 28px rgba(0, 0, 0, 0.2);
+  }
+
+  .applicant-public-profile__contact-kicker {
+    color: #4de1d6;
+  }
+
+  .applicant-public-profile__contact-title,
+  .applicant-public-profile__section-card h2,
+  .applicant-public-profile__section-card p,
+  .applicant-public-profile__hero-top h1 {
+    color: #f4fbff;
+  }
+
+  .applicant-public-profile__contact-subtitle {
+    color: #aec1cf;
+  }
+
+  .applicant-public-profile__section-card p {
+    color: #d4e2ec;
+  }
+
+  .simple-list__item,
+  .profile-link,
+  .profile-contact {
+    background: rgba(21, 44, 57, 0.96);
+    border-color: rgba(77, 225, 214, 0.38);
+    color: #f4fbff;
+  }
+
+  .profile-link__icon,
+  .profile-contact__icon {
+    filter: brightness(0) invert(1) opacity(0.92);
+  }
+
+  .tag {
+    background: rgba(33, 200, 188, 0.14);
+    border-color: rgba(77, 225, 214, 0.28);
+    color: #4de1d6;
+  }
+
+  .badge--success,
+  .badge--info {
+    background: rgba(33, 200, 188, 0.14);
+    color: #4de1d6;
+  }
+
+  .status-badge {
+    background: rgba(33, 200, 188, 0.12);
+    color: #4de1d6;
+    border-color: rgba(77, 225, 214, 0.28);
+  }
+
+  .text-muted {
+    color: #aec1cf !important;
+  }
+
+  .simple-list__item p,
+  .simple-list__item strong {
+    color: #d4e2ec;
   }
 }

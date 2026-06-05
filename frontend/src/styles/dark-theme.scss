@@ -584,8 +584,14 @@ html[data-theme='dark'] {
   .applicant-search__filters,
   .applicant-search__chip-group,
   .applicant-search__state,
-  .applicant-search__card,
   .applicant-search__pagination {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-text);
+    box-shadow: none;
+  }
+
+  .applicant-search__card {
     background: var(--color-surface);
     border-color: var(--color-border);
     color: var(--color-text);
@@ -712,11 +718,7 @@ html[data-theme='dark'] {
     .dashboard-panel,
     .dashboard-layout__header,
     .dashboard-tabs__btn,
-    .applicant-search__filters,
-    .applicant-search__chip-group,
-    .applicant-search__state,
     .applicant-search__card,
-    .applicant-search__pagination,
     .opportunities-page__search-bar,
     .opportunities-page__filters-panel,
     .opportunities-page__salary-filter,
@@ -1035,11 +1037,10 @@ html[data-theme='dark'] {
     .employer-profile__hero,
     .employer-profile__section,
     .employer-profile__card,
-    .employer-create-form,
-    .employer-create-form__section,
-    .employer-create-form__tag-picker,
+    .employer-opportunities__item,
+    .employer-applicants__item,
+    .employer-create-form__ai-description-card,
     .employer-create-form__selected-tags,
-    .employer-create-form__tag-suggestions,
     .employer-verification-modal__status-card,
     .employer-verification-modal__status-item,
     .employer-verification-modal__status-badge,
@@ -1051,6 +1052,26 @@ html[data-theme='dark'] {
     border-color: var(--color-border) !important;
     color: var(--color-text) !important;
     box-shadow: var(--shadow-soft);
+  }
+
+  body :where(
+    .employer-create-form,
+    .employer-create-form__header,
+    .employer-create-form__grid-2,
+    .employer-create-form__grid-3,
+    .employer-create-form__field,
+    .employer-create-form__section-header,
+    .employer-create-form__tag-picker,
+    .employer-create-form__tag-suggestions,
+    .employer-create-form__ai-description-header,
+    .employer-create-form__ai-description-copy,
+    .employer-create-form__ai-description-body,
+    .employer-opportunities__info,
+    .employer-opportunities__meta
+  ) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
   }
 
   body :where(
@@ -1181,7 +1202,7 @@ html[data-theme='dark'] {
     filter: none !important;
   }
 
-  body :where(svg, svg *) {
+  body :where(svg) {
     color: currentColor;
     stroke: currentColor;
   }
@@ -1242,69 +1263,6 @@ html[data-theme='dark'] {
   ) {
     background: linear-gradient(135deg, #12877f, #21c8bc) !important;
     color: #ffffff !important;
-  }
-
-  body :where(
-    .dashboard-layout,
-    .profile-edit,
-    .opportunities-page,
-    .opportunity-detail-page,
-    .applicant-search,
-    .applicant-public-profile,
-    .employer-public-profile,
-    .chats
-  ) :where(
-    [class*='card'],
-    [class*='panel'],
-    [class*='block'],
-    [class*='section'],
-    [class*='editor'],
-    [class*='form'],
-    [class*='state'],
-    [class*='empty'],
-    [class*='status'],
-    [class*='badge'],
-    [class*='tag'],
-    [class*='chip'],
-    [class*='timeline'],
-    [class*='response'],
-    [class*='application'],
-    [class*='contact'],
-    [class*='link'],
-    [class*='item'],
-    [class*='modal'],
-    [class*='popup']
-  ):not([class*='logo']):not([class*='avatar-image']):not([class*='image']):not([class*='photo']):not([class*='map']) {
-    border-color: var(--color-border) !important;
-  }
-
-  body :where(
-    .dashboard-layout,
-    .profile-edit,
-    .opportunities-page,
-    .opportunity-detail-page,
-    .applicant-search,
-    .applicant-public-profile,
-    .employer-public-profile,
-    .chats
-  ) :where(
-    [class*='card'],
-    [class*='panel'],
-    [class*='block'],
-    [class*='section'],
-    [class*='editor'],
-    [class*='form'],
-    [class*='state'],
-    [class*='empty'],
-    [class*='response'],
-    [class*='application'],
-    [class*='contact'],
-    [class*='item'],
-    [class*='modal'],
-    [class*='popup']
-  ):not([class*='logo']):not([class*='avatar']):not([class*='image']):not([class*='photo']):not([class*='map']):not([class*='button']):not(.button) {
-    background: var(--dark-surface-bg) !important;
-    color: var(--color-text) !important;
   }
 
   body :where(
@@ -1378,6 +1336,15 @@ html[data-theme='dark'] {
     color: var(--color-text) !important;
   }
 
+  body :where(
+    .recommendation-card__applied-state > span
+  ) {
+    background: rgba(74, 222, 128, 0.24) !important;
+    border-color: rgba(134, 239, 172, 0.36) !important;
+    color: #ecfdf5 !important;
+    box-shadow: inset 0 0 0 1px rgba(236, 253, 245, 0.08);
+  }
+
   body :where(.toast--destructive) {
     border-left-color: var(--color-danger) !important;
   }
@@ -1398,13 +1365,7 @@ html[data-theme='dark'] {
     .app-footer__bottom,
     .app-footer__compact-links a,
     .text-muted,
-    .muted,
-    [class*='muted'],
-    [class*='hint'],
-    [class*='description'],
-    [class*='caption'],
-    [class*='meta'],
-    [class*='label']
+    .muted
   ) {
     color: var(--color-text-muted) !important;
   }
@@ -1420,9 +1381,7 @@ html[data-theme='dark'] {
     .employer-opportunities__view,
     .opportunity-status-manager__button,
     .moderation-filters__toggle,
-    .moderation-upload-button,
-    [class*='detailBtn'],
-    [class*='dialogSecondary']
+    .moderation-upload-button
   ) {
     background: linear-gradient(180deg, rgba(31, 46, 66, 0.98), rgba(20, 33, 50, 0.98)) !important;
     border-color: rgba(156, 190, 208, 0.34) !important;
@@ -1441,9 +1400,7 @@ html[data-theme='dark'] {
     .employer-opportunities__view:hover,
     .opportunity-status-manager__button:hover,
     .moderation-filters__toggle:hover,
-    .moderation-upload-button:hover,
-    [class*='detailBtn']:hover,
-    [class*='dialogSecondary']:hover
+    .moderation-upload-button:hover
   ) {
     background: rgba(33, 200, 188, 0.18) !important;
     border-color: rgba(77, 225, 214, 0.42) !important;
@@ -1499,9 +1456,7 @@ html[data-theme='dark'] {
     .ai-moderation-card__verdict,
     .application-card__applied-icon,
     .opportunity-detail-page__application-state-icon,
-    [class*='statusBadge'],
-    [class*='badge'],
-    [class*='chip']
+    [class*='statusBadge']
   ) {
     background: rgba(33, 200, 188, 0.15) !important;
     border-color: rgba(77, 225, 214, 0.32) !important;
@@ -1556,10 +1511,7 @@ html[data-theme='dark'] {
     .moderation-filters,
     .moderation-filters .moderation-filter-input--checkbox .custom-checkbox,
     .curator-card,
-    .pagination button,
-    [class*='filters'],
-    [class*='table'],
-    [class*='dialog']
+    .pagination button
   ) {
     background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
     border-color: var(--color-border) !important;
@@ -1579,16 +1531,15 @@ html[data-theme='dark'] {
   }
 
   body :where(
-    th,
-    [class*='table'] th
+    th
   ) {
     background: rgba(24, 38, 56, 0.98) !important;
     color: var(--color-text-muted) !important;
   }
 
   body :where(
-    [class*='table'] tr,
-    [class*='table'] td
+    tr,
+    td
   ) {
     background: transparent !important;
   }
@@ -1794,8 +1745,8 @@ html[data-theme='dark'] {
     .applicant-search__chip-group
   ) {
     background: transparent !important;
-    border-color: rgba(141, 169, 187, 0.22) !important;
-    border-radius: 18px !important;
+    border-color: transparent !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
   }
 
@@ -2109,5 +2060,150 @@ html[data-theme='dark'] {
     .employer-profile__upload-hint
   ) {
     color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .saved-card,
+    .contact-card,
+    .curator-card-item
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
+    border-color: rgba(156, 190, 208, 0.26) !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .saved-card__content h3,
+    .contact-card__info h3,
+    .opportunity-detail-page__company-row,
+    .opportunity-detail-page__company-row span,
+    .opportunity-detail-page__location-row,
+    .opportunity-detail-page__location-row span
+  ) {
+    color: #ffffff !important;
+  }
+
+  body :where(
+    .saved-card__company,
+    .contact-card__info p,
+    .contact-card__date
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .applicant-public-profile__section-card,
+    .applicant-public-profile .simple-list__item,
+    .applicant-public-profile .profile-link,
+    .applicant-public-profile .profile-contact
+  ) {
+    //background: linear-gradient(135deg, rgba(33, 200, 188, 0.22), rgba(18, 29, 43, 0.86)), rgba(21, 44, 57, 0.96) !important;
+    //border-color: rgba(77, 225, 214, 0.38) !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-public-profile .meta-item,
+    .applicant-public-profile .meta-item strong,
+    .applicant-public-profile .meta-item span
+  ) {
+    color: #ffffff !important;
+  }
+
+  body :where(
+    .applicant-tags-editor__chip,
+    .applicant-tags-editor__options button
+  ) {
+    background: rgba(18, 29, 43, 0.46) !important;
+    border: 1px solid rgba(156, 190, 208, 0.28) !important;
+    color: #e4f1f8 !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-tags-editor__chip:hover,
+    .applicant-tags-editor__options button:hover
+  ) {
+    background: rgba(33, 200, 188, 0.14) !important;
+    border-color: rgba(77, 225, 214, 0.34) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .applicant-search__chip-group,
+    .applicant-search__chips-block,
+    .applicant-search__chip-header,
+    .applicant-search__chips,
+    .task-detail-history,
+    .task-detail-history .history-timeline,
+    .task-detail-history .timeline-content
+  ) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-search__filters
+  ) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  body :where(
+    .applicant-search__summary,
+    .applicant-search__state,
+    .applicant-search__pagination
+  ) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-search__chip-group
+  ) {
+    padding: 0 !important;
+  }
+
+  body :where(
+    .moderation-history .loading-state,
+    .task-detail-history .loading-state
+  ) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .seeker-dashboard-modal,
+    .seeker-dashboard-modal .modal__empty-state,
+    .seeker-dashboard-modal .modal__placeholder-box
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
+    border-color: rgba(156, 190, 208, 0.28) !important;
+    color: var(--color-text-muted) !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .ymaps-2-1-79-balloon-pane,
+    [class*='ymaps'][class*='balloon-pane']
+  ) {
+    border-radius: 18px !important;
+    overflow: visible !important;
+  }
+
+  body :where(
+    .ymaps-2-1-79-balloon__layout,
+    .ymaps-2-1-79-balloon__content,
+    [class*='ymaps'][class*='balloon__layout'],
+    [class*='ymaps'][class*='balloon__content']
+  ) {
+    border-radius: 18px !important;
+    overflow: hidden !important;
   }
 }

@@ -2152,6 +2152,67 @@ $transition: all 0.2s ease;
   color: #64748b;
 }
 
+html[data-theme='dark'] {
+  .seeker-dashboard-modal {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98));
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+
+  .seeker-dashboard-modal .modal__empty-state,
+  .seeker-dashboard-modal .modal__placeholder-box {
+    background: transparent;
+    border-color: rgba(156, 190, 208, 0.28);
+    color: var(--color-text-muted);
+    box-shadow: none;
+  }
+
+  .seeker-contacts .empty-state {
+    min-height: 0 !important;
+    padding: 28px 20px !important;
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.92), rgba(12, 21, 34, 0.94)) !important;
+    border-color: rgba(77, 225, 214, 0.18) !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+  }
+
+  .contact-card__link,
+  .btn-reject {
+    background: rgba(18, 29, 43, 0.72) !important;
+    border: 1px solid rgba(77, 225, 214, 0.28) !important;
+    color: #e4f1f8 !important;
+    box-shadow: none !important;
+  }
+
+  .contact-card__link:hover,
+  .btn-reject:hover {
+    background: rgba(33, 200, 188, 0.16) !important;
+    border-color: rgba(77, 225, 214, 0.42) !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .contact-card__remove {
+    background: rgba(255, 107, 134, 0.12) !important;
+    border: 1px solid rgba(255, 107, 134, 0.34) !important;
+    color: #ffd6dd !important;
+    box-shadow: none !important;
+  }
+
+  .contact-card__remove:hover {
+    background: rgba(255, 107, 134, 0.18) !important;
+    border-color: rgba(255, 107, 134, 0.46) !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .contact-card__date {
+    background: rgba(33, 200, 188, 0.14) !important;
+    border: 1px solid rgba(77, 225, 214, 0.28) !important;
+    color: #d9fffb !important;
+  }
+}
+
 .profile-card__header-actions {
   display: flex;
   gap: 12px;

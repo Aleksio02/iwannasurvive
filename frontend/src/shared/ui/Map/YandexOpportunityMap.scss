@@ -30,18 +30,37 @@
 }
 
 .yandex-opportunity-map__marker-count {
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border-radius: 999px;
   background: #ffffff;
   color: #0f5f68;
   font-weight: 700;
   font-size: 12px;
-  line-height: 22px;
+  line-height: 1;
   text-align: center;
   box-shadow: 0 2px 6px rgba(15, 95, 104, 0.24);
-  transform: translate(8px, 7px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.ymaps-2-1-79-balloon-pane,
+[class*='ymaps'][class*='balloon-pane'] {
+  border-radius: 18px;
+  overflow: visible;
+}
+
+.ymaps-2-1-79-balloon__layout,
+.ymaps-2-1-79-balloon__content,
+[class*='ymaps'][class*='balloon__layout'],
+[class*='ymaps'][class*='balloon__content'] {
+  border-radius: 18px;
+  overflow: hidden;
 }
 
 .yandex-opportunity-map__group-title {
