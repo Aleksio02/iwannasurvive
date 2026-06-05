@@ -22,9 +22,9 @@ html:has(.about-page) {
   min-height: 100vh;
   overflow: clip;
   background:
-    radial-gradient(circle at 12% 8%, rgba(31, 182, 170, 0.12), transparent 34%),
-    radial-gradient(circle at 86% 10%, rgba(42, 137, 154, 0.09), transparent 30%),
-    linear-gradient(180deg, #fbfefe 0%, var(--about-bg) 46%, #f3f8fa 100%);
+          radial-gradient(circle at 12% 8%, rgba(31, 182, 170, 0.12), transparent 34%),
+          radial-gradient(circle at 86% 10%, rgba(42, 137, 154, 0.09), transparent 30%),
+          linear-gradient(180deg, #fbfefe 0%, var(--about-bg) 46%, #f3f8fa 100%);
   color: var(--about-text);
   isolation: isolate;
 
@@ -39,9 +39,9 @@ html:has(.about-page) {
     --about-shadow: 0 24px 70px rgba(3, 9, 20, 0.34);
 
     background:
-      radial-gradient(circle at 12% 8%, rgba(31, 182, 170, 0.18), transparent 34%),
-      radial-gradient(circle at 86% 10%, rgba(78, 130, 171, 0.14), transparent 30%),
-      linear-gradient(180deg, #0f172a 0%, #101c2c 50%, #0d1624 100%);
+            radial-gradient(circle at 12% 8%, rgba(31, 182, 170, 0.18), transparent 34%),
+            radial-gradient(circle at 86% 10%, rgba(78, 130, 171, 0.14), transparent 30%),
+            linear-gradient(180deg, #0f172a 0%, #101c2c 50%, #0d1624 100%);
   }
 }
 
@@ -63,9 +63,6 @@ html:has(.about-page) {
   position: absolute;
   border-radius: 999px;
   pointer-events: none;
-}
-
-.about-page__blob {
   width: min(360px, 42vw);
   aspect-ratio: 1;
   filter: blur(34px);
@@ -205,6 +202,127 @@ html:has(.about-page) {
   justify-content: center;
 }
 
+/* Кнопка бургер-меню */
+.about-page__menu-btn {
+  display: none;
+  width: 42px;
+  min-height: 42px;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--about-border);
+  border-radius: 14px;
+  background: var(--about-surface);
+  color: var(--about-primary);
+  cursor: pointer;
+  transition: 0.22s ease;
+
+  &:hover {
+    border-color: rgba(31, 182, 170, 0.58);
+    background: var(--about-accent-soft);
+  }
+
+  .about-page--dark & {
+    color: #ffffff;
+  }
+}
+
+/* Мобильное выезжающее меню */
+.about-page__mobile-menu {
+  position: fixed;
+  top: 88px;
+  right: 16px;
+  left: 16px;
+  z-index: 49;
+  max-height: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--about-surface-strong);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--about-border);
+  transition: max-height 0.3s ease-out, opacity 0.2s ease;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: var(--about-shadow);
+
+  .about-page--dark & {
+    background: rgba(14, 25, 40, 0.96);
+  }
+
+  &--open {
+    max-height: 500px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.about-page__mobile-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.about-page__mobile-nav-link {
+  display: flex;
+  align-items: center;
+  min-height: 54px;
+  padding: 0 18px;
+  border-radius: 14px;
+  color: var(--about-text);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.2s ease;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:hover,
+  &:active {
+    background: var(--about-accent-soft);
+    color: var(--about-primary);
+  }
+
+  .about-page--dark & {
+    color: #ffffff;
+
+    &:hover {
+      background: rgba(31, 182, 170, 0.14);
+      color: #dff8f5;
+    }
+  }
+}
+
+.about-page__mobile-divider {
+  height: 1px;
+  margin: 8px 12px;
+  background: var(--about-border);
+}
+
+.about-page__mobile-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  margin-top: 4px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--about-primary), var(--about-accent));
+  color: #ffffff !important;
+  font-size: 16px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover,
+  &:active {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(31, 182, 170, 0.3);
+  }
+
+  svg {
+    color: #ffffff;
+  }
+}
+
 .about-page__button {
   justify-content: center;
   gap: 9px;
@@ -215,7 +333,8 @@ html:has(.about-page) {
   color: var(--about-primary);
   font-weight: 800;
   text-decoration: none;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease,
+  background 0.22s ease;
 
   &:hover {
     transform: translateY(-2px);
@@ -291,9 +410,8 @@ html:has(.about-page) {
     width: 54%;
     height: 52%;
     border-radius: 36px;
-    background:
-      linear-gradient(var(--about-border) 1px, transparent 1px),
-      linear-gradient(90deg, var(--about-border) 1px, transparent 1px);
+    background: linear-gradient(var(--about-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--about-border) 1px, transparent 1px);
     background-size: 38px 38px;
     mask-image: radial-gradient(circle at 55% 46%, #000 0%, transparent 70%);
     opacity: 0.34;
@@ -574,9 +692,8 @@ html:has(.about-page) {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background:
-      radial-gradient(circle at 82% 16%, rgba(31, 182, 170, 0.16), transparent 34%),
-      linear-gradient(135deg, rgba(31, 182, 170, 0.1), transparent 46%);
+    background: radial-gradient(circle at 82% 16%, rgba(31, 182, 170, 0.16), transparent 34%),
+    linear-gradient(135deg, rgba(31, 182, 170, 0.1), transparent 46%);
     opacity: 0;
     transition: opacity 0.24s ease;
     pointer-events: none;
@@ -644,9 +761,8 @@ html:has(.about-page) {
     box-shadow: 0 20px 54px rgba(3, 9, 20, 0.22);
 
     &::before {
-      background:
-        radial-gradient(circle at 82% 16%, rgba(31, 182, 170, 0.22), transparent 34%),
-        linear-gradient(135deg, rgba(31, 182, 170, 0.12), transparent 48%);
+      background: radial-gradient(circle at 82% 16%, rgba(31, 182, 170, 0.22), transparent 34%),
+      linear-gradient(135deg, rgba(31, 182, 170, 0.12), transparent 48%);
     }
 
     &:hover {
@@ -682,7 +798,8 @@ html:has(.about-page) {
     right: 11%;
     top: 44px;
     height: 2px;
-    background: linear-gradient(90deg, rgba(31, 182, 170, 0.08), rgba(31, 182, 170, 0.56), rgba(31, 182, 170, 0.08));
+    background: linear-gradient(90deg, rgba(31, 182, 170, 0.08), rgba(31, 182, 170, 0.56),
+            rgba(31, 182, 170, 0.08));
   }
 }
 
@@ -895,6 +1012,10 @@ html:has(.about-page) {
     display: none;
   }
 
+  .about-page__menu-btn {
+    display: inline-flex;
+  }
+
   .about-hero {
     grid-template-columns: 1fr;
     min-height: auto;
@@ -935,6 +1056,11 @@ html:has(.about-page) {
     padding: 8px;
   }
 
+  .about-page__menu-btn {
+    width: 40px;
+    min-height: 40px;
+  }
+
   .about-page__brand {
     font-size: 18px;
 
@@ -952,6 +1078,12 @@ html:has(.about-page) {
   .about-page__theme-toggle {
     width: 40px;
     min-height: 40px;
+  }
+
+  .about-page__mobile-menu {
+    top: 76px;
+    right: 12px;
+    left: 12px;
   }
 
   .about-hero,
@@ -1053,6 +1185,10 @@ html:has(.about-page) {
     padding: 0;
   }
 
+  .about-page__mobile-menu {
+    top: 68px;
+  }
+
   .about-hero__content h1 {
     font-size: 36px;
   }
@@ -1076,5 +1212,4 @@ html:has(.about-page) {
   .about-hero__opportunity strong {
     font-size: 18px;
   }
-
 }

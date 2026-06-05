@@ -245,6 +245,7 @@
 @include mobile {
   .register-page {
     padding-block: 10px;
+    padding-bottom: 32px; /* Добавляем отступ снизу на мобильных устройствах */
   }
 
   .register-page__logo-text {
@@ -258,6 +259,7 @@
 
   .register-page__card {
     max-width: 100%;
+    margin-bottom: 10px;
   }
 
   .register-form__roles {
