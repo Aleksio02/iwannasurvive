@@ -79,6 +79,7 @@ export default function RecommendationsSection({
                                                    onOpenOpportunity,
                                                    onDeleteRecommendation,
                                                    onRefreshRecommendations,
+                                                   appliedOpportunityIds,
                                                }) {
     const { toast } = useToast()
     const [updatingRecommendationId, setUpdatingRecommendationId] = useState(null)
@@ -197,6 +198,7 @@ export default function RecommendationsSection({
                 <div className="recommendations-list">
                     {currentRecommendations.map((item) => {
                         const isUpdating = updatingRecommendationId === item.id
+                        const isAppliedToOpportunity = appliedOpportunityIds?.has(Number(item.opportunityId))
                         const viewedAt = formatDateTime(item.viewedAt)
                         const respondedAt = formatDateTime(item.respondedAt)
 
@@ -241,6 +243,13 @@ export default function RecommendationsSection({
                                 </div>
 
                                 <div className="recommendation-card__actions">
+                                    {isAppliedToOpportunity && (
+                                        <span className="recommendation-card__applied-state" role="status">
+                                            <span aria-hidden="true">✓</span>
+                                            Отклик отправлен
+                                        </span>
+                                    )}
+
                                     <button
                                         type="button"
                                         className="recommendation-btn recommendation-btn--primary"
@@ -277,7 +286,7 @@ export default function RecommendationsSection({
                                                 </button>
                                             )}
 
-                                            {canMoveToStatus(item.status, 'APPLIED') && (
+                                            {canMoveToStatus(item.status, 'APPLIED') && !isAppliedToOpportunity && (
                                                 <button
                                                     type="button"
                                                     className="recommendation-btn"
