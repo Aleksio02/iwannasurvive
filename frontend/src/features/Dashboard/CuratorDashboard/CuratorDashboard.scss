@@ -130,7 +130,6 @@
     }
   }
 
-  // <= 1159 оставляем как было (тебе нравится)
   @media (max-width: 1159px) {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
 
@@ -583,7 +582,9 @@
   max-width: 800px;
   width: 100%;
   max-height: 90vh;
-  overflow-y: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -595,6 +596,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
   padding: 20px 24px;
   border-bottom: 1px solid var(--color-border);
 
@@ -624,11 +626,15 @@
 
 .modal-body {
   padding: 24px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
+  flex-shrink: 0;
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid var(--color-border);
@@ -1243,7 +1249,7 @@
 
 .moderation-section-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
@@ -1359,6 +1365,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 
 .moderation-upload-button {
@@ -1370,6 +1377,21 @@
   background: #111827;
   color: #fff;
   cursor: pointer;
+}
+
+.moderation-history .loading-state,
+.task-detail-history .loading-state {
+  padding: 32px 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.task-detail-history,
+.task-detail-history .history-timeline {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .moderation-field-issues {
@@ -2666,8 +2688,8 @@
     padding: 24px 22px;
     border-radius: 24px;
     background:
-      radial-gradient(circle at top right, rgba(31, 182, 170, 0.12), transparent 34%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 252, 0.98) 100%);
+            radial-gradient(circle at top right, rgba(31, 182, 170, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 252, 0.98) 100%);
     box-shadow: 0 18px 38px rgba(16, 42, 67, 0.08);
 
     &::after {
@@ -2747,8 +2769,8 @@
   padding: 34px;
   border-radius: 28px;
   background:
-    radial-gradient(circle at top right, rgba(31, 182, 170, 0.14), transparent 36%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 251, 252, 0.99) 100%);
+          radial-gradient(circle at top right, rgba(31, 182, 170, 0.14), transparent 36%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 251, 252, 0.99) 100%);
   box-shadow: 0 24px 52px rgba(16, 42, 67, 0.1);
 
   h3 {
@@ -2830,8 +2852,8 @@
 .moderation-modal {
   border: 1px solid rgba(189, 213, 217, 0.8);
   background:
-    radial-gradient(circle at top right, rgba(31, 182, 170, 0.09), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 251, 252, 0.99) 100%);
+          radial-gradient(circle at top right, rgba(31, 182, 170, 0.09), transparent 34%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 251, 252, 0.99) 100%);
 }
 
 .modal-body--form {
@@ -3449,4 +3471,26 @@
     max-width: 100%;
     box-sizing: border-box;
   }
+}
+
+.task-detail-snapshot .moderation-section-header {
+  align-items: center;
+}
+
+html[data-theme='dark'] .curator-card-item,
+html[data-theme='dark'] .curator-card-item * {
+  background-color: transparent !important;
+  background: none !important;
+  background-image: none !important;
+}
+
+html[data-theme='dark'] .curator-card-item__badge {
+  background: rgba(33, 200, 188, 0.15) !important;
+  color: #d9fffb !important;
+}
+
+html[data-theme='dark'] .curator-card-item__badge.is-inactive,
+html[data-theme='dark'] .curator-card-item__badge.is-disabled {
+  background: rgba(255, 107, 134, 0.15) !important;
+  color: #ffd6dd !important;
 }

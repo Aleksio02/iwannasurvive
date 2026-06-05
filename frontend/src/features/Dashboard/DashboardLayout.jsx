@@ -7,7 +7,6 @@ import './DashboardLayout.scss'
 
 function DashboardLayout({
                              title,
-                             subtitle,
                              children,
                              hideHeaderActions = false,
                          }) {
@@ -66,9 +65,6 @@ function DashboardLayout({
                 <header className="dashboard-layout__header">
                     <div className="dashboard-layout__heading">
                         <h1 className="dashboard-layout__title">{title}</h1>
-                        {subtitle && (
-                            <p className="dashboard-layout__subtitle">{subtitle}</p>
-                        )}
                     </div>
 
                     {actions.length > 0 && (

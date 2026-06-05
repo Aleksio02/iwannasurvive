@@ -1,12 +1,23 @@
 @use '@/styles/helpers/index' as *;
 
+@supports selector(html:has(.register-page)) {
+  html:has(.register-page),
+  html:has(.register-page) body,
+  html:has(.register-page) #root {
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+}
+
 .register-page {
-  min-height: 100vh;
-  padding: 20px 16px;
+  height: 100dvh;
+  min-height: 0;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  overflow: hidden;
   background:
           radial-gradient(circle at top left, rgba(31, 182, 170, 0.15), transparent 26%),
           radial-gradient(circle at bottom right, rgba(53, 203, 191, 0.1), transparent 24%),
@@ -17,7 +28,7 @@
   display: inline-flex;
   align-items: center;
   column-gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 14px;
   text-decoration: none;
 
   @include hover {
@@ -26,14 +37,14 @@
 }
 
 .register-page__logo-image {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
   display: block;
 }
 
 .register-page__logo-text {
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--color-text);
   letter-spacing: -0.02em;
@@ -41,13 +52,21 @@
 
 .register-page__card {
   width: 100%;
-  max-width: 520px;
+  max-width: 500px;
+
+  .card__header {
+    padding: 22px 28px 16px;
+  }
+
+  .card__content {
+    padding: 0 28px 24px;
+  }
 }
 
 .register-form {
   display: flex;
   flex-direction: column;
-  row-gap: 16px;
+  row-gap: 12px;
 }
 
 .register-form__roles {
@@ -57,8 +76,8 @@
 }
 
 .register-form__role-card {
-  min-height: 142px;
-  padding: 18px;
+  min-height: 112px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -84,8 +103,8 @@
 }
 
 .register-form__role-icon {
-  width: 56px;
-  height: 56px;
+  width: 44px;
+  height: 44px;
   display: block;
   object-fit: contain;
 }
@@ -98,7 +117,7 @@
 }
 
 .register-form__role-note {
-  padding: 14px 16px;
+  padding: 12px 14px;
   background-color: var(--color-primary-soft);
   border: 1px solid rgba(31, 182, 170, 0.18);
   border-radius: 16px;
@@ -202,7 +221,7 @@
 }
 
 .register-page__bottom {
-  margin-top: 22px;
+  margin-top: 14px;
   font-size: 14px;
   text-align: center;
   color: var(--color-text-muted);
@@ -225,7 +244,7 @@
 
 @include mobile {
   .register-page {
-    padding-block: 16px;
+    padding-block: 10px;
   }
 
   .register-page__logo-text {
@@ -233,8 +252,8 @@
   }
 
   .register-page__logo-image {
-    width: 42px;
-    height: 42px;
+    width: 38px;
+    height: 38px;
   }
 
   .register-page__card {
@@ -246,12 +265,12 @@
   }
 
   .register-form__role-card {
-    min-height: 116px;
+    min-height: 96px;
   }
 
   .register-form__role-icon {
-    width: 50px;
-    height: 50px;
+    width: 42px;
+    height: 42px;
   }
 
   .register-page__actions {

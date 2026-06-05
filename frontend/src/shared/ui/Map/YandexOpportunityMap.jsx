@@ -623,6 +623,7 @@ export default function YandexOpportunityMap({
                     iconImageHref: markerSvg(isFavorite ? '#f59f0a' : '#0f5f68'),
                     iconImageSize: isGroup ? [40, 48] : [34, 44],
                     iconImageOffset: isGroup ? [-20, -48] : [-17, -44],
+                    iconContentOffset: isGroup ? [20, 17] : undefined,
                     iconContentLayout: isGroup
                         ? ymaps.templateLayoutFactory.createClass(
                             `<div class="yandex-opportunity-map__marker-count">${group.length}</div>`

@@ -2508,6 +2508,94 @@ $section-title-size: 19px;
   }
 }
 
+html[data-theme='dark'] {
+  .employer-profile__field {
+    .field-value {
+      background: transparent;
+      color: var(--color-text);
+
+      a {
+        color: var(--color-primary);
+      }
+    }
+
+    label,
+    Label {
+      color: var(--color-text-muted);
+    }
+  }
+
+  .links-list,
+  .employer-contact-editor,
+  .employer-contact-editor__list,
+  .employer-contact-editor__card-header,
+  .employer-contact-editor__card-title,
+  .employer-contact-editor__card-title > div {
+    background: transparent;
+  }
+
+  .link-item {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-text);
+
+    a {
+      color: var(--color-primary);
+    }
+  }
+
+  .employer-contact-editor__preset {
+    border-color: rgba(77, 225, 214, 0.28);
+    background: rgba(22, 35, 52, 0.76);
+    color: #e8f7fb;
+    box-shadow: none;
+  }
+
+  .employer-contact-editor__preset:hover {
+    border-color: rgba(77, 225, 214, 0.6);
+    background: rgba(33, 200, 188, 0.16);
+    color: #ffffff;
+  }
+
+  .employer-contact-editor__preset-badge,
+  .employer-contact-editor__card-badge {
+    background: rgba(77, 225, 214, 0.16);
+    color: #6ff3ea;
+  }
+
+  .employer-contact-editor__empty {
+    border-color: rgba(156, 190, 208, 0.22);
+    background: transparent;
+    color: var(--color-text-muted);
+  }
+
+  .employer-contact-editor__card {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .employer-contact-editor__card-title strong {
+    color: var(--color-text);
+  }
+
+  .employer-contact-editor__card-title > div span {
+    color: var(--color-text-muted);
+  }
+
+  .employer-contact-editor__remove {
+    border-color: rgba(255, 107, 134, 0.28);
+    background: rgba(255, 107, 134, 0.1);
+    color: #ff9aad;
+  }
+
+  .employer-contact-editor__remove:hover {
+    border-color: rgba(255, 107, 134, 0.48);
+    background: rgba(255, 107, 134, 0.18);
+    color: #ffd6dd;
+  }
+}
+
 .employer-profile__contacts-block .links-editor,
 .employer-create-form .links-editor {
   gap: 10px;

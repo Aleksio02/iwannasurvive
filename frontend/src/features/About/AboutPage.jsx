@@ -1,4 +1,4 @@
-import { createElement, useEffect } from 'react'
+import { createElement, useEffect, useState } from 'react'
 import { Link } from 'wouter'
 import {
     ArrowRight,
@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import brandMark from '@/assets/icons/brand-mark.png'
 import { useTheme } from '@/shared/hooks/useTheme'
+import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
+import AppFooter from '@/shared/layouts/AppFooter'
 import ThemeToggle from '@/shared/ui/ThemeToggle'
 import './AboutPage.scss'
 
@@ -83,6 +85,7 @@ function scrollToSection(sectionId, behavior = 'smooth') {
 
 function AboutPage() {
     const { isDark } = useTheme()
+    const [sessionUser, setSessionUser] = useState(() => getSessionUser())
 
     useEffect(() => {
         const sectionId = window.location.hash.replace('#', '')
@@ -95,11 +98,15 @@ function AboutPage() {
         return () => timerIds.forEach((timerId) => window.clearTimeout(timerId))
     }, [])
 
+    useEffect(() => subscribeSessionChange(setSessionUser), [])
+
     const handleAnchorClick = (event, sectionId) => {
         event.preventDefault()
         window.history.pushState(null, '', `#${sectionId}`)
         scrollToSection(sectionId)
     }
+
+    const isLoggedIn = Boolean(sessionUser)
 
     return (
         <div className={`about-page ${isDark ? 'about-page--dark' : ''}`}>
@@ -116,15 +123,15 @@ function AboutPage() {
 
                 <nav className="about-page__nav" aria-label="Навигация страницы">
                     <a href="#audience" onClick={(event) => handleAnchorClick(event, 'audience')}>Кому подходит</a>
-                    <a href="#inside" onClick={(event) => handleAnchorClick(event, 'inside')}>Возможности</a>
+                    <a href="#inside" onClick={(event) => handleAnchorClick(event, 'inside')}>Что внутри</a>
                     <a href="#start" onClick={(event) => handleAnchorClick(event, 'start')}>Как начать</a>
                     <a href="#partners" onClick={(event) => handleAnchorClick(event, 'partners')}>Партнёры</a>
                 </nav>
 
                 <div className="about-page__top-actions">
-                    <Link href="/login" className="about-page__login">
-                        <LogIn size={17} />
-                        <span>Войти</span>
+                    <Link href={isLoggedIn ? '/opportunities' : '/login'} className="about-page__login">
+                        {isLoggedIn ? <ArrowRight size={17} /> : <LogIn size={17} />}
+                        <span>{isLoggedIn ? 'К возможностям' : 'Войти'}</span>
                     </Link>
                     <ThemeToggle className="about-page__theme-toggle" showLabel={false} />
                 </div>
@@ -145,7 +152,7 @@ function AboutPage() {
 
                         <div className="about-hero__actions">
                             <Link href="/opportunities" className="about-page__button about-page__button--primary">
-                                Найти возможность
+                                К возможностям
                                 <ArrowRight size={18} />
                             </Link>
                             <Link href="/register" className="about-page__button about-page__button--secondary">
@@ -291,18 +298,7 @@ function AboutPage() {
                 </section>
             </main>
 
-            <footer className="about-footer">
-                <div className="about-footer__brand">
-                    <img src={brandMark} alt="" />
-                    <span>Трамплин</span>
-                </div>
-                <p>Карьерная платформа для студентов, выпускников, вузов и IT-работодателей.</p>
-                <nav aria-label="Контакты">
-                    <a href="mailto:tramplin.support@gmail.com">tramplin.support@gmail.com</a>
-                    <a href="/opportunities">Возможности</a>
-                    <a href="/register">Регистрация</a>
-                </nav>
-            </footer>
+            <AppFooter className="about-page__app-footer" />
         </div>
     )
 }

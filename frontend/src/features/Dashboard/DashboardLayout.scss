@@ -32,14 +32,7 @@
 .dashboard-layout__title {
   font-size: 32px;
   color: var(--color-text);
-  margin-bottom: 10px;
   letter-spacing: -0.03em;
-}
-
-.dashboard-layout__subtitle {
-  color: var(--color-text-muted);
-  max-width: 720px;
-  line-height: 1.6;
 }
 
 .dashboard-layout__actions {
@@ -115,8 +108,4 @@
     font-size: 24px;
   }
 
-  .dashboard-layout__subtitle {
-    font-size: 14px;
-    line-height: 1.5;
-  }
 }
