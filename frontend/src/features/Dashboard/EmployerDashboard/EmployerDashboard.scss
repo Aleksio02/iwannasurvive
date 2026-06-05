@@ -22,6 +22,19 @@ $control-radius: 12px;
 $control-padding-x: 14px;
 $section-title-size: 19px;
 
+:root {
+  --warning-bg: #fffaf0;
+  --warning-border: rgba(245, 158, 11, 0.24);
+  --warning-text: #9a6700;
+}
+
+[data-theme="dark"] {
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --warning-border: rgba(245, 158, 11, 0.35);
+  --warning-text: #ffb347;
+}
+
+
 .icon {
   width: 18px;
   height: 18px;
@@ -1580,10 +1593,10 @@ $section-title-size: 19px;
 .employer-create-form__ai-description-warning {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid rgba(245, 158, 11, 0.24);
+  border: 1px solid var(--warning-border);
   border-radius: 10px;
-  background: #fffaf0;
-  color: #9a6700;
+  background: var(--warning-bg);
+  color: var(--warning-text);
   font-size: 13px;
   line-height: 1.45;
 }
