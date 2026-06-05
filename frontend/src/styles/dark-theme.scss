@@ -1,0 +1,2113 @@
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-black: #f4fbff;
+  --color-primary: #21c8bc;
+  --color-primary-dark: #17a79d;
+  --color-primary-light: rgba(33, 200, 188, 0.24);
+  --color-primary-soft: rgba(33, 200, 188, 0.14);
+
+  --color-accent: #4de1d6;
+  --color-accent-soft: rgba(77, 225, 214, 0.12);
+
+  --color-text: #f4fbff;
+  --color-text-muted: #d4e2ec;
+  --color-text-soft: #aec1cf;
+
+  --color-background: #0b111b;
+  --color-surface: #121d2b;
+  --color-surface-alt: #182638;
+
+  --color-border: rgba(141, 169, 187, 0.28);
+  --color-border-strong: rgba(156, 190, 208, 0.46);
+
+  --color-danger: #ff6b86;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-warning-dark: #facc15;
+
+  --gray-50: #111b29;
+  --gray-100: #172334;
+  --gray-200: #263549;
+  --gray-300: #33465c;
+  --gray-400: #4b6278;
+  --gray-500: #7890a5;
+  --gray-600: #a7bac8;
+  --gray-700: #d2e1ea;
+  --gray-800: #f4fbff;
+
+  --control-bg: linear-gradient(180deg, rgba(22, 35, 52, 0.98) 0%, rgba(14, 24, 38, 0.98) 100%);
+  --panel-bg: linear-gradient(180deg, rgba(18, 29, 43, 0.98) 0%, rgba(12, 21, 34, 0.98) 100%);
+  --panel-border: rgba(141, 169, 187, 0.28);
+  --panel-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+  --surface-highlight: rgba(33, 200, 188, 0.12);
+
+  --shadow-card: 0 24px 70px rgba(0, 0, 0, 0.34);
+  --shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.24);
+
+  background: var(--color-background);
+  scrollbar-color: rgba(93, 122, 142, 0.82) rgba(10, 17, 27, 0.8);
+
+  body {
+    color: var(--color-text-muted);
+    background:
+            radial-gradient(circle at top left, rgba(33, 200, 188, 0.16), transparent 32%),
+            radial-gradient(circle at 92% 8%, rgba(72, 119, 176, 0.13), transparent 28%),
+            linear-gradient(180deg, #0b111b 0%, #0d1624 52%, #09101a 100%);
+  }
+
+  ::selection {
+    background: rgba(77, 225, 214, 0.34);
+    color: #ffffff;
+  }
+
+  img {
+    color: var(--color-text-muted);
+  }
+
+  .app-loading-screen__card,
+  .card {
+    background: rgba(18, 29, 43, 0.92);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-card);
+  }
+
+  .app-loading-screen__spinner {
+    border-color: rgba(77, 225, 214, 0.18);
+    border-top-color: var(--color-accent);
+  }
+
+  .theme-toggle,
+  .navbar__menu-toggle,
+  .dashboard-layout__action,
+  .button--ghost {
+    background: var(--control-bg);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .theme-toggle:hover,
+  .navbar__menu-toggle:hover,
+  .dashboard-layout__action:hover,
+  .button--ghost:hover {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    color: var(--color-accent);
+  }
+
+  .button--outline {
+    color: var(--color-text);
+    border-color: var(--color-border-strong);
+  }
+
+  .button--outline:hover {
+    color: var(--color-accent);
+    border-color: var(--color-primary);
+  }
+
+  .input,
+  .textarea,
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  textarea,
+  select,
+  .custom-select__button {
+    color: var(--color-text);
+    background: var(--control-bg);
+    border-color: var(--color-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .input:hover:not(:disabled),
+  .input:focus,
+  .textarea:hover:not(:disabled),
+  .textarea:focus,
+  .custom-select__button:hover,
+  .custom-select__button:focus-visible {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px rgba(33, 200, 188, 0.15);
+  }
+
+  .input::placeholder,
+  .textarea::placeholder,
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-text-soft);
+  }
+
+  .custom-select__menu,
+  .custom-select__menu--inline,
+  .custom-select__menu--inline-mobile,
+  .autocomplete__list,
+  .applicant-search__autocomplete-list {
+    background: rgba(18, 29, 43, 0.98);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-card);
+  }
+
+  .custom-select__item,
+  .autocomplete__item,
+  .applicant-search__autocomplete-item {
+    color: var(--color-text);
+  }
+
+  .custom-select__item:hover,
+  .custom-select__item.is-active,
+  .custom-select__item.is-selected,
+  .autocomplete__item:hover,
+  .autocomplete__item.is-active,
+  .applicant-search__autocomplete-item:hover {
+    background: var(--color-primary-soft);
+    color: var(--color-accent);
+  }
+
+  .custom-checkbox,
+  .custom-checkbox__box {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+  }
+
+  .custom-checkbox.is-checked {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+  }
+
+  .select-disabled .custom-select__button {
+    background: rgba(24, 38, 56, 0.72) !important;
+    border-color: rgba(141, 169, 187, 0.18) !important;
+    color: var(--color-text-soft) !important;
+  }
+
+  .navbar {
+    border-bottom-color: rgba(141, 169, 187, 0.28);
+    background: linear-gradient(180deg, rgba(12, 20, 32, 0.95) 0%, rgba(12, 20, 32, 0.86) 100%);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.32);
+  }
+
+  .navbar__logo,
+  .navbar__logo:hover {
+    color: var(--color-accent);
+  }
+
+  .navbar__links,
+  .navbar__actions {
+    border-color: var(--color-border);
+    background: rgba(18, 29, 43, 0.82);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 14px 34px rgba(0, 0, 0, 0.22);
+  }
+
+  .navbar__link {
+    color: var(--color-text-muted);
+  }
+
+  .navbar__link:hover,
+  .navbar__link.is-active {
+    color: var(--color-accent);
+    background: rgba(33, 200, 188, 0.12);
+  }
+
+  .navbar__link.is-active {
+    border-color: rgba(77, 225, 214, 0.32);
+    box-shadow: 0 8px 18px rgba(33, 200, 188, 0.12);
+  }
+
+  .navbar__link--register,
+  .navbar__link--register:hover,
+  .navbar__link--register.is-active {
+    color: #ffffff;
+    background: linear-gradient(135deg, #12877f, #21c8bc);
+  }
+
+  .navbar__link--logout {
+    color: #ff8da1;
+  }
+
+  .navbar__link--logout:hover {
+    background: rgba(255, 107, 134, 0.13);
+    color: #ffb3c0;
+  }
+
+  .navbar__user {
+    border-left-color: var(--color-border);
+    color: var(--color-text);
+  }
+
+  .navbar__user svg {
+    color: var(--color-accent);
+  }
+
+  .navbar__panel {
+    @media (max-width: 1180px) {
+      border-color: var(--color-border);
+      background: rgba(14, 24, 38, 0.97);
+      box-shadow: var(--shadow-card);
+    }
+  }
+
+  .app-footer {
+    border-top-color: var(--color-border);
+    background: linear-gradient(180deg, rgba(13, 22, 35, 0.96) 0%, rgba(9, 16, 26, 0.98) 100%);
+    color: var(--color-text-muted);
+  }
+
+  .app-footer--compact {
+    background: rgba(12, 20, 32, 0.62);
+  }
+
+  .app-footer__logo,
+  .app-footer__compact-brand,
+  .app-footer__logo:hover,
+  .app-footer__compact-brand:hover {
+    color: var(--color-accent);
+  }
+
+  .app-footer__bottom {
+    border-top-color: var(--color-border);
+  }
+
+  .auth-layout,
+  .login-page,
+  .register-page,
+  .profile-edit {
+    background:
+            radial-gradient(circle at top left, rgba(33, 200, 188, 0.18), transparent 28%),
+            radial-gradient(circle at bottom right, rgba(72, 119, 176, 0.15), transparent 24%),
+            linear-gradient(180deg, #0b111b 0%, #0d1724 100%);
+  }
+
+  .auth-layout__background {
+    background:
+            radial-gradient(circle at 15% 20%, rgba(33, 200, 188, 0.12), transparent 20%),
+            radial-gradient(circle at 85% 75%, rgba(77, 225, 214, 0.09), transparent 20%);
+  }
+
+  .login-page__note,
+  .register-page__note,
+  .register-form__role-note,
+  .forgot-password-page__note {
+    background: var(--color-primary-soft);
+    border-color: rgba(77, 225, 214, 0.22);
+  }
+
+  .register-form__role-card {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+  }
+
+  .register-form__role-card:hover,
+  .register-form__role-card.is-active {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    color: var(--color-accent);
+  }
+
+  .dashboard-layout,
+  .opportunities-page,
+  .opportunity-detail-page,
+  .applicant-public-profile,
+  .employer-public-profile {
+    background:
+            radial-gradient(circle at 8% 0%, rgba(33, 200, 188, 0.12), transparent 28%),
+            linear-gradient(180deg, #0b111b 0%, #0d1624 48%, #09101a 100%);
+  }
+
+  .dashboard-layout__header {
+    border-color: var(--color-border);
+    background:
+            radial-gradient(circle at top right, rgba(33, 200, 188, 0.18), transparent 36%),
+            linear-gradient(180deg, rgba(18, 29, 43, 0.96) 0%, rgba(12, 21, 34, 0.98) 100%);
+    box-shadow: var(--shadow-card);
+  }
+
+  .dashboard-panel,
+  .dashboard-tabs__btn,
+  .dashboard-layout :is(.profile-card, .profile-overview-card, .recommendation-card, .favorite-card, .curator-card, .stat-card),
+  .dashboard-layout :is(.moderation-filters, .security-settings__card, .verification-banner, .advanced-block),
+  .profile-tags-section,
+  .profile-public-channels,
+  .profile-contact-editor__card,
+  .profile-contact-editor__empty,
+  .embedded-file-card {
+    background: var(--panel-bg);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .dashboard-tabs__btn:hover,
+  .dashboard-tabs__btn.is-active {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    color: var(--color-accent);
+  }
+
+  .profile-card,
+  .employer-profile__hero,
+  .profile-contact-editor__card {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98) 0%, rgba(13, 24, 38, 0.98) 100%);
+  }
+
+  .links-editor__remove,
+  .links-editor__add,
+  .profile-contact-editor__preset,
+  .media-delete-btn {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+  }
+
+  .profile-contact-editor__preset:hover,
+  .links-editor__add:hover,
+  .links-editor__remove:hover {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    color: var(--color-accent);
+  }
+
+  .media-delete-btn,
+  .profile-contact-editor__remove {
+    background: rgba(255, 107, 134, 0.12);
+    border-color: rgba(255, 107, 134, 0.34);
+    color: #ff8da1;
+  }
+
+  .advanced-toggle {
+    background: rgba(33, 200, 188, 0.11);
+    border-color: rgba(77, 225, 214, 0.26);
+    color: var(--color-accent);
+  }
+
+  .advanced-toggle.is-active {
+    background: rgba(255, 107, 134, 0.12);
+    border-color: rgba(255, 107, 134, 0.34);
+    color: #ffb3c0;
+  }
+
+  .modal {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--shadow-card);
+  }
+
+  .modal-overlay,
+  .chats__modal-backdrop {
+    background: rgba(4, 8, 14, 0.68);
+  }
+
+  .modal .autocomplete__list,
+  .chats__header-menu,
+  .chats__floating-menu,
+  .chats__emoji-panel,
+  .chats__confirm,
+  .chats__forward-modal,
+  .chats__opportunity-menu {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-card);
+  }
+
+  .chats,
+  .chats__sidebar,
+  .chats__thread-header,
+  .chats__pinned-bar,
+  .chats__search-panel,
+  .chats__composer,
+  .chats__composer-row,
+  .chats__message,
+  .chats__filter,
+  .chats__opportunity-trigger,
+  .chats__icon-action,
+  .chats__jump,
+  .chats__reactions button,
+  .chats__reaction-chip {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+  }
+
+  .chats__sidebar,
+  .chats__thread-header,
+  .chats__composer {
+    background: rgba(18, 29, 43, 0.88);
+  }
+
+  .chats__messages {
+    background:
+            radial-gradient(circle at 100% 0%, rgba(33, 200, 188, 0.08), transparent 30%),
+            rgba(9, 16, 26, 0.36);
+  }
+
+  .chats__dialog:hover,
+  .chats__dialog.is-active,
+  .chats__filter.is-active,
+  .chats__message--own,
+  .chats__reply-quote,
+  .chats__reply-preview,
+  .chats__edit-preview,
+  .chats__reactions button.is-active,
+  .chats__reaction-chip.is-active {
+    background: var(--color-primary-soft);
+  }
+
+  .opportunities-page__hero {
+    background: linear-gradient(135deg, #0a3841 0%, #0f5f68 100%);
+  }
+
+  .opportunities-page__search-bar,
+  .opportunities-page__filters-panel,
+  .opportunities-page__salary-filter,
+  .opportunities-page__tag-filter,
+  .opportunities-page__toolbar,
+  .opportunities-page__map-layout,
+  .opportunities-page__compact-card,
+  .opportunities-page__card,
+  .opportunities-page__empty,
+  .opportunities-page__menu,
+  .personalized-recommendations,
+  .personalized-recommendations__card,
+  .personalized-recommendations__state {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .opportunities-page__toolbar {
+    background: rgba(18, 29, 43, 0.88);
+  }
+
+  .opportunities-page__map-side-list,
+  .opportunities-page__map-wrap {
+    background: var(--color-background);
+    border-color: var(--color-border);
+  }
+
+  .opportunities-page__map-controls-inner,
+  .opportunities-page__view-switcher {
+    background: rgba(141, 169, 187, 0.16);
+    border-color: var(--color-border);
+  }
+
+  .opportunities-page__map-controls-badge,
+  .opportunities-page__map-controls-btn--secondary,
+  .opportunities-page__view-switcher button.is-active,
+  .opportunities-page__map-btn,
+  .opportunities-page__map-pagination button,
+  .opportunities-page__pagination button,
+  .personalized-recommendations__toggle {
+    background: var(--color-surface-alt);
+    border-color: var(--color-border);
+    color: var(--color-accent);
+  }
+
+  .opportunities-page__tag,
+  .opportunities-page__tag-chip,
+  .opportunities-page__tag-inline-hint,
+  .opportunities-page__badge,
+  .personalized-recommendations__source,
+  .personalized-recommendations__badges span,
+  .personalized-recommendations__skills span,
+  .personalized-recommendations__applied-state {
+    background: rgba(33, 200, 188, 0.13);
+    border-color: rgba(77, 225, 214, 0.25);
+    color: var(--color-accent);
+  }
+
+  .opportunities-page__tag:hover,
+  .opportunities-page__tag-chip:hover,
+  .opportunities-page__tag-chip.is-active,
+  .opportunities-page__tag.is-active {
+    background: rgba(33, 200, 188, 0.22);
+    border-color: var(--color-primary);
+    color: #ffffff;
+  }
+
+  .opportunity-detail-page__content,
+  .opportunity-detail-page__error-card,
+  .opportunity-detail-page__map-card,
+  .opportunity-detail-page__contacts,
+  .opportunity-detail-page .requirements-list,
+  .opportunity-detail-page__info-grid .info-item,
+  .opportunity-detail-page__address,
+  .opportunity-detail-page__application-state,
+  .opportunity-detail-page__fav-star {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .opportunity-detail-page .contacts-list .contact-link,
+  .opportunity-detail-page .contacts-list .contact-person,
+  .opportunity-detail-page .tags-list .tag,
+  .opportunity-detail-page__applications-link {
+    background: var(--color-surface-alt);
+    border-color: var(--color-border);
+    color: var(--color-text);
+  }
+
+  .opportunity-detail-page .tags-list .tag:hover,
+  .opportunity-detail-page__applications-link:hover,
+  .opportunity-detail-page__fav-star:hover {
+    background: var(--color-primary-soft);
+    border-color: var(--color-primary);
+    color: var(--color-accent);
+  }
+
+  .opportunity-detail-page__badges .badge--type,
+  .opportunities-page__badge--type,
+  .applicant-search__badges .badge--success {
+    background: rgba(74, 222, 128, 0.14);
+    border-color: rgba(74, 222, 128, 0.28);
+    color: #86efac;
+  }
+
+  .opportunity-detail-page__badges .badge--format,
+  .applicant-search__badges .badge--info {
+    background: rgba(56, 189, 248, 0.14);
+    border-color: rgba(56, 189, 248, 0.28);
+    color: #7dd3fc;
+  }
+
+  .opportunity-detail-page__badges .badge--grade {
+    background: rgba(251, 191, 36, 0.16);
+    border-color: rgba(251, 191, 36, 0.3);
+    color: #fde68a;
+  }
+
+  .applicant-search__filters,
+  .applicant-search__chip-group,
+  .applicant-search__state,
+  .applicant-search__card,
+  .applicant-search__pagination {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .applicant-search__chip,
+  .applicant-search__tag,
+  .applicant-search__counter,
+  .applicant-search__tag-search-clear {
+    background: var(--color-primary-soft);
+    border-color: rgba(77, 225, 214, 0.24);
+    color: var(--color-accent);
+  }
+
+  .applicant-search__chip.is-active,
+  .applicant-search__chip:hover {
+    background: rgba(33, 200, 188, 0.22);
+    border-color: var(--color-primary);
+    color: #ffffff;
+  }
+
+  .applicant-search__avatar {
+    background: linear-gradient(180deg, rgba(33, 200, 188, 0.28) 0%, rgba(77, 225, 214, 0.18) 100%);
+    color: var(--color-accent);
+  }
+
+  .applicant-public-profile__loader,
+  .applicant-public-profile__error-card,
+  .applicant-public-profile__empty-card,
+  .applicant-public-profile__hero-card,
+  .applicant-public-profile__section-card,
+  .employer-public-profile__state {
+    background: rgba(18, 29, 43, 0.94);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: var(--shadow-card);
+  }
+
+  .applicant-public-profile__back,
+  .employer-public-profile__back,
+  .employer-public-profile__owner-link,
+  .opportunity-detail-page__back,
+  .opportunities-page__reset-filters,
+  .opportunities-page__detail-btn,
+  .opportunities-page__map-link,
+  .applicant-search__back,
+  .applicant-search__summary-reset {
+    color: var(--color-accent);
+  }
+
+  .applicant-public-profile__empty-badge,
+  .applicant-public-profile :is(.badge, .tag),
+  .employer-profile :is(.badge, .tag) {
+    background: var(--color-primary-soft);
+    border-color: rgba(77, 225, 214, 0.24);
+    color: var(--color-accent);
+  }
+
+  .employer-profile--public-view h1,
+  .opportunities-page :is(h2, h3),
+  .opportunity-detail-page :is(h1, h2, h3),
+  .applicant-search :is(h2, h3),
+  .applicant-public-profile :is(h1, h2, h3),
+  .dashboard-layout :is(h1, h2, h3, h4, strong),
+  .profile-edit :is(h1, h2, h3, strong) {
+    color: var(--color-text);
+  }
+
+  .opportunities-page :is(p, span, small, li),
+  .opportunity-detail-page :is(p, span, small, li),
+  .applicant-search :is(p, span, small, li),
+  .applicant-public-profile :is(p, span, small, li),
+  .dashboard-layout :is(p, span, small, li),
+  .profile-edit :is(p, span, small, li),
+  .employer-public-profile__state {
+    color: inherit;
+  }
+
+  .field-hint,
+  .profile-contact-editor__preset-label,
+  .profile-contact-editor__card-title > div span,
+  .embedded-file-card__content p {
+    color: var(--color-text-muted);
+  }
+
+  .field-error,
+  .required-star,
+  .employer-public-profile__state--error,
+  .opportunity-detail-page__error-card p {
+    color: var(--color-danger) !important;
+  }
+
+  body {
+    --dark-page-bg:
+            radial-gradient(circle at 8% 0%, rgba(33, 200, 188, 0.13), transparent 28%),
+            radial-gradient(circle at 92% 8%, rgba(72, 119, 176, 0.13), transparent 30%),
+            linear-gradient(180deg, #0b111b 0%, #0d1624 48%, #09101a 100%);
+    --dark-surface-bg: linear-gradient(180deg, rgba(18, 29, 43, 0.98) 0%, rgba(12, 21, 34, 0.98) 100%);
+    --dark-surface-flat: #121d2b;
+    --dark-surface-soft: #182638;
+    --dark-accent-bg: rgba(33, 200, 188, 0.14);
+    --dark-accent-border: rgba(77, 225, 214, 0.28);
+  }
+
+  body :where(
+    .auth-layout,
+    .login-page,
+    .register-page,
+    .profile-edit,
+    .dashboard-layout,
+    .opportunities-page,
+    .opportunity-detail-page,
+    .applicant-search,
+    .applicant-public-profile,
+    .employer-public-profile
+  ) {
+    background: var(--dark-page-bg) !important;
+    color: var(--color-text-muted);
+  }
+
+  body :where(
+    .card,
+    .dashboard-panel,
+    .dashboard-layout__header,
+    .dashboard-tabs__btn,
+    .applicant-search__filters,
+    .applicant-search__chip-group,
+    .applicant-search__state,
+    .applicant-search__card,
+    .applicant-search__pagination,
+    .opportunities-page__search-bar,
+    .opportunities-page__filters-panel,
+    .opportunities-page__salary-filter,
+    .opportunities-page__tag-filter,
+    .opportunities-page__toolbar,
+    .opportunities-page__map-layout,
+    .opportunities-page__map-side-list,
+    .opportunities-page__compact-card,
+    .opportunities-page__card,
+    .opportunities-page__empty,
+    .personalized-recommendations,
+    .personalized-recommendations__card,
+    .personalized-recommendations__state,
+    .opportunity-detail-page__content,
+    .opportunity-detail-page__error-card,
+    .opportunity-detail-page__map-card,
+    .opportunity-detail-page__contacts,
+    .opportunity-detail-page .requirements-list,
+    .opportunity-detail-page__info-grid .info-item,
+    .opportunity-detail-page__address,
+    .opportunity-detail-page__application-state,
+    .applicant-public-profile__loader,
+    .applicant-public-profile__error-card,
+    .applicant-public-profile__empty-card,
+    .applicant-public-profile__hero-card,
+    .applicant-public-profile__section-card,
+    .employer-public-profile__state,
+    .profile-card,
+    .profile-overview-card,
+    .recommendation-card,
+    .favorite-card,
+    .curator-card,
+    .stat-card,
+    .moderation-filters,
+    .security-settings__card,
+    .verification-banner,
+    .advanced-block,
+    .profile-tags-section,
+    .profile-public-channels,
+    .profile-contact-editor__card,
+    .profile-contact-editor__empty,
+    .embedded-file-card,
+    .chats,
+    .chats__sidebar,
+    .chats__thread-header,
+    .chats__pinned-bar,
+    .chats__search-panel,
+    .chats__composer,
+    .chats__composer-row,
+    .chats__message,
+    .chats__filter,
+    .chats__opportunity-trigger,
+    .chats__icon-action,
+    .chats__jump,
+    .modal,
+    .chats__confirm,
+    .chats__forward-modal
+  ) {
+    background: var(--dark-surface-bg) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+    box-shadow: var(--shadow-soft);
+  }
+
+  body :where(
+    .input,
+    .textarea,
+    input:not([type='checkbox']):not([type='radio']):not([type='file']),
+    textarea,
+    select,
+    .custom-select__button,
+    .custom-select__menu,
+    .custom-select__menu--inline,
+    .custom-select__menu--inline-mobile,
+    .autocomplete__list,
+    .applicant-search__autocomplete-list,
+    .applicant-search__autocomplete-item,
+    .custom-select__item,
+    .autocomplete__item,
+    .links-editor__remove,
+    .links-editor__add,
+    .profile-contact-editor__preset,
+    .opportunity-detail-page .contacts-list .contact-link,
+    .opportunity-detail-page .contacts-list .contact-person,
+    .opportunity-detail-page__applications-link,
+    .opportunities-page__map-controls-badge,
+    .opportunities-page__map-controls-btn--secondary,
+    .opportunities-page__view-switcher button.is-active,
+    .opportunities-page__map-btn,
+    .opportunities-page__map-pagination button,
+    .opportunities-page__pagination button,
+    .personalized-recommendations__toggle,
+    .navbar__menu-toggle,
+    .theme-toggle
+  ) {
+    background: var(--dark-surface-flat) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .custom-select__item:hover,
+    .custom-select__item.is-active,
+    .custom-select__item.is-selected,
+    .autocomplete__item:hover,
+    .autocomplete__item.is-active,
+    .applicant-search__autocomplete-item:hover,
+    .dashboard-tabs__btn:hover,
+    .dashboard-tabs__btn.is-active,
+    .chats__dialog:hover,
+    .chats__dialog.is-active,
+    .chats__filter.is-active,
+    .chats__message--own,
+    .chats__reply-quote,
+    .chats__reply-preview,
+    .chats__edit-preview,
+    .register-form__role-card:hover,
+    .register-form__role-card.is-active
+  ) {
+    background: var(--dark-accent-bg) !important;
+    border-color: var(--dark-accent-border) !important;
+    color: var(--color-accent) !important;
+  }
+
+  body :where(
+    .applicant-search__chip,
+    .applicant-search__tag,
+    .applicant-search__counter,
+    .applicant-search__tag-search-clear,
+    .opportunities-page__tag,
+    .opportunities-page__tag-chip,
+    .opportunities-page__tag-inline-hint,
+    .opportunities-page__badge,
+    .personalized-recommendations__source,
+    .personalized-recommendations__badges span,
+    .personalized-recommendations__skills span,
+    .personalized-recommendations__applied-state,
+    .applicant-public-profile__empty-badge,
+    .applicant-public-profile .badge,
+    .applicant-public-profile .tag,
+    .employer-profile .badge,
+    .employer-profile .tag
+  ) {
+    background: var(--dark-accent-bg) !important;
+    border-color: var(--dark-accent-border) !important;
+    color: var(--color-accent) !important;
+  }
+
+  body :where(
+    .button--primary,
+    .navbar__link--register,
+    .opportunities-page__map-controls-btn--primary,
+    .opportunity-detail-page__salary-row,
+    .opportunity-detail-page__actions .button--primary
+  ) {
+    background: linear-gradient(135deg, #12877f, #21c8bc) !important;
+    border-color: transparent !important;
+    color: #ffffff !important;
+  }
+
+  body :where(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    .h1,
+    .h2,
+    .h3,
+    .h4,
+    .h5,
+    .h6,
+    strong,
+    label,
+    .label
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    p,
+    li,
+    dd,
+    dt,
+    small,
+    .field-hint,
+    .applicant-search__meta-line,
+    .applicant-search__restricted,
+    .opportunities-page__desc,
+    .opportunities-page__short-desc,
+    .opportunity-detail-page .description-text,
+    .opportunity-detail-page .requirements-list p,
+    .opportunity-detail-page__application-hint,
+    .profile-contact-editor__card-title > div span,
+    .embedded-file-card__content p
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    a,
+    .navbar__link:hover,
+    .navbar__link.is-active,
+    .applicant-search__back,
+    .applicant-search__summary-reset,
+    .opportunities-page__reset-filters,
+    .opportunities-page__detail-btn,
+    .opportunities-page__map-link,
+    .opportunity-detail-page__back,
+    .applicant-public-profile__back,
+    .employer-public-profile__back,
+    .employer-public-profile__owner-link
+  ) {
+    color: var(--color-accent);
+  }
+
+  body :where(
+    .field-error,
+    .required-star,
+    .employer-public-profile__state--error,
+    .opportunity-detail-page__error-card p,
+    .chats__state--error,
+    .chats__message-action,
+    .navbar__link--logout
+  ) {
+    color: var(--color-danger) !important;
+  }
+
+  body :where(
+    .button:not(.button--ghost):not(.button--outline),
+    .button--primary,
+    .navbar__link--register,
+    .opportunities-page__map-controls-btn--primary,
+    .opportunity-detail-page__salary-row,
+    .opportunity-detail-page__actions .button--primary
+  ) {
+    color: #ffffff !important;
+  }
+
+  body :where(
+    .applicant-search__chip,
+    .applicant-search__tag,
+    .applicant-search__counter,
+    .applicant-search__tag-search-clear,
+    .opportunities-page__tag,
+    .opportunities-page__tag-chip,
+    .opportunities-page__tag-inline-hint,
+    .opportunities-page__badge,
+    .personalized-recommendations__source,
+    .personalized-recommendations__badges span,
+    .personalized-recommendations__skills span,
+    .personalized-recommendations__applied-state,
+    .applicant-public-profile__empty-badge,
+    .applicant-public-profile .badge,
+    .applicant-public-profile .tag,
+    .employer-profile .badge,
+    .employer-profile .tag
+  ) {
+    background: var(--dark-accent-bg) !important;
+    border-color: var(--dark-accent-border) !important;
+    color: var(--color-accent) !important;
+  }
+
+  body :where(
+    .applicant-search__chip.is-active,
+    .applicant-search__chip:hover,
+    .opportunities-page__tag:hover,
+    .opportunities-page__tag.is-active,
+    .opportunities-page__tag-chip:hover,
+    .opportunities-page__tag-chip.is-active
+  ) {
+    background: rgba(33, 200, 188, 0.24) !important;
+    border-color: var(--color-primary) !important;
+    color: #ffffff !important;
+  }
+
+  body :where(
+    .toast,
+    .verified-company-badge,
+    .recommendation-card,
+    .recommendation-card__timeline-item,
+    .recommendation-card__applied-state,
+    .recommendation-btn,
+    .recommendation-status,
+    .status-badge,
+    .badge,
+    .tag,
+    .skill-tag,
+    .tags-list .tag,
+    .dashboard-tabs__badge,
+    .profile-overview-card__status,
+    .profile-overview-card__editor,
+    .profile-edit-form__section,
+    .profile-edit-form__actions,
+    .info-block,
+    .info-block__edit,
+    .info-card,
+    .info-card__edit,
+    .contact-editor__preset,
+    .contact-editor__empty,
+    .contact-editor__card,
+    .contact-link-card,
+    .contact-editor__card-badge,
+    .contact-link-card__badge,
+    .resume-analysis-card,
+    .resume-analysis-card__opportunity,
+    .resume-analysis-card__opportunity-applied,
+    .applications-list,
+    .application-card,
+    .application-card__status,
+    .application-card__meta,
+    .employer-response-card,
+    .response-card,
+    .response-status,
+    .employer-profile__hero,
+    .employer-profile__section,
+    .employer-profile__card,
+    .employer-create-form,
+    .employer-create-form__section,
+    .employer-create-form__tag-picker,
+    .employer-create-form__selected-tags,
+    .employer-create-form__tag-suggestions,
+    .employer-verification-modal__status-card,
+    .employer-verification-modal__status-item,
+    .employer-verification-modal__status-badge,
+    .employer-verification-modal__selected-card,
+    .employer-verification-modal__selected-card-badge,
+    .employer-verification-modal__textarea
+  ) {
+    background: var(--dark-surface-bg) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+    box-shadow: var(--shadow-soft);
+  }
+
+  body :where(
+    .status-badge,
+    .badge,
+    .tag,
+    .skill-tag,
+    .tags-list .tag,
+    .dashboard-tabs__badge,
+    .recommendation-status,
+    .recommendation-card__timeline-item,
+    .recommendation-card__applied-state,
+    .application-card__status,
+    .application-card__meta,
+    .response-status,
+    .profile-overview-card__status,
+    .verified-company-badge,
+    .employer-verification-modal__status-badge,
+    .employer-verification-modal__selected-card-badge,
+    .contact-editor__card-badge,
+    .contact-link-card__badge,
+    .resume-analysis-card__opportunity-applied
+  ) {
+    background: rgba(33, 200, 188, 0.15) !important;
+    border-color: rgba(77, 225, 214, 0.3) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .status-badge.status-rejected,
+    .recommendation-status.is-declined,
+    .button--danger,
+    .recommendation-btn--danger,
+    .toast--destructive
+  ) {
+    background: rgba(255, 107, 134, 0.14) !important;
+    border-color: rgba(255, 107, 134, 0.36) !important;
+    color: #ffd6dd !important;
+  }
+
+  body :where(
+    .status-badge.status-approved,
+    .status-badge.status-active,
+    .recommendation-status.is-applied,
+    .verified-company-badge
+  ) {
+    background: rgba(74, 222, 128, 0.15) !important;
+    border-color: rgba(134, 239, 172, 0.32) !important;
+    color: #d1fae5 !important;
+  }
+
+  body :where(
+    .status-badge.status-pending,
+    .recommendation-status.is-new,
+    .recommendation-status.is-viewed
+  ) {
+    background: rgba(96, 165, 250, 0.16) !important;
+    border-color: rgba(147, 197, 253, 0.34) !important;
+    color: #dbeafe !important;
+  }
+
+  body :where(
+    .toast__title,
+    .recommendation-card__title-block h3,
+    .recommendation-card__message,
+    .profile-card__detail-value,
+    .info-block__value,
+    .info-card__value,
+    .contact-editor__card-title strong,
+    .contact-link-card__title,
+    .employer-verification-modal__status-card-title,
+    .employer-verification-modal__status-item-value
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .toast__description,
+    .recommendation-card__meta,
+    .recommendation-card__company,
+    .profile-card__detail-label,
+    .info-block__label,
+    .info-card__label,
+    .contact-editor__card-title span,
+    .contact-link-card__description,
+    .employer-verification-modal__status-card-description,
+    .employer-verification-modal__status-item-label
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .textarea,
+    textarea,
+    .seeker-dashboard-modal .modal__field .textarea,
+    .profile-edit-form .textarea,
+    .info-block__edit textarea,
+    .info-card__edit textarea,
+    .employer-verification-modal__textarea
+  ) {
+    background: var(--color-surface) !important;
+    border-color: var(--color-border-strong) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    button img[src$='.svg'],
+    a img[src$='.svg'],
+    .profile-card__edit-btn img,
+    .info-block__edit-btn img,
+    .info-card__edit-btn img,
+    .profile-card__camera-svg,
+    .icon,
+    .icon-small
+  ) {
+    filter: brightness(0) invert(1) opacity(0.9);
+  }
+
+  body :where(
+    .navbar__logo-icon,
+    .app-footer__logo-icon,
+    .app-footer__compact-logo,
+    .auth-layout__logo-image,
+    .profile-card__avatar img,
+    .applicant-search__avatar-image,
+    .employer-profile__logo-image
+  ) {
+    filter: none !important;
+  }
+
+  body :where(svg, svg *) {
+    color: currentColor;
+    stroke: currentColor;
+  }
+
+  body :where(
+    .yandex-opportunity-map__popup,
+    .yandex-opportunity-map__mobile-card
+  ) {
+    background: var(--dark-surface-bg) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .ymaps-2-1-79-balloon__content,
+    .ymaps-2-1-79-balloon__layout,
+    .ymaps-2-1-79-hint,
+    .ymaps-2-1-79-hint__content
+  ) {
+    background: #121d2b !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .yandex-opportunity-map__group-title,
+    .yandex-opportunity-map__title,
+    .yandex-opportunity-map__mobile-card-title
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .yandex-opportunity-map__company,
+    .yandex-opportunity-map__address,
+    .yandex-opportunity-map__description,
+    .yandex-opportunity-map__mobile-card-company,
+    .yandex-opportunity-map__mobile-card-description
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .yandex-opportunity-map__badge,
+    .yandex-opportunity-map__tag,
+    .yandex-opportunity-map__verified-badge,
+    .yandex-opportunity-map__action,
+    .yandex-opportunity-map__mobile-card-action,
+    .yandex-opportunity-map__mobile-card-close
+  ) {
+    background: var(--dark-accent-bg) !important;
+    border-color: var(--dark-accent-border) !important;
+    color: var(--color-accent) !important;
+  }
+
+  body :where(
+    .yandex-opportunity-map__action--primary,
+    .yandex-opportunity-map__mobile-card-action--primary
+  ) {
+    background: linear-gradient(135deg, #12877f, #21c8bc) !important;
+    color: #ffffff !important;
+  }
+
+  body :where(
+    .dashboard-layout,
+    .profile-edit,
+    .opportunities-page,
+    .opportunity-detail-page,
+    .applicant-search,
+    .applicant-public-profile,
+    .employer-public-profile,
+    .chats
+  ) :where(
+    [class*='card'],
+    [class*='panel'],
+    [class*='block'],
+    [class*='section'],
+    [class*='editor'],
+    [class*='form'],
+    [class*='state'],
+    [class*='empty'],
+    [class*='status'],
+    [class*='badge'],
+    [class*='tag'],
+    [class*='chip'],
+    [class*='timeline'],
+    [class*='response'],
+    [class*='application'],
+    [class*='contact'],
+    [class*='link'],
+    [class*='item'],
+    [class*='modal'],
+    [class*='popup']
+  ):not([class*='logo']):not([class*='avatar-image']):not([class*='image']):not([class*='photo']):not([class*='map']) {
+    border-color: var(--color-border) !important;
+  }
+
+  body :where(
+    .dashboard-layout,
+    .profile-edit,
+    .opportunities-page,
+    .opportunity-detail-page,
+    .applicant-search,
+    .applicant-public-profile,
+    .employer-public-profile,
+    .chats
+  ) :where(
+    [class*='card'],
+    [class*='panel'],
+    [class*='block'],
+    [class*='section'],
+    [class*='editor'],
+    [class*='form'],
+    [class*='state'],
+    [class*='empty'],
+    [class*='response'],
+    [class*='application'],
+    [class*='contact'],
+    [class*='item'],
+    [class*='modal'],
+    [class*='popup']
+  ):not([class*='logo']):not([class*='avatar']):not([class*='image']):not([class*='photo']):not([class*='map']):not([class*='button']):not(.button) {
+    background: var(--dark-surface-bg) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .profile-overview-card__chips span,
+    .profile-link,
+    .profile-contact,
+    .profile-card__version-switch,
+    .profile-card__version-switch-btn,
+    .profile-card__revision-card,
+    .profile-card__moderation-btn,
+    .btn-secondary,
+    .profile-card__edit-btn,
+    .profile-overview-card__action,
+    .info-block__edit-btn,
+    .info-card__edit-btn,
+    .embedded-file-card .media-link,
+    .embedded-file-card .media-delete-btn,
+    .contact-editor__preset,
+    .contact-editor__remove,
+    .links-editor__remove,
+    .links-editor__add,
+    .recommendation-btn
+  ) {
+    background: var(--color-surface) !important;
+    border-color: var(--color-border-strong) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .profile-card__version-switch-btn.is-active,
+    .profile-card__edit-btn:hover,
+    .profile-overview-card__action:hover,
+    .info-block__edit-btn:hover,
+    .info-card__edit-btn:hover,
+    .btn-secondary:hover,
+    .embedded-file-card .media-link:hover,
+    .links-editor__add:hover,
+    .links-editor__remove:hover,
+    .contact-editor__preset:hover
+  ) {
+    background: var(--dark-accent-bg) !important;
+    border-color: var(--dark-accent-border) !important;
+    color: var(--color-accent) !important;
+  }
+
+  body :where(
+    .profile-overview-card__chips span,
+    .profile-card__revision-header span,
+    .profile-card__revision-block span,
+    .profile-card__moderation-hint,
+    .profile-link span,
+    .profile-contact span
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .profile-link strong,
+    .profile-contact strong,
+    .profile-card__revision-header h3
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .toast
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
+    border-color: var(--color-border) !important;
+    border-left-color: var(--color-primary) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(.toast--destructive) {
+    border-left-color: var(--color-danger) !important;
+  }
+
+  body :where(
+    [class*='ymaps'][class*='balloon__content'],
+    [class*='ymaps'][class*='balloon__layout'],
+    [class*='ymaps'][class*='balloon__tail'],
+    [class*='ymaps'][class*='hint']
+  ) {
+    background: #121d2b !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .app-footer__brand p,
+    .app-footer__group a,
+    .app-footer__bottom,
+    .app-footer__compact-links a,
+    .text-muted,
+    .muted,
+    [class*='muted'],
+    [class*='hint'],
+    [class*='description'],
+    [class*='caption'],
+    [class*='meta'],
+    [class*='label']
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .button--ghost,
+    .button--outline,
+    .btn-secondary,
+    .profile-card__edit-btn,
+    .profile-overview-card__action,
+    .info-block__edit-btn,
+    .info-card__edit-btn,
+    .employer-opportunities__view,
+    .opportunity-status-manager__button,
+    .moderation-filters__toggle,
+    .moderation-upload-button,
+    [class*='detailBtn'],
+    [class*='dialogSecondary']
+  ) {
+    background: linear-gradient(180deg, rgba(31, 46, 66, 0.98), rgba(20, 33, 50, 0.98)) !important;
+    border-color: rgba(156, 190, 208, 0.34) !important;
+    color: #e9f5fb !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .button--ghost:hover,
+    .button--outline:hover,
+    .btn-secondary:hover,
+    .profile-card__edit-btn:hover,
+    .profile-overview-card__action:hover,
+    .info-block__edit-btn:hover,
+    .info-card__edit-btn:hover,
+    .employer-opportunities__view:hover,
+    .opportunity-status-manager__button:hover,
+    .moderation-filters__toggle:hover,
+    .moderation-upload-button:hover,
+    [class*='detailBtn']:hover,
+    [class*='dialogSecondary']:hover
+  ) {
+    background: rgba(33, 200, 188, 0.18) !important;
+    border-color: rgba(77, 225, 214, 0.42) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .employer-profile__upload-hint,
+    .media-gallery__hint,
+    .opportunity-status-manager__task,
+    .opportunity-status-manager__planned,
+    .opportunity-status-manager__expires,
+    .opportunity-status-manager__feedback,
+    .employer-opportunities__published-warning,
+    .employer-opportunities__edit-note,
+    .employer-opportunities__notice,
+    .publication-lock-notice,
+    .security-settings__highlight,
+    .security-settings__info-item,
+    .security-settings__status,
+    .security-settings__note,
+    .task-detail-info,
+    .task-detail-comments,
+    .task-detail-snapshot .snapshot-content,
+    .ai-moderation-card,
+    .moderation-field-issue-card,
+    .moderation-attachment-card,
+    .moderation-attachment-card--compact,
+    .moderation-empty-state,
+    .history-filters,
+    .history-item,
+    .loading-state,
+    .modal-content,
+    .moderation-modal
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+    box-shadow: var(--shadow-soft);
+  }
+
+  body :where(
+    .security-settings__badge.is-disabled,
+    .opportunity-status-manager__badge,
+    .task-type,
+    .task-status,
+    .task-priority,
+    .priority-badge,
+    .status-badge,
+    .history-chip,
+    .moderation-chip,
+    .ai-moderation-card__status,
+    .ai-moderation-card__verdict,
+    .application-card__applied-icon,
+    .opportunity-detail-page__application-state-icon,
+    [class*='statusBadge'],
+    [class*='badge'],
+    [class*='chip']
+  ) {
+    background: rgba(33, 200, 188, 0.15) !important;
+    border-color: rgba(77, 225, 214, 0.32) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .task-status.status-approved,
+    .status-badge.status-approved,
+    .security-settings__badge.is-enabled,
+    .opportunity-status-manager__badge--green,
+    .btn-approve,
+    [class*='btnApprove']
+  ) {
+    background: rgba(74, 222, 128, 0.15) !important;
+    border-color: rgba(134, 239, 172, 0.34) !important;
+    color: #d1fae5 !important;
+  }
+
+  body :where(
+    .task-status.status-progress,
+    .task-priority.priority-medium,
+    .priority-badge.priority-medium,
+    .opportunity-status-manager__badge--yellow,
+    .opportunity-status-manager__button--warning
+  ) {
+    background: rgba(251, 191, 36, 0.16) !important;
+    border-color: rgba(251, 191, 36, 0.34) !important;
+    color: #fde68a !important;
+  }
+
+  body :where(
+    .task-status.status-rejected,
+    .status-badge.status-rejected,
+    .task-priority.priority-high,
+    .priority-badge.priority-high,
+    .opportunity-status-manager__badge--red,
+    .btn-reject,
+    [class*='btnReject'],
+    [class*='cancelBtn'],
+    [class*='dialogDanger'],
+    [class*='dialogError']
+  ) {
+    background: rgba(255, 107, 134, 0.15) !important;
+    border-color: rgba(255, 107, 134, 0.36) !important;
+    color: #ffd6dd !important;
+  }
+
+  body :where(
+    .task-card,
+    .moderation-stats .stat-card,
+    .moderation-filters,
+    .moderation-filters .moderation-filter-input--checkbox .custom-checkbox,
+    .curator-card,
+    .pagination button,
+    [class*='filters'],
+    [class*='table'],
+    [class*='dialog']
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    table,
+    thead,
+    tbody,
+    tr,
+    th,
+    td
+  ) {
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    th,
+    [class*='table'] th
+  ) {
+    background: rgba(24, 38, 56, 0.98) !important;
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    [class*='table'] tr,
+    [class*='table'] td
+  ) {
+    background: transparent !important;
+  }
+
+  body :where(
+    .security-settings__highlight-label,
+    .security-settings__status-text,
+    .security-settings__hint,
+    .security-settings__note-text,
+    .task-card__body .task-id,
+    .task-card__footer .task-date,
+    .task-detail-info .info-label,
+    .moderation-filters__title span,
+    .history-filters label,
+    .history-item p,
+    .modal-field__hint
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .security-settings__highlight-value,
+    .security-settings__accent,
+    .security-settings__note-title,
+    .task-card__body h4,
+    .task-card__body .task-snapshot,
+    .task-detail-info .info-value,
+    .moderation-filters__title strong,
+    .history-item strong,
+    .modal-header h3
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    img[src*='edit'],
+    img[src*='pencil'],
+    img[src*='trash'],
+    img[src*='delete'],
+    img[src*='close'],
+    img[src*='replace'],
+    img[src*='upload'],
+    .replace-logo-button img,
+    .employer-profile__logo-actions img
+  ) {
+    filter: brightness(0) invert(1) opacity(0.92) !important;
+  }
+
+  body :where(
+    .moderation-accordion,
+    .moderation-accordion__summary,
+    .moderation-accordion__body,
+    .task-detail-section,
+    .task-detail-history,
+    .history-timeline,
+    .moderation-attachments,
+    .moderation-attachments__list,
+    .moderation-attachments__empty,
+    .moderation-attachment-card,
+    .moderation-attachment-card--compact,
+    .moderation-field-issue-card,
+    .moderation-field-issue-card__top,
+    .moderation-entity-editor__empty,
+    .moderation-entity-editor__diff,
+    .moderation-diff-list,
+    .moderation-diff-row,
+    .snapshot-formatted,
+    .snapshot-fields,
+    .snapshot-field
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .moderation-accordion__summary:hover,
+    .moderation-accordion[open] .moderation-accordion__summary
+  ) {
+    background: rgba(33, 200, 188, 0.13) !important;
+    border-color: rgba(77, 225, 214, 0.3) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .moderation-accordion__meta,
+    .moderation-attachment-card__meta span,
+    .moderation-field-issue-pill,
+    .moderation-field-issue-pill__code
+  ) {
+    background: rgba(33, 200, 188, 0.15) !important;
+    border-color: rgba(77, 225, 214, 0.3) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .moderation-attachment-card__title,
+    .moderation-field-issue-card__index,
+    .moderation-diff-row__label,
+    .snapshot-field .field-label,
+    .snapshot-field .field-value,
+    .moderation-entity-editor label,
+    .moderation-accordion__summary span:first-child
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .moderation-attachment-card__meta,
+    .moderation-section-hint,
+    .moderation-editor-note,
+    .moderation-editor-summary,
+    .moderation-diff-row__values,
+    .moderation-diff-row__values span,
+    .moderation-entity-editor__diff,
+    .moderation-entity-editor__empty
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .snapshot-field.is-changed,
+    .moderation-entity-editor__field.is-changed,
+    .moderation-diff-row
+  ) {
+    background: rgba(251, 191, 36, 0.13) !important;
+    border-color: rgba(251, 191, 36, 0.45) !important;
+    color: #fff7d6 !important;
+  }
+
+  body :where(
+    .snapshot-field.is-changed .field-label,
+    .snapshot-field.is-changed .field-value,
+    .moderation-entity-editor__field.is-changed label,
+    .moderation-entity-editor__field.is-changed input,
+    .moderation-entity-editor__field.is-changed textarea,
+    .moderation-entity-editor__field.is-changed .custom-select__button
+  ) {
+    color: #fff7d6 !important;
+  }
+
+  body :where(
+    .moderation-field-issue-card,
+    .moderation-field-issue-pill
+  ) {
+    background: rgba(255, 107, 134, 0.13) !important;
+    border-color: rgba(255, 107, 134, 0.36) !important;
+    color: #ffd6dd !important;
+  }
+
+  body :where(
+    .moderation-field-issue-card .input,
+    .moderation-field-issue-card input,
+    .moderation-field-issue-card textarea,
+    .moderation-field-issue-card .custom-select__button,
+    .moderation-entity-editor__field.is-changed .input,
+    .moderation-entity-editor__field.is-changed input,
+    .moderation-entity-editor__field.is-changed textarea,
+    .moderation-entity-editor__field.is-changed .custom-select__button
+  ) {
+    background: rgba(12, 21, 34, 0.95) !important;
+    border-color: rgba(156, 190, 208, 0.42) !important;
+  }
+
+  body :where(
+    .moderation-section-hint,
+    .moderation-attachments__empty,
+    .applicant-search__chips-hint,
+    .applicant-search__tag-title,
+    .applicant-search__section-title,
+    .applicant-search__label
+  ) {
+    width: fit-content !important;
+    max-width: 100% !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .moderation-attachments__empty
+  ) {
+    width: 100% !important;
+    padding: 14px 16px !important;
+    border: 1px dashed var(--color-border) !important;
+    border-radius: 18px !important;
+    background: rgba(18, 29, 43, 0.58) !important;
+  }
+
+  body :where(
+    .moderation-section-hint
+  ) {
+    display: inline-block;
+    padding: 8px 12px !important;
+    border-radius: 14px !important;
+    background: rgba(18, 29, 43, 0.42) !important;
+  }
+
+  body :where(
+    .applicant-search__chip-group
+  ) {
+    background: transparent !important;
+    border-color: rgba(141, 169, 187, 0.22) !important;
+    border-radius: 18px !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-search__chip-header,
+    .applicant-search__chips,
+    .applicant-search__chips-block
+  ) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-search__badges .badge,
+    .applicant-search__badges .badge--success,
+    .applicant-search__badges .badge--info
+  ) {
+    background: rgba(33, 200, 188, 0.12) !important;
+    border-color: rgba(77, 225, 214, 0.28) !important;
+    color: #d9fffb !important;
+    border-radius: 999px !important;
+    width: fit-content !important;
+  }
+
+  body :where(
+    .applicant-search__tag-title
+  ) {
+    color: var(--color-text) !important;
+    font-weight: 800;
+  }
+
+  body :where(
+    a svg,
+    a svg *,
+    a .icon,
+    a .icon-small,
+    a img[src$='.svg'],
+    .profile-link img,
+    .contact-link-card img,
+    .embedded-file-card .media-link img,
+    .opportunity-detail-page .contacts-list .contact-link img
+  ) {
+    color: currentColor !important;
+    stroke: currentColor !important;
+    filter: brightness(0) invert(1) opacity(0.92) !important;
+  }
+
+  body :where(
+    [class*='badge'][class*='pending'],
+    [class*='pending'][class*='badge'],
+    [data-tag-status='PENDING']
+  ) {
+    background: transparent !important;
+    border-color: rgba(251, 191, 36, 0.34) !important;
+    color: #fde68a !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .employer-profile__moderation-hint,
+    .employer-profile__version-switch,
+    .opportunity-status-manager__task,
+    .opportunity-status-manager__task-info,
+    .media-gallery__upload,
+    .media-gallery__file-preview,
+    .media-gallery__item
+  ) {
+    background: linear-gradient(180deg, rgba(22, 35, 52, 0.98), rgba(14, 24, 38, 0.98)) !important;
+    border: 1px solid var(--color-border) !important;
+    color: var(--color-text-muted) !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .employer-profile__moderation-hint
+  ) {
+    color: #e4f1f8 !important;
+  }
+
+  body :where(
+    .employer-profile__version-switch-btn,
+    .media-gallery__upload-button,
+    .employer-opportunities__delete,
+    .employer-dashboard__alert-button,
+    .opportunity-status-manager__button,
+    .opportunity-status-manager__button--small,
+    .chats__archive-button
+  ) {
+    background: linear-gradient(180deg, rgba(31, 46, 66, 0.98), rgba(20, 33, 50, 0.98)) !important;
+    border: 1px solid rgba(156, 190, 208, 0.36) !important;
+    color: #e9f5fb !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .employer-profile__version-switch-btn:hover,
+    .employer-profile__version-switch-btn.is-active,
+    .media-gallery__upload-button:hover,
+    .employer-dashboard__alert-button:hover,
+    .opportunity-status-manager__button:hover,
+    .opportunity-status-manager__button--small:hover
+  ) {
+    background: rgba(33, 200, 188, 0.18) !important;
+    border-color: rgba(77, 225, 214, 0.42) !important;
+    color: #d9fffb !important;
+    transform: none !important;
+  }
+
+  body :where(
+    .employer-opportunities__delete,
+    .employer-opportunities__delete:hover,
+    .chats__archive-button,
+    .chats__archive-button:hover
+  ) {
+    background: rgba(255, 107, 134, 0.12) !important;
+    border-color: rgba(255, 107, 134, 0.34) !important;
+    color: #ffd6dd !important;
+  }
+
+  body :where(
+    .opportunity-status-manager__task-info > span,
+    .media-gallery__hint,
+    .media-gallery__file-name,
+    .employer-dashboard__alert-text
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .employer-dashboard__alert,
+    .employer-dashboard__alert--approved,
+    .employer-dashboard__alert--pending,
+    .employer-dashboard__alert--revision,
+    .employer-dashboard__alert--info,
+    .employer-dashboard__alert--draft
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98)) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .employer-dashboard__alert-title,
+    .media-gallery__file-icon
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .skill-tag,
+    .tag,
+    .tags-list .tag,
+    .badge,
+    .applicant-search__tag,
+    .applicant-search__chip,
+    .applicant-search__badges .badge,
+    .applicant-public-profile .badge,
+    .applicant-public-profile .tag,
+    .opportunities-page__tag,
+    .opportunities-page__tag-chip,
+    .opportunities-page__badge,
+    .opportunity-detail-page__badges .badge,
+    .opportunity-detail-page .tags-list .tag,
+    .personalized-recommendations__skills span,
+    .personalized-recommendations__badges span
+  ) {
+    background: rgba(18, 29, 43, 0.46) !important;
+    border: 1px solid rgba(156, 190, 208, 0.28) !important;
+    color: #e4f1f8 !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .skill-tag:hover,
+    .skill-tag--active,
+    .applicant-search__chip:hover,
+    .applicant-search__chip.is-active,
+    .applicant-search__tag:hover,
+    .opportunities-page__tag:hover,
+    .opportunities-page__tag.is-active,
+    .opportunities-page__tag-chip:hover,
+    .opportunities-page__tag-chip.is-active,
+    .opportunity-detail-page .tags-list .tag:hover
+  ) {
+    background: rgba(33, 200, 188, 0.14) !important;
+    border-color: rgba(77, 225, 214, 0.34) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .applicant-search__badges .badge--success,
+    .applicant-search__badges .badge--info,
+    .applicant-public-profile__badges .badge--success,
+    .applicant-public-profile__badges .badge--info
+  ) {
+    background: transparent !important;
+    border-color: rgba(156, 190, 208, 0.34) !important;
+    color: #e4f1f8 !important;
+  }
+
+  body :where(
+    .opportunity-detail-page__badges .badge--type,
+    .opportunity-detail-page__badges .badge--format,
+    .opportunity-detail-page__badges .badge--grade,
+    .opportunities-page__badge--type,
+    .opportunities-page__badge--format,
+    .opportunities-page__badge--grade
+  ) {
+    background: rgba(18, 29, 43, 0.42) !important;
+    border-color: rgba(156, 190, 208, 0.3) !important;
+    color: #e4f1f8 !important;
+  }
+
+  body :where(
+    .opportunities-page__view-switcher
+  ) {
+    background: rgba(78, 101, 121, 0.42) !important;
+    border: 1px solid rgba(156, 190, 208, 0.24) !important;
+  }
+
+  body :where(
+    .opportunities-page__view-switcher button
+  ) {
+    background: rgba(36, 52, 72, 0.72) !important;
+    color: #d4e2ec !important;
+  }
+
+  body :where(
+    .opportunities-page__view-switcher button.is-active
+  ) {
+    background: rgba(33, 200, 188, 0.18) !important;
+    color: #d9fffb !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-privacy-preview,
+    .applicant-privacy-preview__summary-item,
+    .applicant-privacy-preview__viewer,
+    .applicant-privacy-preview__item
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.92), rgba(12, 21, 34, 0.94)) !important;
+    border-color: rgba(156, 190, 208, 0.28) !important;
+    color: var(--color-text-muted) !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .applicant-privacy-preview__header h3,
+    .applicant-privacy-preview__summary-item strong,
+    .applicant-privacy-preview__viewer-title,
+    .applicant-privacy-preview__item-label
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .applicant-privacy-preview__header p,
+    .applicant-privacy-preview__viewer-description,
+    .applicant-privacy-preview__item-description,
+    .applicant-privacy-preview__legend
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+
+  body :where(
+    .applicant-privacy-preview__toggle
+  ) {
+    background: linear-gradient(180deg, rgba(31, 46, 66, 0.98), rgba(20, 33, 50, 0.98)) !important;
+    border-color: rgba(156, 190, 208, 0.36) !important;
+    color: #e9f5fb !important;
+  }
+
+  body :where(
+    .applicant-privacy-preview__toggle:hover
+  ) {
+    background: rgba(33, 200, 188, 0.18) !important;
+    border-color: rgba(77, 225, 214, 0.42) !important;
+    color: #d9fffb !important;
+  }
+
+  body :where(
+    .employer-profile__edit-section--accent,
+    .employer-profile__logo-manager,
+    .employer-profile__logo-manager-card,
+    .employer-profile__logo-manager-preview,
+    .employer-profile__logo-placeholder
+  ) {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.94), rgba(12, 21, 34, 0.96)) !important;
+    border-color: rgba(156, 190, 208, 0.3) !important;
+    color: var(--color-text) !important;
+    box-shadow: none !important;
+  }
+
+  body :where(
+    .employer-profile__logo-manager-card
+  ) {
+    border-style: dashed !important;
+  }
+
+  body :where(
+    .employer-profile__edit-section-title,
+    .employer-profile__logo-placeholder
+  ) {
+    color: var(--color-text) !important;
+  }
+
+  body :where(
+    .employer-profile__edit-section-text,
+    .employer-profile__upload-hint
+  ) {
+    color: var(--color-text-muted) !important;
+  }
+}

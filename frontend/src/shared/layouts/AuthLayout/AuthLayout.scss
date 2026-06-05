@@ -23,6 +23,13 @@
           radial-gradient(circle at 85% 75%, rgba(53, 203, 191, 0.08), transparent 18%);
 }
 
+.auth-layout__theme-toggle {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+}
+
 .auth-layout__inner {
   position: relative;
   z-index: 1;
@@ -69,6 +76,11 @@
 }
 
 @include mobile {
+  .auth-layout__theme-toggle {
+    top: 14px;
+    right: 14px;
+  }
+
   .auth-layout__logo-text {
     font-size: 26px;
   }

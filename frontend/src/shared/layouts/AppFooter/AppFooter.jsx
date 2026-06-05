@@ -1,5 +1,4 @@
 import { Link } from 'wouter'
-import { Mail } from 'lucide-react'
 import brandMark from '@/assets/icons/brand-mark.png'
 import './AppFooter.scss'
 
@@ -58,7 +57,6 @@ function AppFooter({ className = '', compact = false }) {
                         <nav className="app-footer__group" aria-label="Связь">
                             <h2>Связь</h2>
                             <a href="mailto:tramplin.support@gmail.com">
-                                <Mail size={15} />
                                 <span>Поддержка</span>
                             </a>
                         </nav>

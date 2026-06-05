@@ -1,4 +1,4 @@
-import { createElement, useEffect, useState } from 'react'
+import { createElement, useEffect } from 'react'
 import { Link } from 'wouter'
 import {
     ArrowRight,
@@ -10,15 +10,15 @@ import {
     GraduationCap,
     LogIn,
     MapPinned,
-    Moon,
     Network,
     Search,
     Sparkles,
-    Sun,
     UserRound,
     Users,
 } from 'lucide-react'
 import brandMark from '@/assets/icons/brand-mark.png'
+import { useTheme } from '@/shared/hooks/useTheme'
+import ThemeToggle from '@/shared/ui/ThemeToggle'
 import './AboutPage.scss'
 
 const audienceCards = [
@@ -82,8 +82,7 @@ function scrollToSection(sectionId, behavior = 'smooth') {
 }
 
 function AboutPage() {
-    const [theme, setTheme] = useState('light')
-    const isDark = theme === 'dark'
+    const { isDark } = useTheme()
 
     useEffect(() => {
         const sectionId = window.location.hash.replace('#', '')
@@ -127,14 +126,7 @@ function AboutPage() {
                         <LogIn size={17} />
                         <span>Войти</span>
                     </Link>
-                    <button
-                        type="button"
-                        className="about-page__theme-toggle"
-                        onClick={() => setTheme(isDark ? 'light' : 'dark')}
-                        aria-label={isDark ? 'Включить светлую тему' : 'Включить тёмную тему'}
-                    >
-                        {isDark ? <Sun size={18} /> : <Moon size={18} />}
-                    </button>
+                    <ThemeToggle className="about-page__theme-toggle" showLabel={false} />
                 </div>
             </header>
 
