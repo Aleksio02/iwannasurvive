@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useRoute } from 'wouter'
 import Navbar from '@/shared/layouts/Navbar'
+import AppFooter from '@/shared/layouts/AppFooter'
 import Button from '@/shared/ui/Button'
 import { useToast } from '@/shared/hooks/use-toast'
 import YandexOpportunityMap from '@/shared/ui/Map/YandexOpportunityMap'
@@ -886,6 +887,8 @@ export default function OpportunityDetailPage() {
                     </div>
                 ) : null}
             </main>
+
+            <AppFooter />
         </div>
     )
 }

@@ -1,13 +1,15 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { Redirect, Route, Switch } from 'wouter'
 import ProtectedRoute from '@/shared/ui/ProtectedRoute'
 import ProfileOnboardingGuard from '@/shared/ui/ProfileOnboardingGuard'
+import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
 
 const OpportunitiesPage = lazy(() => import('@/features/Opportunities/OpportunitiesPage/OpportunitiesPage'))
 const OpportunityDetailPage = lazy(() => import('@/features/Opportunities/OpportunityDetailPage/OpportunityDetailPage'))
 const Login = lazy(() => import('@/features/Auth/Login/Login'))
 const Register = lazy(() => import('@/features/Auth/Register/Register'))
 const ForgotPassword = lazy(() => import('@/features/Auth/ForgotPassword/ForgotPassword'))
+const AboutPage = lazy(() => import('@/features/About/AboutPage'))
 const SeekerDashboard = lazy(() => import('@/features/Dashboard/SeekerDashboard/SeekerDashboard'))
 const EmployerDashboard = lazy(() => import('@/features/Dashboard/EmployerDashboard/EmployerDashboard'))
 const CuratorDashboard = lazy(() => import('@/features/Dashboard/CuratorDashboard/CuratorDashboard'))
@@ -30,12 +32,23 @@ function AppFallback() {
     )
 }
 
+function RootPage() {
+    const [sessionUser, setSessionUser] = useState(() => getSessionUser())
+
+    useEffect(() => subscribeSessionChange(setSessionUser), [])
+
+    return sessionUser ? <OpportunitiesPage /> : <AboutPage />
+}
+
 function App() {
     return (
         <Suspense fallback={<AppFallback />}>
             <ProfileOnboardingGuard>
                 <Switch>
-                    <Route path="/" component={OpportunitiesPage} />
+                    <Route path="/" component={RootPage} />
+                    <Route path="/about" component={AboutPage} />
+                    <Route path="/how-it-works" component={AboutPage} />
+                    <Route path="/opportunities" component={OpportunitiesPage} />
                     <Route path="/opportunities/:id" component={OpportunityDetailPage} />
 
                 <Route path="/seekers">

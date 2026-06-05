@@ -1,5 +1,6 @@
 import { Link } from 'wouter'
 import brandMark from '@/assets/icons/brand-mark.png'
+import AppFooter from '@/shared/layouts/AppFooter'
 import './AuthLayout.scss'
 
 function AuthLayout({ children }) {
@@ -19,6 +20,8 @@ function AuthLayout({ children }) {
 
                 {children}
             </div>
+
+            <AppFooter compact className="auth-layout__footer" />
         </div>
     )
 }

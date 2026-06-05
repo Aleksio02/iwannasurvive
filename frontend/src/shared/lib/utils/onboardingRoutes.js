@@ -10,6 +10,9 @@ const ONBOARDING_ALLOWED_PATHS = [
 
 const PUBLIC_GUEST_PATH_MATCHERS = [
     /^\/$/,
+    /^\/about$/,
+    /^\/how-it-works$/,
+    /^\/opportunities$/,
     /^\/opportunities\/[^/]+$/,
     /^\/seekers\/[^/]+$/,
     /^\/employers\/[^/]+$/,
