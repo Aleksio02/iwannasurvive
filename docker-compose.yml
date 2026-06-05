@@ -138,7 +138,6 @@ services:
       AUTH_SERVER_HOST: http://auth:9999
       OPPORTUNITY_SERVER_HOST: http://opportunity:8081
       MEDIA_SERVER_HOST: http://media:8091
-      CHAT_WEBSOCKET_ALLOWED_ORIGIN_PATTERNS: ${CHAT_WEBSOCKET_ALLOWED_ORIGIN_PATTERNS:-http://localhost:*,https://localhost:*,http://127.0.0.1:*,https://127.0.0.1:*}
 
     networks:
       - tramplin_net
