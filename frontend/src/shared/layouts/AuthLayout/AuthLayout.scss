@@ -3,9 +3,9 @@
 .auth-layout {
   position: relative;
   min-height: 100vh;
-  padding: 20px 16px;
-  display: flex;
-  justify-content: center;
+  padding: 20px 16px 10px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   align-items: center;
   overflow: hidden;
   background:
@@ -23,14 +23,28 @@
           radial-gradient(circle at 85% 75%, rgba(53, 203, 191, 0.08), transparent 18%);
 }
 
+.auth-layout__theme-toggle {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 2;
+}
+
 .auth-layout__inner {
   position: relative;
   z-index: 1;
   width: 100%;
   max-width: 560px;
+  justify-self: center;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.auth-layout__footer {
+  position: relative;
+  z-index: 1;
+  align-self: end;
 }
 
 .auth-layout__logo-link {
@@ -62,6 +76,11 @@
 }
 
 @include mobile {
+  .auth-layout__theme-toggle {
+    top: 14px;
+    right: 14px;
+  }
+
   .auth-layout__logo-text {
     font-size: 26px;
   }

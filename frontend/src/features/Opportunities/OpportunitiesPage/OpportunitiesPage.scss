@@ -2,6 +2,8 @@
 
 .opportunities-page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(180deg, #f8fcff 0%, #f3f8ff 100%);
   overflow-x: clip;
 
@@ -422,6 +424,7 @@
   }
 
   &__main {
+    flex: 1;
     padding-block: 32px 48px;
     position: relative;
     z-index: 1;

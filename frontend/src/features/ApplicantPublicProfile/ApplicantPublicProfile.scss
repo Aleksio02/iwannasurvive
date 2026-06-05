@@ -1,11 +1,14 @@
 .applicant-public-profile {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background:
           radial-gradient(circle at top left, rgba(31, 182, 170, 0.12), transparent 28%),
           radial-gradient(circle at top right, rgba(53, 203, 191, 0.10), transparent 26%),
           linear-gradient(180deg, #edfdfa 0%, #f8fffe 22%, #f8fafc 100%);
 
   &__main {
+    flex: 1;
     padding-top: 32px;
     padding-bottom: 56px;
   }

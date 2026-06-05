@@ -7,6 +7,18 @@
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Трамплин</title>
+    <script>
+        try {
+            var theme = localStorage.getItem('tramplin-theme') === 'dark' ? 'dark' : 'light';
+            document.documentElement.dataset.theme = theme;
+            document.documentElement.style.colorScheme = theme;
+            document.documentElement.classList.add(theme === 'dark' ? 'theme-dark' : 'theme-light');
+        } catch (error) {
+            document.documentElement.dataset.theme = 'light';
+            document.documentElement.style.colorScheme = 'light';
+            document.documentElement.classList.add('theme-light');
+        }
+    </script>
 </head>
 <body>
 <div id="root"></div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useRoute } from 'wouter'
 import Navbar from '@/shared/layouts/Navbar'
+import AppFooter from '@/shared/layouts/AppFooter'
 import Button from '@/shared/ui/Button'
 import { useToast } from '@/shared/hooks/use-toast'
 import { getSessionUser } from '@/shared/lib/utils/sessionStore'
@@ -1302,6 +1303,8 @@ export default function ApplicantPublicProfile() {
                     </div>
                 )}
             </main>
+
+            <AppFooter />
         </div>
     )
 }

@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Link, useLocation } from 'wouter'
 import Button from '@/shared/ui/Button'
 import Navbar from '@/shared/layouts/Navbar'
+import AppFooter from '@/shared/layouts/AppFooter'
 import LazyYandexOpportunityMap from '@/shared/ui/Map/LazyYandexOpportunityMap'
 import { useToast } from '@/shared/hooks/use-toast'
 import { searchGeoCities } from '@/shared/api/geo'
@@ -1482,6 +1483,8 @@ function OpportunitiesPage() {
                     </section>
                 )}
             </main>
+
+            <AppFooter />
         </div>
     )
 }
