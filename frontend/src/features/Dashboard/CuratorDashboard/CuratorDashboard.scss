@@ -3494,3 +3494,37 @@ html[data-theme='dark'] .curator-card-item__badge.is-disabled {
   background: rgba(255, 107, 134, 0.15) !important;
   color: #ffd6dd !important;
 }
+
+html[data-theme='dark'] {
+  .empty-state {
+    background: rgba(18, 29, 43, 0.94) !important;
+    border-color: rgba(77, 225, 214, 0.28) !important;
+    color: var(--color-text-muted);
+
+    p {
+      color: var(--color-text);
+    }
+
+    span {
+      color: var(--color-text-soft);
+    }
+  }
+
+  .moderation-editor-summary {
+    background: rgba(33, 200, 188, 0.12) !important;
+    border-color: rgba(77, 225, 214, 0.35) !important;
+    color: #4de1d6 !important;
+    font-weight: 600;
+  }
+
+  .moderation-tasks .empty-state {
+    background: rgba(18, 29, 43, 0.94) !important;
+    border: 1px solid rgba(77, 225, 214, 0.28);
+    border-radius: 20px;
+  }
+
+  .moderation-history .empty-state,
+  .moderation-tasks .empty-state {
+    background: rgba(18, 29, 43, 0.94) !important;
+  }
+}
