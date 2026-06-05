@@ -34,6 +34,10 @@ import {
     setLocalFavoriteEmployerIds,
 } from '@/shared/lib/utils/favoriteStorage'
 import {
+    addLocalAppliedOpportunityId,
+    setLocalAppliedOpportunityIds,
+} from '@/shared/lib/utils/appliedOpportunityStorage'
+import {
     getSessionUser,
     subscribeSessionChange,
 } from '@/shared/lib/utils/sessionStore'
@@ -565,6 +569,7 @@ function OpportunitiesPage() {
                         .filter((id) => Number.isFinite(id) && id > 0)
                 )
                 setAppliedOpportunityIds(nextIds)
+                setLocalAppliedOpportunityIds(Array.from(nextIds), currentUser)
             } catch {
                 if (mounted) setAppliedOpportunityIds(new Set())
             }
@@ -575,7 +580,7 @@ function OpportunitiesPage() {
         return () => {
             mounted = false
         }
-    }, [isApplicant, currentUser?.id])
+    }, [currentUser, isApplicant])
 
     const syncFavoriteOpportunities = useCallback(async () => {
         if (!currentUser?.id) {
@@ -1006,6 +1011,7 @@ function OpportunitiesPage() {
 
         try {
             await applyToOpportunity(opportunity.id)
+            addLocalAppliedOpportunityId(opportunity.id, currentUser)
             setAppliedOpportunityIds((prev) => {
                 const next = new Set(prev)
                 next.add(Number(opportunity.id))
@@ -1019,6 +1025,7 @@ function OpportunitiesPage() {
             console.error('Apply error:', applyError)
 
             if (applyError.message?.includes('already') || applyError.message?.includes('уже')) {
+                addLocalAppliedOpportunityId(opportunity.id, currentUser)
                 setAppliedOpportunityIds((prev) => {
                     const next = new Set(prev)
                     next.add(Number(opportunity.id))
@@ -1326,6 +1333,7 @@ function OpportunitiesPage() {
                         onApply={handleApply}
                         onToggleFavorite={toggleOpportunityFavorite}
                         favoriteOpportunities={favoriteOpportunities}
+                        appliedOpportunityIds={appliedOpportunityIds}
                     />
                 )}
 

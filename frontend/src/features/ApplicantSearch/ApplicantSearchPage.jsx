@@ -77,12 +77,12 @@ function toggleTagId(ids, tagId) {
 }
 
 function TagSearchFilter({
-    title,
-    placeholder,
-    tags,
-    selectedTagIds,
-    onToggleTag,
-}) {
+                             title,
+                             placeholder,
+                             tags,
+                             selectedTagIds,
+                             onToggleTag,
+                         }) {
     const [search, setSearch] = useState('')
     const normalizedSearch = normalizeTagName(search)
 
@@ -593,8 +593,8 @@ export default function ApplicantSearchPage() {
                             {isLoading && page.items.length > 0
                                 ? 'Обновляем результаты...'
                                 : isLoading
-                                ? 'Загрузка каталога...'
-                                : `Найдено ${page.total} ${page.total === 1 ? 'профиль' : 'профилей'}`}
+                                    ? 'Загрузка каталога...'
+                                    : `Найдено ${page.total} ${page.total === 1 ? 'профиль' : 'профилей'}`}
                         </p>
                     </div>
 
@@ -726,7 +726,11 @@ export default function ApplicantSearchPage() {
 
                                         {hasProfilePreview ? (
                                             <p className="applicant-search__about">
-                                                {applicant.about || 'Краткое описание пока не заполнено'}
+                                                {applicant.about || (
+                                                    <span className="applicant-search__about-placeholder">
+                                                        Описание отсутствует — вы можете связаться с пользователем, чтобы узнать больше
+                                                    </span>
+                                                )}
                                             </p>
                                         ) : (
                                             <p className="applicant-search__restricted">
@@ -735,31 +739,42 @@ export default function ApplicantSearchPage() {
                                             </p>
                                         )}
 
-                                        {applicant.skills.length > 0 && (
-                                            <div className="applicant-search__tag-block">
-                                                <span className="applicant-search__tag-title">Навыки</span>
-                                                <div className="applicant-search__tag-list">
-                                                    {applicant.skills.map((tag) => (
-                                                        <span key={tag.id} className="applicant-search__tag">
-                                                            #{tag.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                        <div className="applicant-search__tag-block">
+                                            {applicant.skills.length > 0 && (
+                                                <>
+                                                    <span className="applicant-search__tag-title">Навыки</span>
+                                                    <div className="applicant-search__tag-list">
+                                                        {applicant.skills.map((tag) => (
+                                                            <span key={tag.id} className="applicant-search__tag">
+                                                                #{tag.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
 
-                                        {applicant.interests.length > 0 && (
-                                            <div className="applicant-search__tag-block">
-                                                <span className="applicant-search__tag-title">Интересы</span>
-                                                <div className="applicant-search__tag-list">
-                                                    {applicant.interests.map((tag) => (
-                                                        <span key={tag.id} className="applicant-search__tag">
-                                                            #{tag.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                            {applicant.interests.length > 0 && (
+                                                <>
+                                                    <span className="applicant-search__tag-title">Интересы</span>
+                                                    <div className="applicant-search__tag-list">
+                                                        {applicant.interests.map((tag) => (
+                                                            <span key={tag.id} className="applicant-search__tag">
+                                                                #{tag.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            {applicant.skills.length === 0 && applicant.interests.length === 0 && (
+                                                <>
+                                                    <span className="applicant-search__tag-title">Навыки и интересы</span>
+                                                    <div className="applicant-search__tag-placeholder">
+                                                        не указаны
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
 
                                         <div className="applicant-search__card-actions">
                                             <Link

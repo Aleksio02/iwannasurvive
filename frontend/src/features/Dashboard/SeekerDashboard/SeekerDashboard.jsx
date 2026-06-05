@@ -8,6 +8,7 @@ import Textarea from '@/shared/ui/Textarea'
 import CustomSelect from '@/shared/ui/CustomSelect'
 import CustomCheckbox from '@/shared/ui/CustomCheckbox'
 import Button from '@/shared/ui/Button'
+import Autocomplete from '@/shared/ui/Autocomplete'
 import {
     getCurrentSessionUser,
     getApplicantProfile,
@@ -37,12 +38,15 @@ import {
 import {
     extractModerationFeedback,
 } from '@/features/Dashboard/EmployerDashboard/lib/employerDashboard.helpers'
+import { RUSSIAN_UNIVERSITIES } from '@/shared/lib/constants/universities'
+import { smartFilter } from '@/shared/lib/utils/searchHelpers'
 import {
     getCachedSavedFavorites,
     getSavedFavorites,
     invalidateSavedFavoritesCache,
     removeEmployerFromSaved,
 } from '@/shared/api/favorites'
+import { setLocalAppliedOpportunityIds } from '@/shared/lib/utils/appliedOpportunityStorage'
 import {
     analyzeResumeForRecommendations,
     listOpportunities,
@@ -311,6 +315,8 @@ function buildContactHref(rawValue, preset) {
 
 const ApplicationCard = memo(function ApplicationCard({ app, onOpenOpportunity, onOpenChat }) {
     const canOpenOpportunity = app.opportunityId !== null && app.opportunityId !== undefined
+    const chatDisabled = !app.chatSummary?.hasChat && !app.chatSummary?.canSend
+    const unreadCount = Number(app.chatSummary?.unreadCount || 0)
 
     return (
         <div
@@ -336,14 +342,14 @@ const ApplicationCard = memo(function ApplicationCard({ app, onOpenOpportunity, 
                     </span>
                 </div>
                 <button
+                    type="button"
                     className="application-card__chat"
                     onClick={(event) => void onOpenChat(event, app)}
-                    disabled={!app.chatSummary?.hasChat && !app.chatSummary?.canSend}
+                    disabled={chatDisabled}
+                    aria-label={unreadCount > 0 ? `Открыть сообщения, непрочитанных: ${unreadCount}` : 'Открыть сообщения'}
+                    title={chatDisabled ? 'Чат пока недоступен' : 'Открыть сообщения'}
                 >
-                    Сообщение
-                    {app.chatSummary?.unreadCount > 0 && (
-                        <span>{app.chatSummary.unreadCount}</span>
-                    )}
+                    Сообщение{unreadCount > 0 ? ` (${unreadCount})` : ''}
                 </button>
             </div>
         </div>
@@ -530,6 +536,9 @@ function SeekerDashboard() {
     const [citySuggestions, setCitySuggestions] = useState([])
     const [cityActiveIndex, setCityActiveIndex] = useState(-1)
     const citySearchRef = useRef(null)
+    const universitySearchRef = useRef(null)
+    const [isUniversitySearchOpen, setIsUniversitySearchOpen] = useState(false)
+    const [universityActiveIndex, setUniversityActiveIndex] = useState(-1)
     const [location, navigate] = useLocation()
     const [visibleApplicationsCount, setVisibleApplicationsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
     const [visibleContactsCount, setVisibleContactsCount] = useState(DASHBOARD_LIST_INITIAL_LIMIT)
@@ -582,6 +591,10 @@ function SeekerDashboard() {
     const hasNewResumeTagSuggestions = newResumeSkillSuggestions.length > 0 || newResumeInterestSuggestions.length > 0
     const hasSkills = profileSkills.length > 0
     const hasInterests = profileInterests.length > 0
+    const universitySuggestions = useMemo(
+        () => smartFilter(RUSSIAN_UNIVERSITIES, profile.universityName || ''),
+        [profile.universityName]
+    )
 
     const linksToArray = (linksArray) => {
         if (!linksArray || !Array.isArray(linksArray)) return []
@@ -876,6 +889,9 @@ function SeekerDashboard() {
             cityId: null,
             cityName: value,
         }))
+        if (errors.cityId) {
+            setErrors((prev) => ({ ...prev, cityId: '' }))
+        }
 
         if (value.length < 2) {
             setCitySuggestions([])
@@ -904,6 +920,9 @@ function SeekerDashboard() {
         setCitySuggestions([])
         setCityActiveIndex(-1)
         setIsCitySearchOpen(false)
+        if (errors.cityId) {
+            setErrors((prev) => ({ ...prev, cityId: '' }))
+        }
     }
 
     const loadContacts = useCallback(async () => {
@@ -1063,7 +1082,14 @@ function SeekerDashboard() {
                     }))
                 }
 
-                setApplications(Array.isArray(applicationsItems) ? applicationsItems : [])
+                const normalizedApplications = Array.isArray(applicationsItems) ? applicationsItems : []
+                setApplications(normalizedApplications)
+                setLocalAppliedOpportunityIds(
+                    normalizedApplications
+                        .map((application) => Number(application.opportunityId))
+                        .filter((id) => Number.isFinite(id) && id > 0),
+                    currentUser
+                )
                 setSavedFavorites(
                     favoritesItems && typeof favoritesItems === 'object'
                         ? favoritesItems
@@ -1284,20 +1310,6 @@ function SeekerDashboard() {
             isMounted = false
         }
     }, [moderationState, user?.id])
-
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (citySearchRef.current && !citySearchRef.current.contains(event.target)) {
-                setIsCitySearchOpen(false)
-                setCityActiveIndex(-1)
-            }
-        }
-
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside)
-        }
-    }, [])
 
     useEffect(() => () => {
         if (avatarPreviewUrl) {
@@ -2171,6 +2183,14 @@ function SeekerDashboard() {
         [applications, visibleApplicationsCount]
     )
 
+    const appliedOpportunityIds = useMemo(() => (
+        new Set(
+            applications
+                .map((application) => Number(application.opportunityId))
+                .filter((id) => Number.isFinite(id) && id > 0)
+        )
+    ), [applications])
+
     const visibleContacts = useMemo(
         () => currentContacts.slice(0, visibleContactsCount),
         [currentContacts, visibleContactsCount]
@@ -2530,29 +2550,41 @@ function SeekerDashboard() {
                                             <h4>Может подойти</h4>
                                         </div>
                                         <div className="resume-analysis-card__opportunity-list">
-                                            {opportunityPreview.slice(0, 3).map((opportunity) => (
-                                                <article key={opportunity.id} className="resume-analysis-card__opportunity">
-                                                    <div>
-                                                        <h5>{opportunity.title}</h5>
-                                                        <p>{opportunity.companyName}</p>
-                                                        <div className="resume-analysis-card__opportunity-meta">
-                                                            {opportunity.type && (
-                                                                <span>{OPPORTUNITY_LABELS.type[opportunity.type] || opportunity.type}</span>
-                                                            )}
-                                                            {opportunity.workFormat && (
-                                                                <span>{OPPORTUNITY_LABELS.workFormat[opportunity.workFormat] || opportunity.workFormat}</span>
-                                                            )}
+                                            {opportunityPreview.slice(0, 3).map((opportunity) => {
+                                                const isApplied = appliedOpportunityIds.has(Number(opportunity.id))
+
+                                                return (
+                                                    <article key={opportunity.id} className="resume-analysis-card__opportunity">
+                                                        <div>
+                                                            <h5>{opportunity.title}</h5>
+                                                            <p>{opportunity.companyName}</p>
+                                                            <div className="resume-analysis-card__opportunity-meta">
+                                                                {opportunity.type && (
+                                                                    <span>{OPPORTUNITY_LABELS.type[opportunity.type] || opportunity.type}</span>
+                                                                )}
+                                                                {opportunity.workFormat && (
+                                                                    <span>{OPPORTUNITY_LABELS.workFormat[opportunity.workFormat] || opportunity.workFormat}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="btn-secondary-small"
-                                                        onClick={() => navigate(`/opportunities/${opportunity.id}`)}
-                                                    >
-                                                        Подробнее
-                                                    </button>
-                                                </article>
-                                            ))}
+                                                        <div className="resume-analysis-card__opportunity-actions">
+                                                            {isApplied && (
+                                                                <span className="resume-analysis-card__opportunity-applied" role="status">
+                                                                    <span aria-hidden="true">✓</span>
+                                                                    Отклик отправлен
+                                                                </span>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                className="btn-secondary-small"
+                                                                onClick={() => navigate(`/opportunities/${opportunity.id}`)}
+                                                            >
+                                                                Подробнее
+                                                            </button>
+                                                        </div>
+                                                    </article>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -2973,10 +3005,25 @@ function SeekerDashboard() {
 
                                 <div className="profile-edit-form__section">
                                     <h4>Образование</h4>
-                                    <div className="form-group">
-                                        <Label>Вуз <span className="required-star">*</span></Label>
-                                        <Input value={profile.universityName} onChange={(e) => handleFieldChange('universityName', e.target.value)} />
-                                        {errors.universityName && <p className="field-error">{errors.universityName}</p>}
+                                    <div className="form-group" ref={universitySearchRef}>
+                                        <Autocomplete
+                                            label="Вуз"
+                                            required
+                                            value={profile.universityName || ''}
+                                            onChange={(value) => handleFieldChange('universityName', value)}
+                                            suggestions={universitySuggestions}
+                                            isOpen={isUniversitySearchOpen}
+                                            onOpenChange={setIsUniversitySearchOpen}
+                                            activeIndex={universityActiveIndex}
+                                            onActiveIndexChange={setUniversityActiveIndex}
+                                            inputRef={universitySearchRef}
+                                            placeholder="Начните вводить название вуза"
+                                            error={errors.universityName}
+                                            onSelect={(selected) => {
+                                                const value = typeof selected === 'string' ? selected : selected?.name || ''
+                                                handleFieldChange('universityName', value)
+                                            }}
+                                        />
                                     </div>
                                     <div className="form-row">
                                         <div className="form-group">
@@ -3000,31 +3047,26 @@ function SeekerDashboard() {
                                             {errors.graduationYear && <p className="field-error">{errors.graduationYear}</p>}
                                         </div>
                                         <div className="form-group" ref={citySearchRef}>
-                                            <Label>Город</Label>
-                                            <div className="autocomplete">
-                                                <Input
-                                                    value={citySearchQuery}
-                                                    onChange={(e) => handleCitySearch(e.target.value)}
-                                                    onFocus={() => citySearchQuery.length >= 2 && citySuggestions.length > 0 && setIsCitySearchOpen(true)}
-                                                    placeholder="Начните вводить город"
-                                                />
-                                                {isCitySearchOpen && citySuggestions.length > 0 && (
-                                                    <div className="autocomplete__list" role="listbox">
-                                                        {citySuggestions.map((city, index) => (
-                                                            <button
-                                                                key={city.id}
-                                                                type="button"
-                                                                className={`autocomplete__item ${cityActiveIndex === index ? 'is-active' : ''}`}
-                                                                onMouseEnter={() => setCityActiveIndex(index)}
-                                                                onMouseDown={(e) => e.preventDefault()}
-                                                                onClick={() => handleSelectCity(city)}
-                                                            >
-                                                                {city.name}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <Autocomplete
+                                                label="Город"
+                                                value={citySearchQuery}
+                                                onChange={handleCitySearch}
+                                                suggestions={citySuggestions}
+                                                isOpen={isCitySearchOpen}
+                                                onOpenChange={setIsCitySearchOpen}
+                                                activeIndex={cityActiveIndex}
+                                                onActiveIndexChange={setCityActiveIndex}
+                                                inputRef={citySearchRef}
+                                                placeholder="Начните вводить город"
+                                                error={errors.cityId}
+                                                getSuggestionValue={(city) => {
+                                                    const cityName = String(city?.name || '').trim()
+                                                    const regionName = String(city?.regionName || '').trim()
+                                                    return regionName ? `${cityName}, ${regionName}` : cityName
+                                                }}
+                                                getSuggestionKey={(city) => `${city.id || city.name}-${city.regionName || ''}`}
+                                                onSelect={handleSelectCity}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -3588,6 +3630,7 @@ function SeekerDashboard() {
                             onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
                             onDeleteRecommendation={handleDeleteRecommendation}
                             onRefreshRecommendations={loadRecommendations}
+                            appliedOpportunityIds={appliedOpportunityIds}
                         />
                     </Suspense>
                 )}

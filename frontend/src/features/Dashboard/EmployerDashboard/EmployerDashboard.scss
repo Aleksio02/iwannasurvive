@@ -1046,6 +1046,14 @@ $section-title-size: 19px;
   visibility: hidden;
 }
 
+.input.is-invalid,
+.textarea.is-invalid,
+.custom-select__button.is-error {
+  border-color: var(--color-danger, #e85d75);
+  background: #fff7f8;
+  box-shadow: 0 0 0 3px rgba(232, 93, 117, 0.12);
+}
+
 .field-hint {
   margin: 0;
   color: $gray-600;
@@ -1382,6 +1390,17 @@ $section-title-size: 19px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: break-word;
+}
+
+.employer-opportunities__status-hint {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid $gray-200;
+  color: $gray-600;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .employer-create-form {

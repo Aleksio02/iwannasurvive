@@ -46,6 +46,7 @@ class EmployerLocationService(
         val unrestrictedValue = normalizeOptionalText(request.unrestrictedValue)
 
         validateCoordinatesPair(request.latitude, request.longitude)
+        validateRequiredCoordinates(request.latitude, request.longitude)
         validateUnrestrictedValueConsistency(
             city = city,
             unrestrictedValue = unrestrictedValue,
@@ -94,6 +95,8 @@ class EmployerLocationService(
 
         val location = getOwnedActiveLocationOrThrow(currentUserId, locationId)
 
+        validateCoordinatesProvidedForAddressPatch(request)
+
         request.cityId?.let { cityId ->
             val city = loadActiveCityOrThrow(cityId)
             location.cityId = requireNotNull(city.id)
@@ -114,6 +117,7 @@ class EmployerLocationService(
         val resolvedAddressLine = normalizeRequiredText(location.addressLine, "Адрес")
 
         validateCoordinatesPair(location.latitude, location.longitude)
+        validateRequiredCoordinates(location.latitude, location.longitude)
         validateUnrestrictedValueConsistency(
             city = resolvedCity,
             unrestrictedValue = location.unrestrictedValue,
@@ -219,6 +223,34 @@ class EmployerLocationService(
             throw ProfileBadRequestException(
                 message = "Широта и долгота должны быть заполнены одновременно",
                 code = "location_coordinates_pair_required",
+            )
+        }
+    }
+
+    private fun validateRequiredCoordinates(
+        latitude: java.math.BigDecimal?,
+        longitude: java.math.BigDecimal?,
+    ) {
+        if (latitude == null || longitude == null) {
+            throw ProfileBadRequestException(
+                message = "Для отображения офиса на карте выберите адрес из подсказки",
+                code = "location_coordinates_required",
+            )
+        }
+    }
+
+    private fun validateCoordinatesProvidedForAddressPatch(
+        request: PatchEmployerLocationRequest,
+    ) {
+        val changesAddressIdentity =
+            request.addressLine != null ||
+                    request.fiasId != null ||
+                    request.unrestrictedValue != null
+
+        if (changesAddressIdentity && (request.latitude == null || request.longitude == null)) {
+            throw ProfileBadRequestException(
+                message = "Для отображения офиса на карте выберите адрес из подсказки",
+                code = "location_coordinates_required",
             )
         }
     }

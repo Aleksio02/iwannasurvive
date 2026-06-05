@@ -11,6 +11,9 @@ import {
     getCurrentSessionUser,
     completeApplicantOnboarding,
     completeEmployerOnboarding,
+    uploadApplicantResumeFile,
+    deleteApplicantFile,
+    getFileDownloadUrlByUserAndFile,
 } from '@/shared/api/profile'
 import {
     createEmployerLocation,
@@ -299,6 +302,27 @@ function createEmptyEmployerLocationForm() {
     }
 }
 
+function formatFileSize(sizeBytes) {
+    if (!sizeBytes) return 'PDF'
+    if (sizeBytes < 1024) return `${sizeBytes} Б`
+    if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} КБ`
+    return `${(sizeBytes / (1024 * 1024)).toFixed(1)} МБ`
+}
+
+function hasLocationMapCoordinates(location = {}) {
+    return (
+        Number.isFinite(Number(location.latitude)) &&
+        Number.isFinite(Number(location.longitude))
+    )
+}
+
+function hasAddressIdentity(location = {}) {
+    return (
+        Boolean(String(location.unrestrictedValue || '').trim()) ||
+        Boolean(String(location.fiasId || '').trim())
+    )
+}
+
 function normalizeReturnTo(value, role) {
     const fallback = role === 'EMPLOYER' ? '/employer' : '/seeker'
     if (!value || !value.startsWith('/') || value.startsWith('//')) return fallback
@@ -387,6 +411,7 @@ function ProfileEdit() {
     const skillsSectionRef = useRef(null)
     const skillSearchInputRef = useRef(null)
     const hasFocusedSkillsRef = useRef(false)
+    const resumeFileInputRef = useRef(null)
 
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
@@ -403,6 +428,8 @@ function ProfileEdit() {
     const [cityQuery, setCityQuery] = useState('')
     const [about, setAbout] = useState('')
     const [resumeText, setResumeText] = useState('')
+    const [resumeFile, setResumeFile] = useState(null)
+    const [isResumeFileUploading, setIsResumeFileUploading] = useState(false)
     const [portfolioRows, setPortfolioRows] = useState([createLinkRow()])
     const [contactRows, setContactRows] = useState([createLinkRow()])
     const [profileVisibility, setProfileVisibility] = useState('PUBLIC')
@@ -551,6 +578,7 @@ function ProfileEdit() {
                         setCityQuery(profile.cityName || '')
                         setAbout(profile.about || '')
                         setResumeText(profile.resumeText || '')
+                        setResumeFile(profile.resumeFile || null)
                         setPortfolioRows(mapLinksToRows(profile.portfolioLinks, 'url'))
                         const { socialRows: applicantSocialRows, contactRows: applicantContactRows } =
                             splitApplicantContactRowsByType(profile.contactLinks)
@@ -1095,6 +1123,7 @@ function ProfileEdit() {
 
         const hasProfessionalSignal =
             Boolean(resumeText.trim()) ||
+            Boolean(resumeFile?.fileId) ||
             cleanLinksToArray(portfolioRows).length > 0 ||
             selectedSkillTagIds.length > 0
 
@@ -1163,6 +1192,13 @@ function ProfileEdit() {
             next.addressLine = 'Укажите адрес'
         }
 
+        if (
+            locationForm.addressLine.trim() &&
+            (!hasLocationMapCoordinates(locationForm) || !hasAddressIdentity(locationForm))
+        ) {
+            next.addressLine = 'Выберите адрес из подсказки, чтобы мы смогли показать офис на карте'
+        }
+
         return next
     }
 
@@ -1226,6 +1262,13 @@ function ProfileEdit() {
             ...prev,
             cityId: String(selectedCity.id),
             cityName: formatCitySuggestionLabel(selectedCity),
+            addressLine: '',
+            postalCode: '',
+            latitude: '',
+            longitude: '',
+            fiasId: '',
+            unrestrictedValue: '',
+            qcGeo: '',
         }))
         setLocationErrors((prev) => ({
             ...prev,
@@ -1260,6 +1303,75 @@ function ProfileEdit() {
             ...prev,
             addressLine: null,
         }))
+    }
+
+    const handleResumeFileUpload = async (event) => {
+        const file = event.target.files?.[0]
+        if (!file) return
+
+        const isPdf =
+            file.type === 'application/pdf' ||
+            file.name.toLowerCase().endsWith('.pdf')
+
+        if (!isPdf) {
+            toast({
+                title: 'Неверный формат файла',
+                description: 'Для резюме можно загружать только PDF',
+                variant: 'destructive',
+            })
+            event.target.value = ''
+            return
+        }
+
+        try {
+            setIsResumeFileUploading(true)
+            const updatedProfile = await uploadApplicantResumeFile(file)
+
+            setResumeFile(updatedProfile?.resumeFile || null)
+
+            if (updatedProfile?.resumeText !== undefined) {
+                setResumeText(updatedProfile.resumeText || resumeText)
+            }
+
+            setErrors((prev) => ({
+                ...prev,
+                professionalSignal: null,
+            }))
+
+            toast({
+                title: 'Файл резюме загружен',
+                description: 'PDF-резюме прикреплено к профилю',
+            })
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error.message || 'Не удалось загрузить файл резюме',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsResumeFileUploading(false)
+            event.target.value = ''
+        }
+    }
+
+    const handleDeleteResumeFile = async () => {
+        if (!resumeFile?.fileId) return
+
+        try {
+            const updatedProfile = await deleteApplicantFile(resumeFile.fileId)
+            setResumeFile(updatedProfile?.resumeFile || null)
+
+            toast({
+                title: 'Файл удалён',
+                description: 'PDF-резюме удалено из профиля',
+            })
+        } catch (error) {
+            toast({
+                title: 'Ошибка',
+                description: error.message || 'Не удалось удалить файл резюме',
+                variant: 'destructive',
+            })
+        }
     }
 
     const handleSaveLocation = async () => {
@@ -1477,6 +1589,16 @@ function ProfileEdit() {
 
                 <CardContent>
                     <form className="profile-edit-form" onSubmit={handleSubmit}>
+                        {!isEmployer && (
+                            <input
+                                ref={resumeFileInputRef}
+                                type="file"
+                                accept=".pdf,application/pdf"
+                                hidden
+                                onChange={handleResumeFileUpload}
+                            />
+                        )}
+
                         {isProfileLoading && (
                             <p className="field-hint">
                                 Загружаем сохранённые данные профиля...
@@ -1911,6 +2033,54 @@ function ProfileEdit() {
                                                 onChange={(e) => setResumeText(e.target.value)}
                                                 placeholder="Опишите опыт работы, ключевые проекты, технологии и навыки"
                                             />
+
+                                            <div className="profile-edit-form__file-tools">
+                                                <Button
+                                                    type="button"
+                                                    className="button--outline"
+                                                    onClick={() => resumeFileInputRef.current?.click()}
+                                                    disabled={isResumeFileUploading}
+                                                >
+                                                    {isResumeFileUploading
+                                                        ? 'Загрузка файла...'
+                                                        : resumeFile
+                                                            ? 'Заменить PDF-резюме'
+                                                            : 'Прикрепить PDF-резюме'}
+                                                </Button>
+
+                                                <p className="field-hint">Можно прикрепить только PDF-файл.</p>
+                                            </div>
+
+                                            {resumeFile && (
+                                                <div className="embedded-file-card">
+                                                    <div className="embedded-file-card__content">
+                                                        <strong>{resumeFile.originalFileName || 'PDF-резюме'}</strong>
+                                                        <p>{formatFileSize(resumeFile.sizeBytes)}</p>
+                                                    </div>
+
+                                                    <div className="embedded-file-card__actions">
+                                                        <a
+                                                            href={getFileDownloadUrlByUserAndFile(
+                                                                'APPLICANT',
+                                                                user?.userId || user?.id,
+                                                                resumeFile.fileId
+                                                            )}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="media-link"
+                                                        >
+                                                            Открыть файл
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            className="media-delete-btn"
+                                                            onClick={handleDeleteResumeFile}
+                                                        >
+                                                            Удалить
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <Suspense fallback={<div className="field-hint">Загрузка редактора портфолио...</div>}>
@@ -2030,6 +2200,13 @@ function ProfileEdit() {
                                         ...prev,
                                         cityId: '',
                                         cityName: val,
+                                        addressLine: '',
+                                        postalCode: '',
+                                        latitude: '',
+                                        longitude: '',
+                                        fiasId: '',
+                                        unrestrictedValue: '',
+                                        qcGeo: '',
                                     }))
                                 }
                                 suggestions={locationCitySuggestions}

@@ -24,6 +24,11 @@ import {
 } from '@/shared/api/favorites'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
 import { isOpportunityFavoriteLocally } from '@/shared/lib/utils/favoriteStorage'
+import {
+    addLocalAppliedOpportunityId,
+    isOpportunityAppliedLocally,
+    setLocalAppliedOpportunityIds,
+} from '@/shared/lib/utils/appliedOpportunityStorage'
 import { isOnboardingRole } from '@/shared/lib/utils/onboardingRoutes'
 import { isEmployerVerified } from '@/shared/lib/utils/employerVerification'
 import VerifiedCompanyBadge from '@/shared/ui/VerifiedCompanyBadge/VerifiedCompanyBadge'
@@ -127,7 +132,9 @@ export default function OpportunityDetailPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState('')
     const [isApplying, setIsApplying] = useState(false)
-    const [hasApplied, setHasApplied] = useState(false)
+    const [hasApplied, setHasApplied] = useState(() => (
+        isOpportunityAppliedLocally(Number(params?.id), getGuestAwareSessionUser())
+    ))
     const [isApplicationsStateLoading, setIsApplicationsStateLoading] = useState(false)
     const [sessionUser, setSessionUser] = useState(getSessionUser())
     const [onboardingStatus, setOnboardingStatus] = useState(() => {
@@ -226,23 +233,30 @@ export default function OpportunityDetailPage() {
     useEffect(() => {
         if (!params?.id || !isApplicant) {
             setHasApplied(false)
+            setIsApplicationsStateLoading(false)
             return
         }
 
+        const cachedHasApplied = isOpportunityAppliedLocally(Number(params.id), currentUser)
+        setHasApplied(cachedHasApplied)
         let isMounted = true
 
         async function loadApplicationsState() {
-            setIsApplicationsStateLoading(true)
+            setIsApplicationsStateLoading(!cachedHasApplied)
             try {
                 const applications = await getSeekerApplications()
                 if (!isMounted) return
 
+                const appliedIds = (Array.isArray(applications) ? applications : [])
+                    .map((application) => Number(application.opportunityId))
+                    .filter((id) => Number.isFinite(id) && id > 0)
                 const exists = Array.isArray(applications) && applications.some((application) => (
                     Number(application.opportunityId) === Number(params.id)
                 ))
+                setLocalAppliedOpportunityIds(appliedIds, currentUser)
                 setHasApplied(exists)
             } catch {
-                if (isMounted) setHasApplied(false)
+                if (isMounted && !cachedHasApplied) setHasApplied(false)
             } finally {
                 if (isMounted) setIsApplicationsStateLoading(false)
             }
@@ -253,7 +267,7 @@ export default function OpportunityDetailPage() {
         return () => {
             isMounted = false
         }
-    }, [isApplicant, params?.id])
+    }, [currentUser, isApplicant, params?.id])
 
     useEffect(() => {
         if (!params?.id) return
@@ -395,6 +409,7 @@ export default function OpportunityDetailPage() {
         setIsApplying(true)
         try {
             await applyToOpportunity(item.id)
+            addLocalAppliedOpportunityId(item.id, currentUser)
             setHasApplied(true)
             toast({
                 title: 'Отклик отправлен',
@@ -402,6 +417,7 @@ export default function OpportunityDetailPage() {
             })
         } catch (applyError) {
             if (applyError.message?.includes('already') || applyError.message?.includes('уже')) {
+                addLocalAppliedOpportunityId(item.id, currentUser)
                 setHasApplied(true)
                 toast({
                     title: 'Отклик уже отправлен',
@@ -776,10 +792,22 @@ export default function OpportunityDetailPage() {
                             <div className="opportunity-detail-page__actions">
                                 {isApplicant && (
                                     hasApplied ? (
-                                        <div className="opportunity-detail-page__application-state" role="status">
-                                            <span className="opportunity-detail-page__application-status">
-                                                Отклик отправлен
-                                            </span>
+                                        <div
+                                            className="opportunity-detail-page__application-state"
+                                            role="status"
+                                            aria-live="polite"
+                                        >
+                                            <div className="opportunity-detail-page__application-icon" aria-hidden="true">
+                                                ✓
+                                            </div>
+                                            <div className="opportunity-detail-page__application-copy">
+                                                <span className="opportunity-detail-page__application-status">
+                                                    Отклик отправлен
+                                                </span>
+                                                <span className="opportunity-detail-page__application-hint">
+                                                    Вы можете отслеживать статус в личном кабинете.
+                                                </span>
+                                            </div>
                                             <Link
                                                 href="/seeker?tab=applications"
                                                 className="opportunity-detail-page__applications-link"
@@ -787,11 +815,29 @@ export default function OpportunityDetailPage() {
                                                 Мои отклики
                                             </Link>
                                         </div>
+                                    ) : isApplicationsStateLoading ? (
+                                        <div
+                                            className="opportunity-detail-page__application-state opportunity-detail-page__application-state--checking"
+                                            role="status"
+                                            aria-live="polite"
+                                        >
+                                            <div className="opportunity-detail-page__application-icon" aria-hidden="true">
+                                                …
+                                            </div>
+                                            <div className="opportunity-detail-page__application-copy">
+                                                <span className="opportunity-detail-page__application-status">
+                                                    Проверяем статус отклика
+                                                </span>
+                                                <span className="opportunity-detail-page__application-hint">
+                                                    Сейчас уточняем, отправляли ли вы отклик на эту возможность.
+                                                </span>
+                                            </div>
+                                        </div>
                                     ) : (
                                         <Button
                                             className="button--primary button--full"
                                             onClick={handleApply}
-                                            disabled={isApplying || isApplicationsStateLoading}
+                                            disabled={isApplying}
                                         >
                                             {isApplying ? 'Отправка...' : 'Откликнуться'}
                                         </Button>

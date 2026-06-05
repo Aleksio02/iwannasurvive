@@ -291,18 +291,21 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
+  align-items: stretch;
 }
 
 .applicant-search__card {
   min-width: 0;
   padding: 20px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   border: 1px solid var(--color-border);
   border-radius: 24px;
   background: var(--color-white);
   box-shadow: 0 16px 42px rgba(15, 23, 42, 0.06);
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  height: 100%;
 
   &:hover {
     transform: translateY(-2px);
@@ -366,39 +369,38 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
+  min-height: 38px;
 
-.applicant-search__badges .badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  border: 1px solid transparent;
-}
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid transparent;
+    width: auto;
+    flex-shrink: 0;
+  }
 
-.applicant-search__badges .badge--success {
-  background: #e8f8ef;
-  color: #137c4d;
-  border-color: #b9e9cf;
-}
+  .badge--success {
+    background: #e8f8ef;
+    color: #137c4d;
+    border-color: #b9e9cf;
+  }
 
-.applicant-search__badges .badge--info {
-  background: #ecf7f6;
-  color: #0f5f68;
-  border-color: #c9e6e4;
-}
-
-.applicant-search__about,
-.applicant-search__restricted {
-  margin: 0;
-  color: var(--color-text);
-  line-height: 1.6;
+  .badge--info {
+    background: #ecf7f6;
+    color: #0f5f68;
+    border-color: #c9e6e4;
+  }
 }
 
 .applicant-search__about {
+  margin: 0;
+  color: var(--color-text);
+  line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
@@ -407,7 +409,29 @@
 }
 
 .applicant-search__restricted {
+  margin: 0;
   color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.applicant-search__about-placeholder {
+  display: block;
+  padding: 16px 12px;
+  color: rgba(15, 95, 104, 0.4);
+  font-size: 0.85rem;
+  text-align: center;
+  font-style: italic;
+  position: relative;
+
+  &::before {
+    content: "~~~";
+    display: block;
+    margin-bottom: 8px;
+    font-size: 1.2rem;
+    letter-spacing: 4px;
+    color: rgba(15, 95, 104, 0.15);
+    font-style: normal;
+  }
 }
 
 .applicant-search__tag-block {
@@ -439,6 +463,13 @@
   color: var(--color-text);
   font-size: 13px;
   font-weight: 600;
+}
+
+.applicant-search__tag-placeholder {
+  color: rgba(15, 95, 104, 0.4);
+  font-size: 0.85rem;
+  padding: 6px 0;
+  font-style: italic;
 }
 
 .applicant-search__card-actions {
@@ -529,6 +560,14 @@
   }
 }
 
+@media (max-width: 768px) {
+  .applicant-search__chip {
+    font-size: 12px !important;
+    min-height: 30px;
+    padding: 0 10px;
+  }
+}
+
 @media (max-width: 640px) {
   .applicant-search__summary-actions {
     flex-direction: column;
@@ -553,14 +592,6 @@
     min-width: 0;
     width: auto;
     padding: 0 4px;
-  }
-}
-
-@media (max-width: 768px) {
-  .applicant-search__chip {
-    font-size: 12px !important;
-    min-height: 30px;
-    padding: 0 10px;
   }
 }
 

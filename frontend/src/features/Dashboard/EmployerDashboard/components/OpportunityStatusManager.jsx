@@ -5,7 +5,7 @@ import { useToast } from '@/shared/hooks/use-toast'
 const STATUS_CONFIG = {
     DRAFT: { color: 'gray', actions: ['edit', 'submit'] },
     PENDING_MODERATION: { color: 'yellow', actions: ['cancel_moderation', 'view'] },
-    PUBLISHED: { color: 'green', actions: ['edit', 'close', 'archive'] },
+    PUBLISHED: { color: 'green', actions: ['close', 'archive'] },
     REJECTED: { color: 'red', actions: ['edit', 'return_to_draft'] },
     CLOSED: { color: 'gray', actions: ['archive'] },
     ARCHIVED: { color: 'gray', actions: [] },

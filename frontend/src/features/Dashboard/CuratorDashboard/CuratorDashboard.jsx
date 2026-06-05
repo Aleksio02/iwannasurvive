@@ -72,6 +72,17 @@ const REJECT_REASON_OPTIONS = [
     { value: 'NOT_RELEVANT', label: 'Неактуально' },
 ]
 
+function getReasonLabel(code) {
+    const value = String(code || '').trim()
+    if (!value) return ''
+
+    return (
+        REQUEST_CHANGE_REASON_OPTIONS.find((item) => item.value === value)?.label ||
+        REJECT_REASON_OPTIONS.find((item) => item.value === value)?.label ||
+        value
+    )
+}
+
 function getManualEntityIdHint(entityType) {
     switch (entityType) {
         case 'APPLICANT_PROFILE':
@@ -631,6 +642,12 @@ function CuratorDashboard() {
             const search = debouncedHistorySearch.trim().toLowerCase()
             if (search) {
                 mergedHistory = mergedHistory.filter((item) => {
+                    const fieldIssuesHaystack = Array.isArray(item.payload?.fieldIssues)
+                        ? item.payload.fieldIssues
+                            .flatMap((issue) => [issue.field, issue.code, issue.message])
+                            .filter(Boolean)
+                            .join(' ')
+                        : ''
                     const haystack = [
                         item.taskId,
                         item.entityId,
@@ -639,6 +656,7 @@ function CuratorDashboard() {
                         item.payload?.comment,
                         item.payload?.text,
                         item.payload?.reasonCode,
+                        fieldIssuesHaystack,
                         item.entityType,
                         item.taskType,
                     ]
@@ -1544,6 +1562,21 @@ function CuratorDashboard() {
                                                 {item.payload?.comment && <p><strong>Комментарий:</strong> {item.payload.comment}</p>}
                                                 {item.payload?.text && <p><strong>Комментарий:</strong> {item.payload.text}</p>}
                                                 {item.payload?.reasonCode && <p><strong>Причина:</strong> {item.payload.reasonCode}</p>}
+                                                {Array.isArray(item.payload?.fieldIssues) && item.payload.fieldIssues.length > 0 && (
+                                                    <div className="moderation-field-issues-preview">
+                                                        {item.payload.fieldIssues.map((issue, issueIndex) => (
+                                                            <div key={`${issue.field}-${issue.code || issueIndex}`} className="moderation-field-issue-pill">
+                                                                <strong>{issue.field}</strong>
+                                                                {issue.code && (
+                                                                    <span className="moderation-field-issue-pill__code">
+                                                                        {getReasonLabel(issue.code)} · {issue.code}
+                                                                    </span>
+                                                                )}
+                                                                <span>{issue.message}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
@@ -1775,8 +1808,14 @@ function CuratorDashboard() {
                                                                     {Array.isArray(item.payload?.fieldIssues) && item.payload.fieldIssues.length > 0 && (
                                                                         <div className="moderation-field-issues-preview">
                                                                             {item.payload.fieldIssues.map((issue, index) => (
-                                                                                <div key={`${issue.field}-${index}`} className="moderation-field-issue-pill">
-                                                                                    <strong>{issue.field}</strong>: {issue.message}
+                                                                                <div key={`${issue.field}-${issue.code || index}`} className="moderation-field-issue-pill">
+                                                                                    <strong>{issue.field}</strong>
+                                                                                    {issue.code && (
+                                                                                        <span className="moderation-field-issue-pill__code">
+                                                                                            {getReasonLabel(issue.code)} · {issue.code}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    <span>{issue.message}</span>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
@@ -1904,12 +1943,12 @@ function CuratorDashboard() {
                             <div className="manual-task-form-grid">
                                 <div className="modal-field">
                                     <Label>Причина <span className="required-star">*</span></Label>
-                                    <CustomSelect value={rejectReason} onChange={setRejectReason} options={REJECT_REASON_OPTIONS} placeholder="Выберите причину" />
+                                    <CustomSelect inModal value={rejectReason} onChange={setRejectReason} options={REJECT_REASON_OPTIONS} placeholder="Выберите причину" />
                                 </div>
 
                                 <div className="modal-field">
                                     <Label>Уровень важности <span className="required-star">*</span></Label>
-                                    <CustomSelect value={rejectSeverity} onChange={setRejectSeverity} options={SEVERITY_OPTIONS} />
+                                    <CustomSelect inModal value={rejectSeverity} onChange={setRejectSeverity} options={SEVERITY_OPTIONS} />
                                 </div>
 
                                 <div className="modal-field modal-field--full">
@@ -1937,7 +1976,7 @@ function CuratorDashboard() {
                             <div className="manual-task-form-grid">
                                 <div className="modal-field">
                                     <Label>Причина <span className="required-star">*</span></Label>
-                                    <CustomSelect value={requestChangesReason} onChange={setRequestChangesReason} options={REQUEST_CHANGE_REASON_OPTIONS} placeholder="Выберите причину" />
+                                    <CustomSelect inModal value={requestChangesReason} onChange={setRequestChangesReason} options={REQUEST_CHANGE_REASON_OPTIONS} placeholder="Выберите причину" />
                                 </div>
 
                                 <div className="modal-field modal-field--full">
@@ -1973,6 +2012,7 @@ function CuratorDashboard() {
                                             <div className="modal-field">
                                                 <Label>Код причины</Label>
                                                 <CustomSelect
+                                                    inModal
                                                     value={issue.code || ''}
                                                     onChange={(value) => updateFieldIssue(index, 'code', value)}
                                                     options={REQUEST_CHANGE_REASON_OPTIONS.filter((item) => item.value)}
@@ -2007,7 +2047,7 @@ function CuratorDashboard() {
                             <div className="manual-task-form-grid">
                                 <div className="modal-field">
                                     <Label>Тип записи <span className="required-star">*</span></Label>
-                                    <CustomSelect value={manualTaskForm.entityType} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, entityType: value }))} options={ENTITY_TYPES.filter((item) => item.value)} />
+                                    <CustomSelect inModal value={manualTaskForm.entityType} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, entityType: value }))} options={ENTITY_TYPES.filter((item) => item.value)} />
                                     <p className="modal-field__hint modal-field__hint--placeholder">.</p>
                                 </div>
                                 <div className="modal-field">
@@ -2017,12 +2057,12 @@ function CuratorDashboard() {
                                 </div>
                                 <div className="modal-field">
                                     <Label>Тип задачи <span className="required-star">*</span></Label>
-                                    <CustomSelect value={manualTaskForm.taskType} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, taskType: value }))} options={TASK_TYPES.filter((item) => item.value)} />
+                                    <CustomSelect inModal value={manualTaskForm.taskType} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, taskType: value }))} options={TASK_TYPES.filter((item) => item.value)} />
                                     <p className="modal-field__hint modal-field__hint--placeholder">.</p>
                                 </div>
                                 <div className="modal-field">
                                     <Label>Приоритет <span className="required-star">*</span></Label>
-                                    <CustomSelect value={manualTaskForm.priority} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, priority: value }))} options={PRIORITIES.filter((item) => item.value)} />
+                                    <CustomSelect inModal value={manualTaskForm.priority} onChange={(value) => setManualTaskForm((prev) => ({ ...prev, priority: value }))} options={PRIORITIES.filter((item) => item.value)} />
                                     <p className="modal-field__hint modal-field__hint--placeholder">.</p>
                                 </div>
                                 <div className="modal-field modal-field--full">

@@ -21,13 +21,14 @@ function Autocomplete({
                           getSuggestionValue = (item) => typeof item === 'string' ? item : item.name,
                           getSuggestionKey = (item) => typeof item === 'string' ? item : item.id,
                       }) {
-    const wrapperRef = useRef(null)
+    const rootRef = useRef(null)
+    const inputWrapperRef = useRef(null)
     const menuRef = useRef(null)
     const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 })
 
     const updatePosition = useCallback(() => {
-        if (!wrapperRef.current) return
-        const rect = wrapperRef.current.getBoundingClientRect()
+        if (!inputWrapperRef.current) return
+        const rect = inputWrapperRef.current.getBoundingClientRect()
         setMenuPosition({
             top: rect.bottom + 6,
             left: rect.left,
@@ -35,13 +36,29 @@ function Autocomplete({
         })
     }, [])
 
+    const uniqueSuggestions = useMemo(() => {
+        const seen = new Set()
+        return suggestions.filter(item => {
+            const name = getSuggestionValue(item)
+            if (seen.has(name)) return false
+            seen.add(name)
+            return true
+        })
+    }, [suggestions, getSuggestionValue])
+
+    const selectSuggestion = useCallback((item) => {
+        onSelect(item)
+        onOpenChange(false)
+        onActiveIndexChange(-1)
+    }, [onSelect, onOpenChange, onActiveIndexChange])
+
     // Закрытие при клике вне
     useEffect(() => {
         const handleClickOutside = (event) => {
-            const isInsideWrapper = wrapperRef.current?.contains(event.target)
+            const isInsideRoot = rootRef.current?.contains(event.target)
             const isInsideMenu = menuRef.current?.contains(event.target)
 
-            if (!isInsideWrapper && !isInsideMenu && isOpen) {
+            if (!isInsideRoot && !isInsideMenu && isOpen) {
                 onOpenChange(false)
                 onActiveIndexChange(-1)
             }
@@ -80,12 +97,12 @@ function Autocomplete({
     const handleKeyDown = (event) => {
         if (event.key === 'ArrowDown') {
             event.preventDefault()
-            if (!isOpen && suggestions.length > 0) {
+            if (!isOpen && uniqueSuggestions.length > 0) {
                 onOpenChange(true)
             }
-            if (suggestions.length > 0) {
+            if (uniqueSuggestions.length > 0) {
                 const newIndex = activeIndex + 1
-                if (newIndex < suggestions.length) {
+                if (newIndex < uniqueSuggestions.length) {
                     onActiveIndexChange(newIndex)
                 } else {
                     onActiveIndexChange(0)
@@ -93,37 +110,25 @@ function Autocomplete({
             }
         } else if (event.key === 'ArrowUp') {
             event.preventDefault()
-            if (!isOpen && suggestions.length > 0) {
+            if (!isOpen && uniqueSuggestions.length > 0) {
                 onOpenChange(true)
             }
-            if (suggestions.length > 0) {
+            if (uniqueSuggestions.length > 0) {
                 const newIndex = activeIndex - 1
                 if (newIndex >= 0) {
                     onActiveIndexChange(newIndex)
                 } else {
-                    onActiveIndexChange(suggestions.length - 1)
+                    onActiveIndexChange(uniqueSuggestions.length - 1)
                 }
             }
-        } else if (event.key === 'Enter' && isOpen && activeIndex >= 0 && suggestions[activeIndex]) {
+        } else if (event.key === 'Enter' && isOpen && activeIndex >= 0 && uniqueSuggestions[activeIndex]) {
             event.preventDefault()
-            onSelect(suggestions[activeIndex])
-            onOpenChange(false)
-            onActiveIndexChange(-1)
+            selectSuggestion(uniqueSuggestions[activeIndex])
         } else if (event.key === 'Escape') {
             onOpenChange(false)
             onActiveIndexChange(-1)
         }
     }
-
-    const uniqueSuggestions = useMemo(() => {
-        const seen = new Set()
-        return suggestions.filter(item => {
-            const name = getSuggestionValue(item)
-            if (seen.has(name)) return false
-            seen.add(name)
-            return true
-        })
-    }, [suggestions, getSuggestionValue])
 
     const menu = isOpen && uniqueSuggestions.length > 0 && createPortal(
         <div
@@ -146,11 +151,13 @@ function Autocomplete({
                         type="button"
                         className={`autocomplete__item ${activeIndex === index ? 'is-active' : ''}`}
                         onMouseEnter={() => onActiveIndexChange(index)}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => {
-                            onSelect(item)
-                            onOpenChange(false)
-                            onActiveIndexChange(-1)
+                        onMouseDown={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            selectSuggestion(item)
+                        }}
+                        onClick={(event) => {
+                            event.preventDefault()
                         }}
                         title={displayName}
                     >
@@ -163,16 +170,17 @@ function Autocomplete({
     )
 
     return (
-        <div className="autocomplete" ref={wrapperRef}>
+        <div className="autocomplete" ref={rootRef}>
             {label && (
                 <Label>
                     {label}
                     {required && <span className="required-star"> *</span>}
                 </Label>
             )}
-            <div className="autocomplete__wrapper">
+            <div className="autocomplete__wrapper" ref={inputWrapperRef}>
                 <Input
                     ref={inputRef}
+                    className={error ? 'is-invalid' : ''}
                     value={value}
                     onFocus={() => {
                         if (uniqueSuggestions.length > 0 && !isOpen) {
