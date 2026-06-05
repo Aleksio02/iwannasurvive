@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'wouter'
 import Navbar from '@/shared/layouts/Navbar'
+import AppFooter from '@/shared/layouts/AppFooter'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
 import './DashboardLayout.scss'
 
@@ -87,6 +88,8 @@ function DashboardLayout({
 
                 {children}
             </main>
+
+            <AppFooter />
         </div>
     )
 }

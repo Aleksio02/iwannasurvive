@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useRoute } from 'wouter'
 import Navbar from '@/shared/layouts/Navbar'
+import AppFooter from '@/shared/layouts/AppFooter'
 import Label from '@/shared/ui/Label'
 import { getPublicEmployerProfile, getFileDownloadUrlByUserAndFile } from '@/shared/api/profile'
 import { getSessionUser } from '@/shared/lib/utils/sessionStore'
@@ -191,6 +192,7 @@ export default function EmployerPublicProfile() {
                     )}
                 </div>
             </main>
+            <AppFooter />
         </>
     )
 }

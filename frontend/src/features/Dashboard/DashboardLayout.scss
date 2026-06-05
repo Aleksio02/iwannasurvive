@@ -1,9 +1,12 @@
 .dashboard-layout {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--color-background);
 }
 
 .dashboard-layout__main {
+  flex: 1;
   padding-block: 32px 42px;
 }
 

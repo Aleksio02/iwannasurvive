@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'wouter'
 import { useState, useEffect, useRef } from 'react'
+import { LogOut, Menu, MessageCircle, UserRound, X } from 'lucide-react'
 import brandMark from '@/assets/icons/brand-mark.png'
 import { getCurrentUserInfo, logoutUser } from '@/shared/api/auth'
 import {
@@ -34,6 +35,7 @@ function Navbar() {
             : null
     })
     const [unreadChatCount, setUnreadChatCount] = useState(0)
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
     const { eventVersion } = useChatRealtime()
     const lastUnreadRefreshAtRef = useRef(0)
 
@@ -261,7 +263,25 @@ function Navbar() {
     }
 
     const isActive = (path) => location === path
+    const isAboutActive = location === '/about' || location === '/how-it-works'
     const isChatsActive = location.startsWith('/chats')
+
+    useEffect(() => {
+        setIsMenuOpen(false)
+    }, [location])
+
+    useEffect(() => {
+        if (!isMenuOpen) return undefined
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setIsMenuOpen(false)
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [isMenuOpen])
 
     const getDashboardLink = () => {
         if (visibleUser?.role === 'EMPLOYER') return '/employer'
@@ -287,16 +307,32 @@ function Navbar() {
     }
 
     return (
-        <nav className="navbar">
+        <nav className={`navbar ${isMenuOpen ? 'is-menu-open' : ''}`}>
             <div className="navbar__container container">
                 <Link href="/" className="navbar__logo">
                     <img src={brandMark} alt="Трамплин" className="navbar__logo-icon" />
                     <span className="navbar__logo-text">Трамплин</span>
                 </Link>
 
-                <div className="navbar__links">
+                <button
+                    type="button"
+                    className="navbar__menu-toggle"
+                    onClick={() => setIsMenuOpen((isOpen) => !isOpen)}
+                    aria-controls="navbar-menu"
+                    aria-expanded={isMenuOpen}
+                    aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+                >
+                    {isMenuOpen ? <X size={21} /> : <Menu size={21} />}
+                </button>
+
+                <div className="navbar__panel" id="navbar-menu">
+                    <div className="navbar__links">
                     <Link href="/" className={`navbar__link ${isActive('/') ? 'is-active' : ''}`}>
                         Главная
+                    </Link>
+
+                    <Link href="/about" className={`navbar__link ${isAboutActive ? 'is-active' : ''}`}>
+                        <span>О платформе</span>
                     </Link>
 
                     {visibleUser ? (
@@ -313,7 +349,8 @@ function Navbar() {
                                     href="/chats"
                                     className={`navbar__link navbar__chat-link ${isChatsActive ? 'is-active' : ''}`}
                                 >
-                                    Сообщения
+                                    <MessageCircle size={16} />
+                                    <span>Сообщения</span>
                                     {unreadChatCount > 0 && (
                                         <span className="navbar__chat-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>
                                     )}
@@ -325,11 +362,13 @@ function Navbar() {
                                 onClick={handleLogout}
                                 className="navbar__link navbar__link--logout"
                             >
-                                Выйти
+                                <LogOut size={16} />
+                                <span>Выйти</span>
                             </button>
 
                             <span className="navbar__user">
-                                {getUserShortName()}
+                                <UserRound size={16} />
+                                <span>{getUserShortName()}</span>
                             </span>
                         </>
                     ) : (
@@ -349,6 +388,7 @@ function Navbar() {
                             )}
                         </>
                     )}
+                    </div>
                 </div>
             </div>
         </nav>
