@@ -101,6 +101,16 @@ const dedupeAddressSuggestions = (items = []) => {
     })
 }
 
+const hasLocationMapCoordinates = (location = {}) => (
+    Number.isFinite(Number(location.latitude)) &&
+    Number.isFinite(Number(location.longitude))
+)
+
+const hasAddressIdentity = (location = {}) => (
+    Boolean(String(location.unrestrictedValue || '').trim()) ||
+    Boolean(String(location.fiasId || '').trim())
+)
+
 const areProfilePayloadsEqual = (a = {}, b = {}) => {
     return JSON.stringify({
         companyName: a.companyName || '',
@@ -962,6 +972,8 @@ function EmployerDashboard() {
         const normalizedOpportunityType = String(opportunityForm.type || '').trim().toUpperCase()
         const normalizedWorkFormat = String(opportunityForm.workFormat || '').trim().toUpperCase()
         const isEventType = normalizedOpportunityType === 'EVENT'
+        const selectedLocation =
+            employerLocations.find((item) => Number(item.id) === Number(opportunityForm.locationId)) || null
 
         if (!opportunityForm.title.trim()) nextErrors.title = 'Укажите название'
         if (!opportunityForm.shortDescription.trim()) nextErrors.shortDescription = 'Укажите краткое описание'
@@ -971,6 +983,14 @@ function EmployerDashboard() {
         const isOfficeBasedWorkFormat = ['OFFICE', 'HYBRID'].includes(normalizedWorkFormat)
         if (isOfficeBasedWorkFormat && !opportunityForm.locationId) {
             nextErrors.locationId = 'Для офисного или гибридного формата выберите офис'
+        }
+
+        if (
+            isOfficeBasedWorkFormat &&
+            opportunityForm.locationId &&
+            !hasLocationMapCoordinates(selectedLocation)
+        ) {
+            nextErrors.locationId = 'У выбранной локации нет координат. Обновите адрес локации через подсказку.'
         }
 
         const salaryFrom = opportunityForm.salaryFrom !== '' ? Number(opportunityForm.salaryFrom) : null
@@ -1004,6 +1024,13 @@ function EmployerDashboard() {
         if (!locationForm.cityId) nextErrors.cityId = 'Выберите город'
         if (!locationForm.addressLine?.trim()) nextErrors.addressLine = 'Укажите адрес'
 
+        if (
+            locationForm.addressLine?.trim() &&
+            (!hasLocationMapCoordinates(locationForm) || !hasAddressIdentity(locationForm))
+        ) {
+            nextErrors.addressLine = 'Выберите адрес из подсказки, чтобы мы смогли показать офис на карте'
+        }
+
         setLocationErrors(nextErrors)
 
         return {
@@ -1019,7 +1046,18 @@ function EmployerDashboard() {
             ...prev,
             cityId: null,
             cityName: value,
+            addressLine: '',
+            addressLine2: '',
+            postalCode: '',
+            latitude: '',
+            longitude: '',
+            fiasId: '',
+            unrestrictedValue: '',
+            qcGeo: '',
         }))
+        setAddressSearchQuery('')
+        setAddressSuggestions([])
+        setIsAddressSearchOpen(false)
 
         if (normalizedQuery.length < 1) {
             window.clearTimeout(locationCitySearchDebounceRef.current)
