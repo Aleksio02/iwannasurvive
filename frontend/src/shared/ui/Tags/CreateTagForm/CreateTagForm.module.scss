@@ -24,6 +24,22 @@
   z-index: 1001;
 }
 
+:global(html[data-theme='dark']) .formContainer {
+  background: linear-gradient(180deg, rgba(18, 29, 43, 0.98), rgba(12, 21, 34, 0.98));
+  border-color: var(--color-border);
+  color: var(--color-text);
+  box-shadow: var(--shadow-card);
+}
+
+:global(html[data-theme='dark']) .closeButton {
+  color: var(--color-text-muted);
+}
+
+:global(html[data-theme='dark']) .closeButton:hover {
+  background: rgba(33, 200, 188, 0.14);
+  color: var(--color-text);
+}
+
 .closeButton {
   position: absolute;
   top: 16px;

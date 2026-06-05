@@ -779,3 +779,57 @@
 .curator-access-switch__button {
   border-radius: 999px;
 }
+
+html[data-theme='dark'] {
+  .admin-curators-page__modal,
+  .curator-detail-card,
+  .curator-stats-grid__item,
+  .curator-access-form,
+  .curator-card-item,
+  .curator-card-item__facts > div,
+  .loading-state,
+  .empty-state {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.96), rgba(12, 21, 34, 0.98));
+    border-color: rgba(156, 190, 208, 0.28);
+    color: var(--color-text);
+    box-shadow: none;
+  }
+
+  .curator-detail-card__field {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .curator-card-item__badge.is-active,
+  .curator-access-switch__button.is-active {
+    background: rgba(74, 222, 128, 0.15);
+    border-color: rgba(134, 239, 172, 0.34);
+    color: #d1fae5;
+    box-shadow: none;
+  }
+
+  .curator-card-item__badge.is-inactive,
+  .curator-access-switch__button.is-danger.is-active {
+    background: rgba(255, 107, 134, 0.14);
+    border-color: rgba(255, 107, 134, 0.36);
+    color: #ffd6dd;
+    box-shadow: none;
+  }
+
+  .curator-access-switch__button {
+    background: rgba(18, 29, 43, 0.72);
+    border-color: rgba(156, 190, 208, 0.28);
+    color: #e4f1f8;
+  }
+
+  .curator-detail-card__field span,
+  .curator-stats-grid__item span {
+    color: var(--color-text-muted);
+  }
+
+  .curator-detail-card__field strong,
+  .curator-card-item__identity h3 {
+    color: var(--color-text);
+  }
+}

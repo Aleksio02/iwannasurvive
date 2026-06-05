@@ -16,17 +16,21 @@
   white-space: nowrap;
   box-shadow: var(--shadow-soft);
   transition:
-          border-color var(--transition-duration),
-          background var(--transition-duration),
-          color var(--transition-duration),
-          box-shadow var(--transition-duration),
-          transform var(--transition-duration);
+          border-color 0.12s ease,
+          background-color 0.12s ease,
+          color 0.12s ease,
+          box-shadow 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 
   &:hover {
     border-color: var(--color-primary);
     background: var(--color-primary-soft);
     color: var(--color-primary-dark);
-    transform: translateY(-1px);
+  }
+
+  &:active {
+    box-shadow: none;
   }
 }
 

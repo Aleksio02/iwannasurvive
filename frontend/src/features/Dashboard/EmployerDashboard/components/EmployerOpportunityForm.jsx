@@ -403,11 +403,15 @@ function EmployerOpportunityForm({
                     />
                     <p className={`field-error ${errors.salaryTo ? '' : 'is-placeholder'}`}>{errors.salaryTo || '\u00A0'}</p>
                 </div>
-                <Input
-                    value={opportunityForm.contactEmail}
-                    onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
-                    placeholder="Контактный email"
-                />
+                <div className="employer-create-form__field">
+                    <Label>Контактный email</Label>
+                    <Input
+                        value={opportunityForm.contactEmail}
+                        onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, contactEmail: e.target.value }))}
+                        placeholder="Контактный email"
+                    />
+                    <p className="field-error is-placeholder">{'\u00A0'}</p>
+                </div>
             </div>
 
             <div className="employer-create-form__grid-3">

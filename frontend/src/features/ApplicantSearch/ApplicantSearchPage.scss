@@ -472,6 +472,38 @@
   font-style: italic;
 }
 
+html[data-theme='dark'] {
+  .applicant-search__summary,
+  .applicant-search__state,
+  .applicant-search__pagination {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .applicant-search__state {
+    min-height: 160px;
+    padding: 18px 0;
+  }
+
+  .applicant-search__pagination {
+    padding: 0;
+  }
+
+  .applicant-search__card-head,
+  .applicant-search__identity,
+  .applicant-search__tag-block,
+  .applicant-search__tag-list {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .applicant-search__tag-placeholder {
+    color: #d4e2ec;
+  }
+}
+
 .applicant-search__card-actions {
   margin-top: auto;
   display: flex;
@@ -600,4 +632,17 @@
     font-size: 11px !important;
     padding: 0 8px;
   }
+}
+
+html[data-theme='dark'] .applicant-search {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+html[data-theme='dark'] .applicant-search__checkboxes,
+html[data-theme='dark'] .applicant-search__checkboxes .custom-checkbox {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }

@@ -139,6 +139,14 @@ svg * {
   transition-duration: var(--transition-duration);
 }
 
+html.theme-changing *,
+html.theme-changing *::before,
+html.theme-changing *::after {
+  transition: none !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+}
+
 a {
   color: inherit;
 

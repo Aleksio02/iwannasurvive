@@ -624,6 +624,7 @@ export default function OpportunityDetailPage() {
                                 {isApplicant && item.employerUserId && (
                                     <button
                                         type="button"
+                                        className={`opportunity-detail-page__employer-favorite ${isEmployerFavorite ? 'is-favorite' : ''}`}
                                         onClick={handleToggleEmployerFavorite}
                                         disabled={isEmployerFavoriteLoading}
                                         style={getEmployerFavoriteButtonStyle(isEmployerFavorite, isEmployerFavoriteLoading)}
