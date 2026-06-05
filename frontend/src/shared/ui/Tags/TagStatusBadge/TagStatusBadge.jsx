@@ -9,7 +9,11 @@ const statusConfig = {
 
 const TagStatusBadge = ({ status }) => {
   const config = statusConfig[status] || statusConfig.PENDING;
-  return <span className={`${styles.badge} ${config.className}`}>{config.label}</span>;
+  return (
+    <span className={`${styles.badge} ${config.className}`} data-tag-status={status || 'PENDING'}>
+      {config.label}
+    </span>
+  );
 };
 
 export default TagStatusBadge;

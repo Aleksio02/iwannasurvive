@@ -1,8 +1,9 @@
 import { Link, useLocation } from 'wouter'
 import { useState, useEffect, useRef } from 'react'
-import { LogOut, Menu, MessageCircle, UserRound, X } from 'lucide-react'
+import { LogOut, Menu, UserRound, X } from 'lucide-react'
 import brandMark from '@/assets/icons/brand-mark.png'
 import { getCurrentUserInfo, logoutUser } from '@/shared/api/auth'
+import ThemeToggle from '@/shared/ui/ThemeToggle'
 import {
     getApplicantProfile,
     getEmployerProfile,
@@ -327,13 +328,13 @@ function Navbar() {
 
                 <div className="navbar__panel" id="navbar-menu">
                     <div className="navbar__links">
-                    <Link href="/" className={`navbar__link ${isActive('/') ? 'is-active' : ''}`}>
-                        Главная
-                    </Link>
+                        <Link href="/" className={`navbar__link ${isActive('/') ? 'is-active' : ''}`}>
+                            Главная
+                        </Link>
 
-                    <Link href="/about" className={`navbar__link ${isAboutActive ? 'is-active' : ''}`}>
-                        <span>О платформе</span>
-                    </Link>
+                        <Link href="/about" className={`navbar__link ${isAboutActive ? 'is-active' : ''}`}>
+                            <span>О платформе</span>
+                        </Link>
 
                     {visibleUser ? (
                         <>
@@ -349,7 +350,6 @@ function Navbar() {
                                     href="/chats"
                                     className={`navbar__link navbar__chat-link ${isChatsActive ? 'is-active' : ''}`}
                                 >
-                                    <MessageCircle size={16} />
                                     <span>Сообщения</span>
                                     {unreadChatCount > 0 && (
                                         <span className="navbar__chat-badge">{unreadChatCount > 99 ? '99+' : unreadChatCount}</span>
@@ -388,6 +388,10 @@ function Navbar() {
                             )}
                         </>
                     )}
+                    </div>
+
+                    <div className="navbar__actions">
+                        <ThemeToggle className="navbar__theme-toggle" showLabel={false} />
                     </div>
                 </div>
             </div>
