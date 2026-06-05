@@ -57,6 +57,36 @@ function normalizeOpportunityId(id) {
     return String(id)
 }
 
+function getPointCoordinateKey(point) {
+    const lat = Number(point.latitude)
+    const lng = Number(point.longitude)
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null
+    }
+
+    return `${lat.toFixed(6)}:${lng.toFixed(6)}`
+}
+
+function groupPointsByCoordinates(points = []) {
+    const groups = new Map()
+
+    points
+        .filter((point) => point.latitude && point.longitude)
+        .forEach((point) => {
+            const key = getPointCoordinateKey(point)
+            if (!key) return
+
+            if (!groups.has(key)) {
+                groups.set(key, [])
+            }
+
+            groups.get(key).push(point)
+        })
+
+    return Array.from(groups.values())
+}
+
 function isPointEmployerVerified(point) {
     const preview = point.preview || {}
     return Boolean(point.employerVerified || preview.employerVerified) ||
@@ -173,6 +203,101 @@ function buildBalloon(point, isOpportunityFavorite = false) {
     `
 }
 
+function buildGroupedBalloon(group, favoriteOpportunityIds) {
+    const count = group.length
+    const items = group.map((point) => {
+        const preview = point.preview || {}
+        const title = preview.title || point.title
+        const companyName = preview.companyName || point.companyName
+        const typeLabel = OPPORTUNITY_LABELS.type[point.type] || 'Возможность'
+        const rawWorkFormat =
+            preview.workFormat ||
+            point.workFormat ||
+            preview.format ||
+            point.format ||
+            ''
+
+        const formatLabel =
+            OPPORTUNITY_LABELS.workFormat[rawWorkFormat] ||
+            rawWorkFormat ||
+            'Формат не указан'
+
+        const salary = formatMoney(preview.salaryFrom, preview.salaryTo, preview.salaryCurrency)
+        const isOpportunityFavorite = favoriteOpportunityIds.has(normalizeOpportunityId(point.id))
+        const tags = (preview.tags || [])
+            .slice(0, 3)
+            .map(
+                (tag) => `
+                    <span class="yandex-opportunity-map__tag">
+                        ${escapeHtml(tag.name)}
+                    </span>
+                `
+            )
+            .join('')
+
+        return `
+            <article class="yandex-opportunity-map__group-item">
+                <div class="yandex-opportunity-map__group-header">
+                    <h4 class="yandex-opportunity-map__title">
+                        ${escapeHtml(title)}
+                    </h4>
+                    <span class="yandex-opportunity-map__badge yandex-opportunity-map__badge--type">
+                        ${escapeHtml(typeLabel)}
+                    </span>
+                </div>
+
+                <p class="yandex-opportunity-map__company">
+                    ${escapeHtml(companyName)}
+                </p>
+
+                ${buildVerifiedCompanyBadgeHtml(point)}
+
+                <div class="yandex-opportunity-map__badges">
+                    <span class="yandex-opportunity-map__badge">
+                        ${escapeHtml(formatLabel)}
+                    </span>
+                    <span class="yandex-opportunity-map__badge yandex-opportunity-map__badge--salary">
+                        ${escapeHtml(salary)}
+                    </span>
+                </div>
+
+                ${tags ? `<div class="yandex-opportunity-map__tags">${tags}</div>` : ''}
+
+                <div class="yandex-opportunity-map__actions">
+                    <button
+                        type="button"
+                        class="yandex-opportunity-map__action yandex-opportunity-map__action--primary"
+                        data-map-action="details"
+                        data-opportunity-id="${escapeHtml(point.id)}"
+                    >
+                        Подробнее
+                    </button>
+
+                    <button
+                        type="button"
+                        class="yandex-opportunity-map__action yandex-opportunity-map__action--favorite ${isOpportunityFavorite ? 'is-favorite' : ''}"
+                        data-map-action="favorite"
+                        data-opportunity-id="${escapeHtml(point.id)}"
+                    >
+                        ${isOpportunityFavorite ? 'В избранном' : 'В избранное'}
+                    </button>
+                </div>
+            </article>
+        `
+    }).join('')
+
+    return `
+        <div class="yandex-opportunity-map__popup yandex-opportunity-map__popup--group">
+            <div class="yandex-opportunity-map__group-title">
+                ${count} возможности в этой точке
+            </div>
+            <div class="yandex-opportunity-map__group-list">
+                ${items}
+            </div>
+        </div>
+    `
+}
+
 function buildHint(point) {
     const preview = point.preview || {}
     const tags = (preview.tags || [])
@@ -229,6 +354,19 @@ function buildHint(point) {
             </div>
 
             ${tags ? `<div class="yandex-opportunity-map__tags">${tags}</div>` : ''}
+        </div>
+    `
+}
+
+function buildGroupedHint(group) {
+    return `
+        <div class="yandex-opportunity-map__popup yandex-opportunity-map__popup--hint">
+            <h4 class="yandex-opportunity-map__title">
+                ${group.length} возможности в этой точке
+            </h4>
+            <p class="yandex-opportunity-map__company">
+                ${escapeHtml(group[0]?.cityName || group[0]?.addressLine || 'Одна локация')}
+            </p>
         </div>
     `
 }
@@ -453,52 +591,70 @@ export default function YandexOpportunityMap({
         placemarksRef.current.clear()
         pointsByIdRef.current.clear()
 
-        points
-            .filter((point) => point.latitude && point.longitude)
-            .forEach((point) => {
-                const isFavorite = favoriteCompanies.has(point.companyName)
-                const isOpportunityFavorite = favoriteOpportunityIds.has(normalizeOpportunityId(point.id))
+        const pointGroups = groupPointsByCoordinates(points)
+
+        pointGroups.forEach((group) => {
+            const firstPoint = group[0]
+            const isGroup = group.length > 1
+            group.forEach((point) => {
                 pointsByIdRef.current.set(normalizeOpportunityId(point.id), point)
-                const placemarkState = isTouchMode
-                    ? {}
-                    : {
-                        balloonContentBody: buildBalloon(point, isOpportunityFavorite),
-                        hintContent: buildHint(point),
-                    }
+            })
 
-                const placemark = new ymaps.Placemark(
-                    [point.latitude, point.longitude],
-                    placemarkState,
-                    {
-                        iconLayout: 'default#imageWithContent',
-                        iconImageHref: markerSvg(isFavorite ? '#f59f0a' : '#0f5f68'),
-                        iconImageSize: [34, 44],
-                        iconImageOffset: [-17, -44],
-                        hasBalloon: !isTouchMode,
-                        openBalloonOnClick: !isTouchMode,
-                        hintOpenTimeout: isTouchMode ? 0 : 80,
-                        hintCloseTimeout: 0,
-                        hintFitPane: !isTouchMode,
-                        hintOffset: [18, -12],
-                        balloonMaxWidth: 340,
-                        balloonPanelMaxMapArea: 0,
-                        balloonAutoPan: !isTouchMode,
-                        balloonAutoPanDuration: 300,
-                        balloonAutoPanCheckZoomRange: true,
-                        balloonAutoPanMargin: [40, 40, 40, 40],
-                        balloonAutoPanUseMapMargin: true,
-                        hideIconOnBalloonOpen: false,
-                    }
-                )
+            const isFavorite = group.some((point) => favoriteCompanies.has(point.companyName))
+            const hasFavoriteOpportunity = group.some((point) =>
+                favoriteOpportunityIds.has(normalizeOpportunityId(point.id))
+            )
+            const placemarkState = isTouchMode
+                ? {}
+                : {
+                    balloonContentBody: isGroup
+                        ? buildGroupedBalloon(group, favoriteOpportunityIds)
+                        : buildBalloon(firstPoint, hasFavoriteOpportunity),
+                    hintContent: isGroup
+                        ? buildGroupedHint(group)
+                        : buildHint(firstPoint),
+                }
 
-                placemark.events.add('click', () => {
-                    lastMarkerClickAtRef.current = Date.now()
-                    onOpenCardRef.current?.(point.id)
-                })
+            const placemark = new ymaps.Placemark(
+                [firstPoint.latitude, firstPoint.longitude],
+                placemarkState,
+                {
+                    iconLayout: 'default#imageWithContent',
+                    iconImageHref: markerSvg(isFavorite ? '#f59f0a' : '#0f5f68'),
+                    iconImageSize: isGroup ? [40, 48] : [34, 44],
+                    iconImageOffset: isGroup ? [-20, -48] : [-17, -44],
+                    iconContentLayout: isGroup
+                        ? ymaps.templateLayoutFactory.createClass(
+                            `<div class="yandex-opportunity-map__marker-count">${group.length}</div>`
+                        )
+                        : undefined,
+                    hasBalloon: !isTouchMode,
+                    openBalloonOnClick: !isTouchMode,
+                    hintOpenTimeout: isTouchMode ? 0 : 80,
+                    hintCloseTimeout: 0,
+                    hintFitPane: !isTouchMode,
+                    hintOffset: [18, -12],
+                    balloonMaxWidth: isGroup ? 420 : 340,
+                    balloonPanelMaxMapArea: 0,
+                    balloonAutoPan: !isTouchMode,
+                    balloonAutoPanDuration: 300,
+                    balloonAutoPanCheckZoomRange: true,
+                    balloonAutoPanMargin: [40, 40, 40, 40],
+                    balloonAutoPanUseMapMargin: true,
+                    hideIconOnBalloonOpen: false,
+                }
+            )
 
-                map.geoObjects.add(placemark)
+            placemark.events.add('click', () => {
+                lastMarkerClickAtRef.current = Date.now()
+                onOpenCardRef.current?.(firstPoint.id)
+            })
+
+            map.geoObjects.add(placemark)
+            group.forEach((point) => {
                 placemarksRef.current.set(normalizeOpportunityId(point.id), placemark)
             })
+        })
 
         if (!didInitialCenterRef.current) {
             suppressCenterEventRef.current = true

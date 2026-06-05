@@ -44,11 +44,21 @@ function EmployerOpportunityForm({
     const normalizedOpportunityType = String(opportunityForm.type || '').trim().toUpperCase()
     const normalizedWorkFormat = String(opportunityForm.workFormat || '').trim().toUpperCase()
     const isEventType = normalizedOpportunityType === 'EVENT'
-    const isLocationEditingDisabled = normalizedWorkFormat === 'REMOTE'
+    const isRemoteLikeWorkFormat = ['REMOTE', 'ONLINE'].includes(normalizedWorkFormat)
+    const isLocationEditingDisabled = isRemoteLikeWorkFormat
+    const isOfficeBasedWorkFormat = ['OFFICE', 'HYBRID'].includes(normalizedWorkFormat)
     const isVerificationPending = verificationState === 'PENDING'
     const isVerificationRejected = verificationState === 'REJECTED'
     const isVerificationApproved = verificationState === 'APPROVED'
     const [tagSearchQuery, setTagSearchQuery] = useState('')
+    const getFieldErrorClass = (field) => errors[field] ? 'is-invalid' : ''
+    const availableWorkFormats = useMemo(() => {
+        if (isEventType) {
+            return WORK_FORMATS.filter((item) => ['OFFICE', 'ONLINE'].includes(item.value))
+        }
+
+        return WORK_FORMATS.filter((item) => ['OFFICE', 'HYBRID', 'REMOTE'].includes(item.value))
+    }, [isEventType])
     const hasExistingDescription = Boolean(
         opportunityForm.shortDescription?.trim() ||
         opportunityForm.fullDescription?.trim() ||
@@ -111,6 +121,7 @@ function EmployerOpportunityForm({
             <div className="employer-create-form__field">
                 <Label>Название <span className="required-star">*</span></Label>
                 <Input
+                    className={getFieldErrorClass('title')}
                     value={opportunityForm.title}
                     onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, title: e.target.value }))}
                     placeholder="Например, Junior Java Developer"
@@ -121,33 +132,64 @@ function EmployerOpportunityForm({
             <div className="employer-create-form__grid-2">
                 <CustomSelect
                     label="Тип"
+                    required={true}
                     value={opportunityForm.type}
                     onChange={(val) =>
-                        onChangeOpportunityForm((prev) => ({
-                            ...prev,
-                            type: val,
-                            eventDate: String(val || '').trim().toUpperCase() === 'EVENT' ? prev.eventDate : '',
-                        }))
+                        onChangeOpportunityForm((prev) => {
+                            const nextType = String(val || '').trim().toUpperCase()
+                            const currentFormat = String(prev.workFormat || '').trim().toUpperCase()
+
+                            if (nextType === 'EVENT' && !['OFFICE', 'ONLINE'].includes(currentFormat)) {
+                                return {
+                                    ...prev,
+                                    type: val,
+                                    workFormat: 'ONLINE',
+                                    locationId: null,
+                                    cityId: null,
+                                    cityName: '',
+                                    expiresAt: '',
+                                }
+                            }
+
+                            if (nextType !== 'EVENT' && currentFormat === 'ONLINE') {
+                                return {
+                                    ...prev,
+                                    type: val,
+                                    workFormat: 'REMOTE',
+                                    eventDate: '',
+                                }
+                            }
+
+                            return {
+                                ...prev,
+                                type: val,
+                                eventDate: nextType === 'EVENT' ? prev.eventDate : '',
+                                expiresAt: nextType === 'EVENT' ? '' : prev.expiresAt,
+                            }
+                        })
                     }
                     options={OPPORTUNITY_TYPES}
                 />
                 <CustomSelect
                     label="Формат"
+                    required={true}
                     value={opportunityForm.workFormat}
                     onChange={(val) =>
                         onChangeOpportunityForm((prev) => {
-                            const isRemote = String(val || '').trim().toUpperCase() === 'REMOTE'
+                            const isRemoteLike = ['REMOTE', 'ONLINE'].includes(
+                                String(val || '').trim().toUpperCase()
+                            )
 
                             return {
                                 ...prev,
                                 workFormat: val,
-                                locationId: isRemote ? null : prev.locationId,
-                                cityId: isRemote ? null : prev.cityId,
-                                cityName: isRemote ? '' : prev.cityName,
+                                locationId: isRemoteLike ? null : prev.locationId,
+                                cityId: isRemoteLike ? null : prev.cityId,
+                                cityName: isRemoteLike ? '' : prev.cityName,
                             }
                         })
                     }
-                    options={WORK_FORMATS}
+                    options={availableWorkFormats}
                 />
             </div>
 
@@ -155,7 +197,9 @@ function EmployerOpportunityForm({
                 <div className={isLocationEditingDisabled ? 'select-disabled' : ''}>
                     <CustomSelect
                         label="Офис"
+                        required={isOfficeBasedWorkFormat}
                         value={opportunityForm.locationId ? String(opportunityForm.locationId) : ''}
+                        error={errors.locationId}
                         onChange={(val) => {
                             if (isLocationEditingDisabled) return
 
@@ -173,7 +217,7 @@ function EmployerOpportunityForm({
                             {
                                 value: '',
                                 label: isLocationEditingDisabled
-                                    ? 'Для удаленного формата офис не требуется'
+                                    ? 'Офис не требуется'
                                     : employerLocations.length
                                         ? 'Выберите офис'
                                         : 'Нет созданных офисов',
@@ -196,7 +240,9 @@ function EmployerOpportunityForm({
                         value={
                             !isLocationEditingDisabled
                                 ? (opportunityForm.cityName || '')
-                                : 'Для удаленного формата город не требуется'
+                                : normalizedWorkFormat === 'ONLINE'
+                                    ? 'Онлайн-мероприятие: используется город организатора'
+                                    : 'Используется город из профиля компании'
                         }
                         readOnly
                         className={isLocationEditingDisabled ? 'input--disabled' : ''}
@@ -255,6 +301,7 @@ function EmployerOpportunityForm({
             <div className="employer-create-form__field">
                 <Label>Краткое описание <span className="required-star">*</span></Label>
                 <Textarea
+                    className={getFieldErrorClass('shortDescription')}
                     rows={3}
                     value={opportunityForm.shortDescription}
                     onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, shortDescription: e.target.value }))}
@@ -307,7 +354,7 @@ function EmployerOpportunityForm({
                         <Label>Дата мероприятия <span className="required-star">*</span></Label>
                         <Input
                             type="date"
-                            className="employer-create-form__date-input"
+                            className={`employer-create-form__date-input ${getFieldErrorClass('eventDate')}`.trim()}
                             value={opportunityForm.eventDate}
                             min={new Date().toISOString().slice(0, 10)}
                             onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, eventDate: e.target.value }))}
@@ -319,7 +366,7 @@ function EmployerOpportunityForm({
                         <Label>Срок действия <span className="required-star">*</span></Label>
                         <Input
                             type="date"
-                            className="employer-create-form__date-input"
+                            className={`employer-create-form__date-input ${getFieldErrorClass('expiresAt')}`.trim()}
                             value={opportunityForm.expiresAt}
                             min={new Date().toISOString().slice(0, 10)}
                             onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, expiresAt: e.target.value }))}
@@ -336,7 +383,7 @@ function EmployerOpportunityForm({
                         type="number"
                         min="0"
                         inputMode="numeric"
-                        className="employer-create-form__salary-input"
+                        className={`employer-create-form__salary-input ${getFieldErrorClass('salaryFrom')}`.trim()}
                         value={opportunityForm.salaryFrom}
                         onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryFrom: e.target.value }))}
                         placeholder="Например, 50000"
@@ -349,7 +396,7 @@ function EmployerOpportunityForm({
                         type="number"
                         min="0"
                         inputMode="numeric"
-                        className="employer-create-form__salary-input"
+                        className={`employer-create-form__salary-input ${getFieldErrorClass('salaryTo')}`.trim()}
                         value={opportunityForm.salaryTo}
                         onChange={(e) => onChangeOpportunityForm((prev) => ({ ...prev, salaryTo: e.target.value }))}
                         placeholder="Например, 100000"

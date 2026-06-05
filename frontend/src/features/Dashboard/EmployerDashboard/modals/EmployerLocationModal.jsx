@@ -123,7 +123,7 @@ function EmployerLocationModal({
                         )}
                     </div>
                     <p className="field-hint">
-                        Для небольших городов можно указать город или ориентир, а офис и помещение добавить ниже.
+                        Выберите адрес из подсказки, чтобы офис отображался на карте. Офис и помещение можно добавить ниже.
                     </p>
                     {locationErrors.addressLine && <p className="field-error">{locationErrors.addressLine}</p>}
                 </div>
