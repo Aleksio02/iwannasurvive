@@ -13,6 +13,7 @@ function PersonalizedRecommendationsSection({
     onApply,
     onToggleFavorite,
     favoriteOpportunities,
+    appliedOpportunityIds,
 }) {
     const subtitle = isLoading
         ? 'Подбираем подходящие возможности...'
@@ -71,6 +72,8 @@ function PersonalizedRecommendationsSection({
                         const whatToImprove = (explanation.whatToImprove || item.improvementTips || []).slice(0, 2)
                         const matchedSkills = (item.matchedSkills || []).slice(0, 3)
                         const matchedInterests = (item.matchedInterests || []).slice(0, 2)
+                        const opportunityId = Number(opportunity.id)
+                        const isApplied = appliedOpportunityIds?.has(opportunityId)
                         const hiddenMatches = Math.max(
                             0,
                             (item.matchedSkills?.length || 0) + (item.matchedInterests?.length || 0) -
@@ -128,9 +131,20 @@ function PersonalizedRecommendationsSection({
                                 )}
 
                                 <div className="personalized-recommendations__actions">
-                                    <Button className="button--primary" onClick={() => onApply(opportunity)}>
-                                        Откликнуться
-                                    </Button>
+                                    {isApplied ? (
+                                        <div
+                                            className="personalized-recommendations__applied-state"
+                                            role="status"
+                                            aria-live="polite"
+                                        >
+                                            <span aria-hidden="true">✓</span>
+                                            <strong>Отклик отправлен</strong>
+                                        </div>
+                                    ) : (
+                                        <Button className="button--primary" onClick={() => onApply(opportunity)}>
+                                            Откликнуться
+                                        </Button>
+                                    )}
                                     <Button className="button--outline" onClick={() => onOpenOpportunity(opportunity.id)}>
                                         Подробнее
                                     </Button>

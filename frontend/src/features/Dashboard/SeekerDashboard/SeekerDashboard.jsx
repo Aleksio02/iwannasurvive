@@ -46,6 +46,7 @@ import {
     invalidateSavedFavoritesCache,
     removeEmployerFromSaved,
 } from '@/shared/api/favorites'
+import { setLocalAppliedOpportunityIds } from '@/shared/lib/utils/appliedOpportunityStorage'
 import {
     analyzeResumeForRecommendations,
     listOpportunities,
@@ -314,6 +315,8 @@ function buildContactHref(rawValue, preset) {
 
 const ApplicationCard = memo(function ApplicationCard({ app, onOpenOpportunity, onOpenChat }) {
     const canOpenOpportunity = app.opportunityId !== null && app.opportunityId !== undefined
+    const chatDisabled = !app.chatSummary?.hasChat && !app.chatSummary?.canSend
+    const unreadCount = Number(app.chatSummary?.unreadCount || 0)
 
     return (
         <div
@@ -339,14 +342,14 @@ const ApplicationCard = memo(function ApplicationCard({ app, onOpenOpportunity, 
                     </span>
                 </div>
                 <button
+                    type="button"
                     className="application-card__chat"
                     onClick={(event) => void onOpenChat(event, app)}
-                    disabled={!app.chatSummary?.hasChat && !app.chatSummary?.canSend}
+                    disabled={chatDisabled}
+                    aria-label={unreadCount > 0 ? `Открыть сообщения, непрочитанных: ${unreadCount}` : 'Открыть сообщения'}
+                    title={chatDisabled ? 'Чат пока недоступен' : 'Открыть сообщения'}
                 >
-                    Сообщение
-                    {app.chatSummary?.unreadCount > 0 && (
-                        <span>{app.chatSummary.unreadCount}</span>
-                    )}
+                    Сообщение{unreadCount > 0 ? ` (${unreadCount})` : ''}
                 </button>
             </div>
         </div>
@@ -1079,7 +1082,14 @@ function SeekerDashboard() {
                     }))
                 }
 
-                setApplications(Array.isArray(applicationsItems) ? applicationsItems : [])
+                const normalizedApplications = Array.isArray(applicationsItems) ? applicationsItems : []
+                setApplications(normalizedApplications)
+                setLocalAppliedOpportunityIds(
+                    normalizedApplications
+                        .map((application) => Number(application.opportunityId))
+                        .filter((id) => Number.isFinite(id) && id > 0),
+                    currentUser
+                )
                 setSavedFavorites(
                     favoritesItems && typeof favoritesItems === 'object'
                         ? favoritesItems
@@ -2173,6 +2183,14 @@ function SeekerDashboard() {
         [applications, visibleApplicationsCount]
     )
 
+    const appliedOpportunityIds = useMemo(() => (
+        new Set(
+            applications
+                .map((application) => Number(application.opportunityId))
+                .filter((id) => Number.isFinite(id) && id > 0)
+        )
+    ), [applications])
+
     const visibleContacts = useMemo(
         () => currentContacts.slice(0, visibleContactsCount),
         [currentContacts, visibleContactsCount]
@@ -2532,29 +2550,41 @@ function SeekerDashboard() {
                                             <h4>Может подойти</h4>
                                         </div>
                                         <div className="resume-analysis-card__opportunity-list">
-                                            {opportunityPreview.slice(0, 3).map((opportunity) => (
-                                                <article key={opportunity.id} className="resume-analysis-card__opportunity">
-                                                    <div>
-                                                        <h5>{opportunity.title}</h5>
-                                                        <p>{opportunity.companyName}</p>
-                                                        <div className="resume-analysis-card__opportunity-meta">
-                                                            {opportunity.type && (
-                                                                <span>{OPPORTUNITY_LABELS.type[opportunity.type] || opportunity.type}</span>
-                                                            )}
-                                                            {opportunity.workFormat && (
-                                                                <span>{OPPORTUNITY_LABELS.workFormat[opportunity.workFormat] || opportunity.workFormat}</span>
-                                                            )}
+                                            {opportunityPreview.slice(0, 3).map((opportunity) => {
+                                                const isApplied = appliedOpportunityIds.has(Number(opportunity.id))
+
+                                                return (
+                                                    <article key={opportunity.id} className="resume-analysis-card__opportunity">
+                                                        <div>
+                                                            <h5>{opportunity.title}</h5>
+                                                            <p>{opportunity.companyName}</p>
+                                                            <div className="resume-analysis-card__opportunity-meta">
+                                                                {opportunity.type && (
+                                                                    <span>{OPPORTUNITY_LABELS.type[opportunity.type] || opportunity.type}</span>
+                                                                )}
+                                                                {opportunity.workFormat && (
+                                                                    <span>{OPPORTUNITY_LABELS.workFormat[opportunity.workFormat] || opportunity.workFormat}</span>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        className="btn-secondary-small"
-                                                        onClick={() => navigate(`/opportunities/${opportunity.id}`)}
-                                                    >
-                                                        Подробнее
-                                                    </button>
-                                                </article>
-                                            ))}
+                                                        <div className="resume-analysis-card__opportunity-actions">
+                                                            {isApplied && (
+                                                                <span className="resume-analysis-card__opportunity-applied" role="status">
+                                                                    <span aria-hidden="true">✓</span>
+                                                                    Отклик отправлен
+                                                                </span>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                className="btn-secondary-small"
+                                                                onClick={() => navigate(`/opportunities/${opportunity.id}`)}
+                                                            >
+                                                                Подробнее
+                                                            </button>
+                                                        </div>
+                                                    </article>
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 )}
@@ -3600,6 +3630,7 @@ function SeekerDashboard() {
                             onOpenOpportunity={(opportunityId) => navigate(`/opportunities/${opportunityId}`)}
                             onDeleteRecommendation={handleDeleteRecommendation}
                             onRefreshRecommendations={loadRecommendations}
+                            appliedOpportunityIds={appliedOpportunityIds}
                         />
                     </Suspense>
                 )}

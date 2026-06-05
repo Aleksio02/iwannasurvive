@@ -690,6 +690,15 @@ $transition: all 0.2s ease;
     flex-shrink: 0;
   }
 
+  &-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
   h5,
   p {
     margin: 0;
@@ -706,6 +715,36 @@ $transition: all 0.2s ease;
     margin-top: 3px;
     color: $gray-600;
     font-size: 12px;
+  }
+}
+
+.resume-analysis-card__opportunity-applied {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(31, 182, 170, 0.24);
+  border-radius: 999px;
+  background: #f0fdfa;
+  color: $primary-dark;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    border-radius: 999px;
+    background: #dffaf6;
+    color: #0f766e;
+    font-size: 10px;
+    font-weight: 900;
   }
 }
 
@@ -768,7 +807,8 @@ $transition: all 0.2s ease;
   .resume-analysis-card__result-actions button,
   .resume-analysis-card__error button,
   .resume-analysis-card__missing button,
-  .resume-analysis-card__opportunity button {
+  .resume-analysis-card__opportunity button,
+  .resume-analysis-card__opportunity-applied {
     width: 100%;
   }
 }
@@ -1217,30 +1257,46 @@ $transition: all 0.2s ease;
 .application-card__chat {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  min-height: 36px;
   margin-top: 12px;
-  padding: 7px 12px;
-  color: $primary-dark;
+  padding: 8px 16px;
+  border: 1px solid $gray-300;
+  border-radius: 10px;
+  background: transparent;
+  color: $primary;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid $primary;
-  border-radius: 10px;
-  background: $primary-light;
+  text-decoration: none;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: $primary-light;
+    border-color: $primary;
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(31, 182, 170, 0.36);
+    outline-offset: 3px;
+    background: $primary-light;
+    border-color: $primary;
+  }
 
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none;
   }
 
-  span {
-    min-width: 18px;
-    padding: 1px 5px;
-    color: white;
-    text-align: center;
-    font-size: 11px;
-    border-radius: 10px;
-    background: $primary;
+  @media (max-width: 560px) {
+    width: 100%;
   }
 }
 

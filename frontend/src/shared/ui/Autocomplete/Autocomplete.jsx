@@ -21,13 +21,14 @@ function Autocomplete({
                           getSuggestionValue = (item) => typeof item === 'string' ? item : item.name,
                           getSuggestionKey = (item) => typeof item === 'string' ? item : item.id,
                       }) {
-    const wrapperRef = useRef(null)
+    const rootRef = useRef(null)
+    const inputWrapperRef = useRef(null)
     const menuRef = useRef(null)
     const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 })
 
     const updatePosition = useCallback(() => {
-        if (!wrapperRef.current) return
-        const rect = wrapperRef.current.getBoundingClientRect()
+        if (!inputWrapperRef.current) return
+        const rect = inputWrapperRef.current.getBoundingClientRect()
         setMenuPosition({
             top: rect.bottom + 6,
             left: rect.left,
@@ -54,10 +55,10 @@ function Autocomplete({
     // Закрытие при клике вне
     useEffect(() => {
         const handleClickOutside = (event) => {
-            const isInsideWrapper = wrapperRef.current?.contains(event.target)
+            const isInsideRoot = rootRef.current?.contains(event.target)
             const isInsideMenu = menuRef.current?.contains(event.target)
 
-            if (!isInsideWrapper && !isInsideMenu && isOpen) {
+            if (!isInsideRoot && !isInsideMenu && isOpen) {
                 onOpenChange(false)
                 onActiveIndexChange(-1)
             }
@@ -169,16 +170,17 @@ function Autocomplete({
     )
 
     return (
-        <div className="autocomplete" ref={wrapperRef}>
+        <div className="autocomplete" ref={rootRef}>
             {label && (
                 <Label>
                     {label}
                     {required && <span className="required-star"> *</span>}
                 </Label>
             )}
-            <div className="autocomplete__wrapper">
+            <div className="autocomplete__wrapper" ref={inputWrapperRef}>
                 <Input
                     ref={inputRef}
+                    className={error ? 'is-invalid' : ''}
                     value={value}
                     onFocus={() => {
                         if (uniqueSuggestions.length > 0 && !isOpen) {
