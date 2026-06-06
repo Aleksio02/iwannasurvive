@@ -274,14 +274,33 @@ function Navbar() {
     useEffect(() => {
         if (!isMenuOpen) return undefined
 
+        const previousOverflow = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
                 setIsMenuOpen(false)
             }
         }
 
+        const handlePointerDown = (event) => {
+            const target = event.target
+            const panel = document.getElementById('navbar-menu')
+
+            if (panel?.contains(target)) return
+            if (target.closest?.('.navbar__menu-toggle')) return
+
+            setIsMenuOpen(false)
+        }
+
         window.addEventListener('keydown', handleKeyDown)
-        return () => window.removeEventListener('keydown', handleKeyDown)
+        document.addEventListener('pointerdown', handlePointerDown)
+
+        return () => {
+            document.body.style.overflow = previousOverflow
+            window.removeEventListener('keydown', handleKeyDown)
+            document.removeEventListener('pointerdown', handlePointerDown)
+        }
     }, [isMenuOpen])
 
     const getDashboardLink = () => {
@@ -309,6 +328,15 @@ function Navbar() {
 
     return (
         <nav className={`navbar ${isMenuOpen ? 'is-menu-open' : ''}`}>
+            {isMenuOpen && (
+                <button
+                    type="button"
+                    className="navbar__menu-backdrop"
+                    aria-label="Закрыть меню"
+                    onClick={() => setIsMenuOpen(false)}
+                />
+            )}
+
             <div className="navbar__container container">
                 <Link href="/" className="navbar__logo">
                     <img src={brandMark} alt="Трамплин" className="navbar__logo-icon" />
@@ -326,7 +354,11 @@ function Navbar() {
                     {isMenuOpen ? <X size={21} /> : <Menu size={21} />}
                 </button>
 
-                <div className="navbar__panel" id="navbar-menu">
+                <div
+                    className="navbar__panel"
+                    id="navbar-menu"
+                    onClick={(event) => event.stopPropagation()}
+                >
                     <div className="navbar__links">
                         <Link href="/" className={`navbar__link ${isActive('/') ? 'is-active' : ''}`}>
                             Главная

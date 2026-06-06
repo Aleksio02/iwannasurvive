@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import {
     THEME_STORAGE_KEY,
     THEMES,
+    applyTheme,
     getCurrentTheme,
+    normalizeTheme,
     setStoredTheme,
 } from '@/shared/lib/theme'
 
@@ -15,9 +17,10 @@ export function useTheme() {
         }
 
         const syncStorageTheme = (event) => {
-            if (event.key === THEME_STORAGE_KEY) {
-                setThemeState(setStoredTheme(event.newValue))
-            }
+            if (event.key !== THEME_STORAGE_KEY) return
+            const nextTheme = normalizeTheme(event.newValue)
+            applyTheme(nextTheme, { disableTransitions: true })
+            setThemeState(nextTheme)
         }
 
         window.addEventListener('themechange', syncTheme)
@@ -30,13 +33,12 @@ export function useTheme() {
     }, [])
 
     const setTheme = useCallback((nextTheme) => {
-        setThemeState(setStoredTheme(nextTheme))
+        setStoredTheme(nextTheme)
     }, [])
 
     const toggleTheme = useCallback(() => {
-        setThemeState((currentTheme) =>
-            setStoredTheme(currentTheme === THEMES.dark ? THEMES.light : THEMES.dark)
-        )
+        const nextTheme = getCurrentTheme() === THEMES.dark ? THEMES.light : THEMES.dark
+        setStoredTheme(nextTheme)
     }, [])
 
     return {

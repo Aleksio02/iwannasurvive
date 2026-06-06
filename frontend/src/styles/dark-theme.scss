@@ -715,6 +715,7 @@ html[data-theme='dark'] {
 
   body :where(
     .card,
+    .profile-edit__card,
     .dashboard-panel,
     .dashboard-layout__header,
     .dashboard-tabs__btn,
@@ -781,6 +782,8 @@ html[data-theme='dark'] {
     border-color: var(--color-border) !important;
     color: var(--color-text) !important;
     box-shadow: var(--shadow-soft);
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   body :where(

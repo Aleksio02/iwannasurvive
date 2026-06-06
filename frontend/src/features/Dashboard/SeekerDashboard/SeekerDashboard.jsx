@@ -3643,7 +3643,17 @@ function SeekerDashboard() {
                     onMouseUp={handleRecommendationOverlayMouseUp}
                 >
                     <div className="modal seeker-dashboard-modal" onClick={(e) => e.stopPropagation()}>
-                        <h3>Рекомендовать возможность</h3>
+                        <div className="seeker-dashboard-modal__header">
+                            <h3>Рекомендовать возможность</h3>
+                            <button
+                                type="button"
+                                className="seeker-dashboard-modal__close"
+                                onClick={closeRecommendationModal}
+                                aria-label="Закрыть"
+                            >
+                                ×
+                            </button>
+                        </div>
 
                         {!canSendRecommendation && (
                             <div className="modal__empty-state">
@@ -3733,12 +3743,6 @@ function SeekerDashboard() {
                                 disabled={!canSendRecommendation}
                             >
                                 Отправить
-                            </button>
-                            <button
-                                className="btn-secondary-small"
-                                onClick={closeRecommendationModal}
-                            >
-                                Отмена
                             </button>
                         </div>
                     </div>
