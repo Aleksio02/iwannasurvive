@@ -1033,3 +1033,22 @@ html, body, #root {
 .modal .autocomplete__list {
   z-index: 10002 !important;
 }
+
+html[data-theme='dark'] {
+  .profile-edit {
+    background:
+            radial-gradient(circle at top left, rgba(33, 200, 188, 0.18), transparent 28%),
+            radial-gradient(circle at bottom right, rgba(72, 119, 176, 0.15), transparent 24%),
+            linear-gradient(180deg, #0b111b 0%, #0d1724 100%) !important;
+  }
+
+  .profile-edit .profile-edit__card.card {
+    background: linear-gradient(180deg, rgba(18, 29, 43, 0.98) 0%, rgba(12, 21, 34, 0.98) 100%) !important;
+    background-color: #121d2b !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+    box-shadow: var(--shadow-card) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

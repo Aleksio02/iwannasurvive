@@ -1,5 +1,5 @@
-import { createElement, useEffect, useState } from 'react'
-import { Link } from 'wouter'
+import { createElement, useEffect, useRef, useState } from 'react'
+import { Link, useLocation } from 'wouter'
 import {
     ArrowRight,
     BriefcaseBusiness,
@@ -10,14 +10,15 @@ import {
     GraduationCap,
     LogIn,
     MapPinned,
+    Menu,
     Network,
     Search,
     Sparkles,
     UserRound,
     Users,
+    X,
 } from 'lucide-react'
 import brandMark from '@/assets/icons/brand-mark.png'
-import { useTheme } from '@/shared/hooks/useTheme'
 import { getSessionUser, subscribeSessionChange } from '@/shared/lib/utils/sessionStore'
 import AppFooter from '@/shared/layouts/AppFooter'
 import ThemeToggle from '@/shared/ui/ThemeToggle'
@@ -84,8 +85,10 @@ function scrollToSection(sectionId, behavior = 'smooth') {
 }
 
 function AboutPage() {
-    const { isDark } = useTheme()
+    const [, navigate] = useLocation()
     const [sessionUser, setSessionUser] = useState(() => getSessionUser())
+    const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const topbarRef = useRef(null)
 
     useEffect(() => {
         const sectionId = window.location.hash.replace('#', '')
@@ -100,40 +103,114 @@ function AboutPage() {
 
     useEffect(() => subscribeSessionChange(setSessionUser), [])
 
+    useEffect(() => {
+        if (!isMenuOpen) return undefined
+
+        const previousOverflow = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setIsMenuOpen(false)
+            }
+        }
+
+        const handlePointerDown = (event) => {
+            const target = event.target
+            if (target.closest?.('.about-page__theme-toggle, .theme-toggle')) return
+            if (topbarRef.current?.contains(target)) return
+            setIsMenuOpen(false)
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        document.addEventListener('pointerdown', handlePointerDown)
+
+        return () => {
+            document.body.style.overflow = previousOverflow
+            window.removeEventListener('keydown', handleKeyDown)
+            document.removeEventListener('pointerdown', handlePointerDown)
+        }
+    }, [isMenuOpen])
+
     const handleAnchorClick = (event, sectionId) => {
         event.preventDefault()
+        setIsMenuOpen(false)
         window.history.pushState(null, '', `#${sectionId}`)
         scrollToSection(sectionId)
     }
 
     const isLoggedIn = Boolean(sessionUser)
 
+    const closeMenu = () => setIsMenuOpen(false)
+
     return (
-        <div className={`about-page ${isDark ? 'about-page--dark' : ''}`}>
+        <div className="about-page">
             <div className="about-page__ambient" aria-hidden="true">
                 <span className="about-page__blob about-page__blob--one" />
                 <span className="about-page__blob about-page__blob--two" />
             </div>
 
-            <header className="about-page__topbar">
+            {isMenuOpen && (
+                <button
+                    type="button"
+                    className="about-page__menu-backdrop"
+                    aria-label="Закрыть меню"
+                    onClick={closeMenu}
+                />
+            )}
+
+            <header
+                ref={topbarRef}
+                className={`about-page__topbar ${isMenuOpen ? 'is-menu-open' : ''}`}
+            >
                 <Link href="/" className="about-page__brand">
                     <img src={brandMark} alt="Трамплин" />
                     <span>Трамплин</span>
                 </Link>
 
-                <nav className="about-page__nav" aria-label="Навигация страницы">
-                    <a href="#audience" onClick={(event) => handleAnchorClick(event, 'audience')}>Кому подходит</a>
-                    <a href="#inside" onClick={(event) => handleAnchorClick(event, 'inside')}>Что внутри</a>
-                    <a href="#start" onClick={(event) => handleAnchorClick(event, 'start')}>Как начать</a>
-                    <a href="#partners" onClick={(event) => handleAnchorClick(event, 'partners')}>Партнёры</a>
-                </nav>
+                <div className="about-page__header-tools">
+                    <ThemeToggle
+                        className="about-page__theme-toggle"
+                        showLabel={false}
+                        onPointerDown={(event) => event.stopPropagation()}
+                    />
 
-                <div className="about-page__top-actions">
-                    <Link href={isLoggedIn ? '/opportunities' : '/login'} className="about-page__login">
-                        {isLoggedIn ? <ArrowRight size={17} /> : <LogIn size={17} />}
-                        <span>{isLoggedIn ? 'К возможностям' : 'Войти'}</span>
-                    </Link>
-                    <ThemeToggle className="about-page__theme-toggle" showLabel={false} />
+                    <button
+                        type="button"
+                        className="about-page__menu-toggle"
+                        onClick={() => setIsMenuOpen((isOpen) => !isOpen)}
+                        aria-controls="about-page-menu"
+                        aria-expanded={isMenuOpen}
+                        aria-label={isMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
+                    >
+                        {isMenuOpen ? <X size={21} /> : <Menu size={21} />}
+                    </button>
+                </div>
+
+                <div
+                    className="about-page__menu"
+                    id="about-page-menu"
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <nav className="about-page__nav" aria-label="Навигация страницы">
+                        <a href="#audience" onClick={(event) => handleAnchorClick(event, 'audience')}>Кому подходит</a>
+                        <a href="#inside" onClick={(event) => handleAnchorClick(event, 'inside')}>Что внутри</a>
+                        <a href="#start" onClick={(event) => handleAnchorClick(event, 'start')}>Как начать</a>
+                        <a href="#partners" onClick={(event) => handleAnchorClick(event, 'partners')}>Партнёры</a>
+                    </nav>
+
+                    <div className="about-page__top-actions">
+                        <Link
+                            href={isLoggedIn ? '/opportunities' : '/login'}
+                            className="about-page__login"
+                            onClick={() => {
+                                closeMenu()
+                            }}
+                        >
+                            {isLoggedIn ? <ArrowRight size={17} /> : <LogIn size={17} />}
+                            <span>{isLoggedIn ? 'К возможностям' : 'Войти'}</span>
+                        </Link>
+                    </div>
                 </div>
             </header>
 
